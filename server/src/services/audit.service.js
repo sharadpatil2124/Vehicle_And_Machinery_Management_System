@@ -88,4 +88,27 @@ function recordArchive({ tenantId, entityType, entityId, performedBy }, { transa
   );
 }
 
-module.exports = { recordAudit, snapshot, diffSnapshots, recordCreate, recordUpdate, recordArchive };
+function recordRestore({ tenantId, entityType, entityId, performedBy }, { transaction } = {}) {
+  return recordAudit(
+    {
+      tenantId,
+      entityType,
+      entityId,
+      action: 'RESTORED',
+      before: { status: 'archived' },
+      after: { status: 'active' },
+      performedBy,
+    },
+    { transaction }
+  );
+}
+
+module.exports = {
+  recordAudit,
+  snapshot,
+  diffSnapshots,
+  recordCreate,
+  recordUpdate,
+  recordArchive,
+  recordRestore,
+};

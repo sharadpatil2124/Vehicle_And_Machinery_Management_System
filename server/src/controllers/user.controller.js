@@ -6,26 +6,29 @@ async function list(req, res) {
 }
 
 async function createSupervisor(req, res) {
-  const { name, email } = req.body ?? {};
+  const { name, email, siteId } = req.body ?? {};
 
   const data = await userService.createSupervisor({
     tenantId: req.auth.tenantId,
     actingUserId: req.auth.userId,
     name,
     email,
+    siteId,
   });
 
   res.status(201).json({ data, message: 'Supervisor created' });
 }
 
 async function updateSupervisor(req, res) {
-  const { name, email } = req.body ?? {};
+  const { name, email, siteId } = req.body ?? {};
 
   const data = await userService.updateSupervisor({
     tenantId: req.auth.tenantId,
     actingUserId: req.auth.userId,
+    supervisorId: req.params.id,
     name,
     email,
+    siteId,
   });
 
   res.status(200).json({ data, message: 'Supervisor updated' });
@@ -37,6 +40,7 @@ async function setSupervisorStatus(req, res) {
   const data = await userService.setSupervisorStatus({
     tenantId: req.auth.tenantId,
     actingUserId: req.auth.userId,
+    supervisorId: req.params.id,
     status,
   });
 

@@ -3,7 +3,7 @@ const storage = require('../services/storage.service');
 
 async function list(req, res) {
   const data = await assetDocumentService.listDocuments({
-    tenantId: req.auth.tenantId,
+    tenantId: req.auth.tenantId, auth: req.auth,
     assetType: req.params.assetType?.toUpperCase(),
     assetId: req.params.assetId,
   });
@@ -12,7 +12,7 @@ async function list(req, res) {
 
 async function upload(req, res) {
   const data = await assetDocumentService.uploadDocument({
-    tenantId: req.auth.tenantId,
+    tenantId: req.auth.tenantId, auth: req.auth,
     assetType: req.params.assetType?.toUpperCase(),
     assetId: req.params.assetId,
     docType: req.params.docType?.toUpperCase(),
@@ -29,7 +29,7 @@ function contentDisposition(filename) {
 
 async function download(req, res) {
   const doc = await assetDocumentService.getDocumentForDownload({
-    tenantId: req.auth.tenantId,
+    tenantId: req.auth.tenantId, auth: req.auth,
     assetType: req.params.assetType?.toUpperCase(),
     assetId: req.params.assetId,
     docType: req.params.docType?.toUpperCase(),

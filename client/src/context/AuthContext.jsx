@@ -10,11 +10,13 @@ function toSession({ token, user, organization }) {
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(readSession);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   const startSession = useCallback((payload) => {
     const next = toSession(payload);
     writeSession(next);
     setSession(next);
+    setSessionExpired(false);
     return next;
   }, []);
 
@@ -24,8 +26,12 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    window.addEventListener(SESSION_EXPIRED_EVENT, endSession);
-    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, endSession);
+    function handleExpired() {
+      setSessionExpired(true);
+      endSession();
+    }
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleExpired);
   }, [endSession]);
 
   const signUp = useCallback(
@@ -43,6 +49,7 @@ export function AuthProvider({ children }) {
       await authApi.logOut();
     } catch {
     }
+    setSessionExpired(false);
     endSession();
   }, [endSession]);
 
@@ -52,11 +59,12 @@ export function AuthProvider({ children }) {
       organization: session?.organization ?? null,
       role: session?.user?.role ?? null,
       isAuthenticated: Boolean(session?.token),
+      sessionExpired,
       signUp,
       logIn,
       logOut,
     }),
-    [session, signUp, logIn, logOut]
+    [session, sessionExpired, signUp, logIn, logOut]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

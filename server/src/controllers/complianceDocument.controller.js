@@ -2,7 +2,7 @@ const complianceService = require('../services/complianceDocument.service');
 
 async function list(req, res) {
   const data = await complianceService.listComplianceDocuments({
-    tenantId: req.auth.tenantId,
+    tenantId: req.auth.tenantId, auth: req.auth,
     assetType: req.params.assetType?.toUpperCase(),
     assetId: req.params.assetId,
   });
@@ -11,7 +11,7 @@ async function list(req, res) {
 
 async function upsert(req, res) {
   const data = await complianceService.upsertComplianceDocument({
-    tenantId: req.auth.tenantId,
+    tenantId: req.auth.tenantId, auth: req.auth,
     assetType: req.params.assetType?.toUpperCase(),
     assetId: req.params.assetId,
     docType: req.params.docType?.toUpperCase(),

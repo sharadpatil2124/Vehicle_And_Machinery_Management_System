@@ -45,8 +45,15 @@ function readComplianceInput(docType, payload) {
 
   const startDate = requireDateOnly(payload.startDate, 'Start date');
   const expiryDate = requireDateOnly(payload.expiryDate, 'End date');
-  if (new Date(expiryDate) < new Date(startDate)) {
+  // The end date must be strictly after the start date — not before it, and
+  // not the same day either. Dates are "YYYY-MM-DD" strings, so they compare
+  // correctly with plain string operators; this is the backstop behind the
+  // matching client-side check in ComplianceFields.jsx.
+  if (expiryDate < startDate) {
     throw AppError.badRequest('End date cannot be before the start date');
+  }
+  if (expiryDate === startDate) {
+    throw AppError.badRequest('End date cannot be the same as the start date');
   }
   return { roadTaxType: null, startDate, expiryDate };
 }
@@ -106,8 +113,8 @@ async function saveComplianceDocuments({ tenantId, assetType, assetId, actingUse
   }
 }
 
-async function listComplianceDocuments({ tenantId, assetType, assetId }) {
-  await resolveAsset(tenantId, assetType, assetId);
+async function listComplianceDocuments({ tenantId, auth, assetType, assetId }) {
+  await resolveAsset(tenantId, assetType, assetId, { auth });
 
   const docs = await ComplianceDocument.findAll({ where: { tenantId, assetType, assetId } });
   const byType = new Map(docs.map((doc) => [doc.docType, doc]));
@@ -122,9 +129,9 @@ async function listComplianceDocuments({ tenantId, assetType, assetId }) {
   });
 }
 
-async function upsertComplianceDocument({ tenantId, assetType, assetId, docType, actingUserId, payload }) {
+async function upsertComplianceDocument({ tenantId, auth, assetType, assetId, docType, actingUserId, payload }) {
   assertDocType(docType);
-  await resolveAsset(tenantId, assetType, assetId);
+  await resolveAsset(tenantId, assetType, assetId, { auth });
 
   const input = readComplianceInput(docType, payload);
   const existing = await ComplianceDocument.findOne({ where: { tenantId, assetType, assetId, docType } });

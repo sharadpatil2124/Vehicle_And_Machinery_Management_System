@@ -1,8 +1,8 @@
 const authService = require('../services/auth.service');
 
 async function signUp(req, res) {
-  const { organizationName, name, email, password } = req.body ?? {};
-  const data = await authService.signUp({ organizationName, name, email, password });
+  const { organizationName, name, email, password, supervisors } = req.body ?? {};
+  const data = await authService.signUp({ organizationName, name, email, password, supervisors });
 
   res.status(201).json({ data, message: 'Organization created' });
 }

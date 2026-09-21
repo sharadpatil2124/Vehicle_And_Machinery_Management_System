@@ -19,15 +19,21 @@ function getTransporter() {
   return transporter;
 }
 
+function logEmailToConsole({ to, subject, text }) {
+  const rule = '='.repeat(70);
+  process.stdout.write(
+    `\n${rule}\nEMAIL (console transport — not sent)\nTo: ${to}\nSubject: ${subject}\n${rule}\n${text}\n${rule}\n\n`
+  );
+}
+
 async function sendEmail({ to, subject, text }) {
   if (env.email.transport === 'console') {
-    logger.info('Email (console transport — not sent)', { to, subject, body: text });
+    logEmailToConsole({ to, subject, text });
     return;
   }
 
   try {
     await getTransporter().sendMail({ from: env.email.from, to, subject, text });
-    logger.info('Email sent', { to, subject });
   } catch (error) {
     logger.error('Email delivery failed', { to, subject, reason: error.message });
   }

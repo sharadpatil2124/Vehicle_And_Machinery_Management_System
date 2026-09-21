@@ -3,15 +3,12 @@ import { Link } from 'react-router-dom';
 import { machineryApi } from '../api/client';
 import { Alert, Badge, Button, Input, Pagination, Select, Spinner, Table } from '../components/ui';
 import Can from '../components/Can';
+import useSiteNames from '../hooks/useSiteNames';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'Active (default)' },
   { value: 'archived', label: 'Archived' },
 ];
-
-function StatusBadge({ status }) {
-  return <Badge tone={status === 'archived' ? 'neutral' : 'success'}>{status}</Badge>;
-}
 
 function ServiceDueBadge({ machine }) {
   if (!machine.isServiceDue) return null;
@@ -28,6 +25,7 @@ export default function MachineryListPage() {
   });
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const siteNames = useSiteNames();
 
   const load = useCallback(async (activeFilters) => {
     setError(null);
@@ -79,17 +77,17 @@ export default function MachineryListPage() {
       key: 'currentHours',
       label: 'Current hours',
       sortable: true,
-      render: (m) => Number(m.currentHours).toLocaleString(),
-    },
-    {
-      key: 'status',
-      label: 'Status',
       render: (m) => (
         <div className="flex items-center gap-1.5">
-          <StatusBadge status={m.status} />
+          <span>{Number(m.currentHours).toLocaleString()}</span>
           <ServiceDueBadge machine={m} />
         </div>
       ),
+    },
+    {
+      key: 'currentSiteId',
+      label: 'Site',
+      render: (m) => siteNames[m.currentSiteId] ?? '—',
     },
     {
       key: 'actions',

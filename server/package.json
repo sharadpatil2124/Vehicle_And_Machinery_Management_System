@@ -10,7 +10,7 @@
   },
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js",
+    "dev": "node src/server.js",
     "migrate": "node scripts/migrate.js up",
     "migrate:undo": "node scripts/migrate.js down",
     "migrate:status": "node scripts/migrate.js status"
@@ -31,5 +31,8 @@
   },
   "overrides": {
     "uuid": "^11.1.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
   }
 }

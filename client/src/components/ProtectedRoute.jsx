@@ -2,11 +2,12 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function ProtectedRoute({ allowedRoles, children }) {
-  const { isAuthenticated, role } = useAuth();
+  const { isAuthenticated, role, sessionExpired } = useAuth();
   const location = useLocation();
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace state={{ from: location }} />;
+    const notice = sessionExpired ? 'Your session has expired. Please sign in again.' : undefined;
+    return <Navigate to="/login" replace state={{ from: location, notice, noticeTone: 'warning' }} />;
   }
 
   if (allowedRoles && !allowedRoles.includes(role)) {

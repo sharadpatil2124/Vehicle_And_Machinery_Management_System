@@ -4,6 +4,10 @@ const env = require('../config/env');
 const { MAX_FILE_SIZE_BYTES } = require('./upload');
 
 function translateDatabaseError(error) {
+  if (error.name === 'SequelizeDatabaseError' && error.original?.sqlState === '45000') {
+    return AppError.conflict(error.original.sqlMessage ?? 'That value is already in use');
+  }
+
   switch (error.name) {
     case 'SequelizeUniqueConstraintError':
       return AppError.conflict('That value is already in use');

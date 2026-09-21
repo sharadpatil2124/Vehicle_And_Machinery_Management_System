@@ -20,6 +20,7 @@ class User extends Model {
       email: this.email,
       role: this.role,
       status: this.status,
+      siteId: this.siteId,
       lastLoginAt: this.lastLoginAt,
       createdAt: this.createdAt,
     };
@@ -63,6 +64,13 @@ User.init(
     lastLoginAt: {
       type: DataTypes.DATE,
       allowNull: true,
+    },
+    // The one site a Supervisor may work with. Always null for an Admin, who
+    // sees every site in the organization.
+    siteId: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: true,
+      references: { model: 'sites', key: 'id' },
     },
   },
   {

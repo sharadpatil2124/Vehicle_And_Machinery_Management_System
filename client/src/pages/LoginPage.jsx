@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const notice = location.state?.notice ?? null;
+  const noticeTone = location.state?.noticeTone ?? 'success';
 
   if (isAuthenticated) return <Navigate to="/dashboard" replace />;
 
@@ -44,7 +45,7 @@ export default function LoginPage() {
         </>
       }
     >
-      <Alert tone="success">{notice}</Alert>
+      <Alert tone={noticeTone}>{notice}</Alert>
       <Alert tone="error">{error}</Alert>
 
       <form onSubmit={handleSubmit} noValidate>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { usersApi } from '../api/client';
-import { Alert, Badge, Button, Card, Field, Input, Modal, RoleBadge, Spinner } from '../components/ui';
+import { usersApi, sitesApi } from '../api/client';
+import { Alert, Badge, Button, Card, Field, Input, Modal, RoleBadge, Select, Spinner } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 
 function formatDate(value) {
@@ -12,7 +12,7 @@ function StatusBadge({ status }) {
   return <Badge tone={status === 'active' ? 'success' : 'neutral'}>{status}</Badge>;
 }
 
-function AccountDetails({ account }) {
+function AccountDetails({ account, siteName }) {
   return (
     <dl className="grid gap-4 sm:grid-cols-2">
       <div>
@@ -33,12 +33,32 @@ function AccountDetails({ account }) {
         <dt className="text-xs font-semibold tracking-wide text-steel-500 uppercase">Last sign-in</dt>
         <dd className="mt-0.5 text-steel-900">{formatDate(account.lastLoginAt)}</dd>
       </div>
+      {account.role === 'supervisor' && (
+        <div className="sm:col-span-2">
+          <dt className="text-xs font-semibold tracking-wide text-steel-500 uppercase">Assigned site</dt>
+          <dd className="mt-0.5">
+            {account.siteId ? (
+              <span className="text-steel-900">{siteName ?? `Site #${account.siteId}`}</span>
+            ) : (
+              <span className="text-danger-600">
+                No site assigned — this supervisor cannot see any site data until you edit them and
+                pick one.
+              </span>
+            )}
+          </dd>
+        </div>
+      )}
     </dl>
   );
 }
 
-function SupervisorForm({ mode, initial, onCancel, onSaved }) {
-  const [form, setForm] = useState({ name: initial?.name ?? '', email: initial?.email ?? '' });
+function SupervisorForm({ mode, initial, sites, onCancel, onSaved }) {
+  const [form, setForm] = useState({
+    name: initial?.name ?? '',
+    email: initial?.email ?? '',
+    // A supervisor works at exactly one site, so this is always required.
+    siteId: initial?.siteId ? String(initial.siteId) : '',
+  });
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -53,7 +73,7 @@ function SupervisorForm({ mode, initial, onCancel, onSaved }) {
       const response =
         mode === 'create'
           ? await usersApi.createSupervisor(form)
-          : await usersApi.updateSupervisor(form);
+          : await usersApi.updateSupervisor(initial.id, form);
       onSaved(response.message);
     } catch (err) {
       setError(err.message);
@@ -107,11 +127,43 @@ function SupervisorForm({ mode, initial, onCancel, onSaved }) {
         )}
       </Field>
 
+      <Field
+        label="Site"
+        required
+        hint="This supervisor will only be able to see and work with data from this one site."
+      >
+        {({ id, invalid, describedBy }) => (
+          <Select
+            id={id}
+            invalid={invalid}
+            describedBy={describedBy}
+            name="siteId"
+            value={form.siteId}
+            onChange={update('siteId')}
+            required
+          >
+            <option value="">Select a site...</option>
+            {sites.map((site) => (
+              <option key={site.id} value={site.id}>
+                {site.location ? `${site.name} — ${site.location}` : site.name}
+              </option>
+            ))}
+          </Select>
+        )}
+      </Field>
+
+      {sites.length === 0 && (
+        <Alert tone="warning">
+          This organization has no active sites yet. Create a site first, then come back and add
+          the supervisor.
+        </Alert>
+      )}
+
       <div className="flex justify-end gap-2">
         <Button variant="secondary" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit" loading={submitting}>
+        <Button type="submit" loading={submitting} disabled={sites.length === 0}>
           {mode === 'create' ? 'Create supervisor' : 'Save changes'}
         </Button>
       </div>
@@ -119,21 +171,70 @@ function SupervisorForm({ mode, initial, onCancel, onSaved }) {
   );
 }
 
+function SupervisorCard({ supervisor, sites, isEditing, isCreatingAnother, onEdit, onCancelEdit, onSaved, onRequestStatusChange }) {
+  const siteName = sites.find((site) => site.id === supervisor.siteId)?.name;
+
+  return (
+    <Card
+      title={isEditing ? 'Edit supervisor' : supervisor.name}
+      subtitle={isEditing ? undefined : supervisor.email}
+      actions={
+        !isEditing && !isCreatingAnother ? (
+          <div className="flex items-center gap-2">
+            <RoleBadge role="supervisor" />
+            <Button variant="secondary" size="sm" onClick={onEdit}>
+              Edit
+            </Button>
+            <Button
+              variant={supervisor.status === 'active' ? 'danger' : 'primary'}
+              size="sm"
+              onClick={() => onRequestStatusChange(supervisor)}
+            >
+              {supervisor.status === 'active' ? 'Deactivate' : 'Reactivate'}
+            </Button>
+          </div>
+        ) : (
+          <RoleBadge role="supervisor" />
+        )
+      }
+    >
+      {isEditing ? (
+        <SupervisorForm
+          mode="edit"
+          initial={supervisor}
+          sites={sites}
+          onCancel={onCancelEdit}
+          onSaved={onSaved}
+        />
+      ) : (
+        <AccountDetails account={supervisor} siteName={siteName} />
+      )}
+    </Card>
+  );
+}
+
 export default function UsersPage() {
   const { user: currentUser } = useAuth();
 
   const [accounts, setAccounts] = useState(null);
+  // Active sites of this organization — the Admin picks one of these for each supervisor.
+  const [sites, setSites] = useState([]);
   const [loadError, setLoadError] = useState(null);
   const [notice, setNotice] = useState(null);
-  const [mode, setMode] = useState('view');
-  const [confirmingStatus, setConfirmingStatus] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const [statusTarget, setStatusTarget] = useState(null);
   const [statusPending, setStatusPending] = useState(false);
 
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      const response = await usersApi.list();
-      setAccounts(response.data);
+      const [usersResponse, sitesResponse] = await Promise.all([
+        usersApi.list(),
+        sitesApi.list({ limit: 100 }),
+      ]);
+      setAccounts(usersResponse.data);
+      setSites(sitesResponse.data);
     } catch (err) {
       setLoadError(err.message);
     }
@@ -144,21 +245,22 @@ export default function UsersPage() {
   }, [load]);
 
   const admin = accounts?.find((account) => account.role === 'admin') ?? null;
-  const supervisor = accounts?.find((account) => account.role === 'supervisor') ?? null;
+  const supervisors = accounts?.filter((account) => account.role === 'supervisor') ?? [];
 
   async function handleSaved(message) {
-    setMode('view');
+    setEditingId(null);
+    setCreating(false);
     setNotice(message);
     await load();
   }
 
-  async function toggleSupervisorStatus() {
+  async function toggleStatus() {
     setStatusPending(true);
     try {
-      const next = supervisor.status === 'active' ? 'inactive' : 'active';
-      const response = await usersApi.setSupervisorStatus(next);
+      const next = statusTarget.status === 'active' ? 'inactive' : 'active';
+      const response = await usersApi.setSupervisorStatus(statusTarget.id, next);
       setNotice(response.message);
-      setConfirmingStatus(false);
+      setStatusTarget(null);
       await load();
     } catch (err) {
       setLoadError(err.message);
@@ -184,11 +286,14 @@ export default function UsersPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <div className="mb-5">
-        <h1 className="text-xl font-semibold text-steel-900">Organization users</h1>
-        <p className="mt-1 text-steel-500">
-          Every organization has one admin and one supervisor.
-        </p>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-steel-900">Organization users</h1>
+          <p className="mt-1 text-steel-500">One admin, and as many supervisors as the organization needs.</p>
+        </div>
+        {!creating && (
+          <Button onClick={() => setCreating(true)}>Add supervisor</Button>
+        )}
       </div>
 
       {notice && <Alert tone="success">{notice}</Alert>}
@@ -209,80 +314,63 @@ export default function UsersPage() {
           )}
         </Card>
 
-        <Card
-          title="Supervisor"
-          subtitle="Can create and edit records, but cannot delete or export"
-          actions={
-            supervisor ? (
-              <div className="flex items-center gap-2">
-                <RoleBadge role="supervisor" />
-                {mode === 'view' && (
-                  <>
-                    <Button variant="secondary" size="sm" onClick={() => setMode('edit')}>
-                      Edit
-                    </Button>
-                    <Button
-                      variant={supervisor.status === 'active' ? 'danger' : 'primary'}
-                      size="sm"
-                      onClick={() => setConfirmingStatus(true)}
-                    >
-                      {supervisor.status === 'active' ? 'Deactivate' : 'Reactivate'}
-                    </Button>
-                  </>
-                )}
-              </div>
-            ) : null
-          }
-        >
-          {mode === 'create' && (
-            <SupervisorForm mode="create" onCancel={() => setMode('view')} onSaved={handleSaved} />
-          )}
-
-          {mode === 'edit' && supervisor && (
+        {creating && (
+          <Card title="Add supervisor" actions={<RoleBadge role="supervisor" />}>
             <SupervisorForm
-              mode="edit"
-              initial={supervisor}
-              onCancel={() => setMode('view')}
+              mode="create"
+              sites={sites}
+              onCancel={() => setCreating(false)}
               onSaved={handleSaved}
             />
-          )}
+          </Card>
+        )}
 
-          {mode === 'view' &&
-            (supervisor ? (
-              <AccountDetails account={supervisor} />
-            ) : (
-              <div className="py-6 text-center">
-                <p className="text-steel-500">
-                  This organization does not have a supervisor yet.
-                </p>
-                <Button className="mt-4" onClick={() => setMode('create')}>
-                  Create supervisor
-                </Button>
-              </div>
-            ))}
-        </Card>
+        {supervisors.map((supervisor) => (
+          <SupervisorCard
+            key={supervisor.id}
+            supervisor={supervisor}
+            sites={sites}
+            isEditing={editingId === supervisor.id}
+            isCreatingAnother={creating}
+            onEdit={() => setEditingId(supervisor.id)}
+            onCancelEdit={() => setEditingId(null)}
+            onSaved={handleSaved}
+            onRequestStatusChange={setStatusTarget}
+          />
+        ))}
+
+        {!creating && supervisors.length === 0 && (
+          <Card title="Supervisors" subtitle="Can create and edit records, but cannot delete or export">
+            <div className="py-6 text-center">
+              <p className="text-steel-500">This organization does not have any supervisors yet.</p>
+              <Button className="mt-4" onClick={() => setCreating(true)}>
+                Add supervisor
+              </Button>
+            </div>
+          </Card>
+        )}
       </div>
 
       <Modal
-        open={confirmingStatus}
-        onClose={() => setConfirmingStatus(false)}
-        title={supervisor?.status === 'active' ? 'Deactivate supervisor?' : 'Reactivate supervisor?'}
+        open={Boolean(statusTarget)}
+        onClose={() => setStatusTarget(null)}
+        title={statusTarget?.status === 'active' ? 'Deactivate supervisor?' : 'Reactivate supervisor?'}
         description={
-          supervisor?.status === 'active'
-            ? `${supervisor?.name} will be signed out on their next request and will not be able to sign in again until reactivated.`
-            : `${supervisor?.name} will be able to sign in again.`
+          statusTarget?.status === 'active'
+            ? `${statusTarget?.name} will be signed out on their next request and will not be able to sign in again until reactivated.`
+            : `${statusTarget?.name} will be able to sign in again.`
         }
         footer={
           <>
-            <Button variant="secondary" onClick={() => setConfirmingStatus(false)}>
+            <Button variant="secondary" onClick={() => setStatusTarget(null)}>
               Cancel
             </Button>
             <Button
-              variant={supervisor?.status === 'active' ? 'danger' : 'primary'}
+              variant={statusTarget?.status === 'active' ? 'danger' : 'primary'}
               loading={statusPending}
-              onClick={toggleSupervisorStatus}
+              onClick={toggleStatus}
             >
-              {supervisor?.status === 'active' ? 'Deactivate' : 'Reactivate'}
+              {statusTarget?.status === 'active' ? 'Deactivate' : 'Reactivate'}
             </Button>
           </>
         }

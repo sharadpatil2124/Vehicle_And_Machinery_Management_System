@@ -30,6 +30,8 @@ export default function VehicleDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [restoreError, setRestoreError] = useState(null);
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -69,6 +71,19 @@ export default function VehicleDetailPage() {
     }
   }
 
+  async function handleRestore() {
+    setRestoring(true);
+    setRestoreError(null);
+    try {
+      await vehiclesApi.restore(id);
+      await load();
+    } catch (err) {
+      setRestoreError(err.message);
+    } finally {
+      setRestoring(false);
+    }
+  }
+
   if (loadError) {
     return (
       <div className="mx-auto max-w-4xl">
@@ -96,7 +111,7 @@ export default function VehicleDetailPage() {
           </div>
         </div>
 
-        {vehicle.status === 'active' && (
+        {vehicle.status === 'active' ? (
           <div className="flex gap-2">
             <Can resource="VEHICLE" action="UPDATE">
               <Button as={Link} to={`/vehicles/${vehicle.id}/edit`} variant="secondary">
@@ -109,6 +124,15 @@ export default function VehicleDetailPage() {
               </Button>
             </Can>
           </div>
+        ) : (
+          <Can resource="VEHICLE" action="RESTORE">
+            <div className="flex flex-col items-end gap-1">
+              <Button variant="secondary" onClick={handleRestore} disabled={restoring}>
+                {restoring ? 'Restoring…' : 'Restore'}
+              </Button>
+              {restoreError && <p className="text-sm text-danger-600">{restoreError}</p>}
+            </div>
+          </Can>
         )}
       </div>
 
@@ -156,7 +180,7 @@ export default function VehicleDetailPage() {
       <DeleteWordModal
         open={confirmingDelete}
         title="Delete this vehicle?"
-        description={`${vehicle.registrationNumber} will be archived. It disappears from the fleet list, but its history is preserved and this cannot be undone from here.`}
+        description={`${vehicle.registrationNumber} will be archived. It disappears from the fleet list, but its history is preserved and it can be restored later from this page.`}
         onCancel={() => setConfirmingDelete(false)}
         onConfirm={handleDelete}
         pending={deleting}

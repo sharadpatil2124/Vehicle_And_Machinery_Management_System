@@ -9,6 +9,38 @@ export const EMPTY_COMPLIANCE = {
   puc: { startDate: '', expiryDate: '' },
 };
 
+/**
+ * Insurance, Permit (State) and PUC each have a start date and an end date.
+ * The end date must be strictly after the start date — not before it, and not
+ * the same day either.
+ *
+ * Dates come from <input type="date"> as "YYYY-MM-DD" strings, so they can be
+ * compared directly with < / === (no need to parse them into Date objects).
+ */
+function dateRangeError(startDate, expiryDate) {
+  if (!startDate || !expiryDate) return null;
+  if (expiryDate < startDate) return 'End date cannot be before the start date';
+  if (expiryDate === startDate) return 'End date cannot be the same as the start date';
+  return null;
+}
+
+/**
+ * The current validation errors for the three date-range compliance fields,
+ * keyed the same way as `value` itself: { insurance, statePermit, puc }.
+ * Each is either an error message or null.
+ *
+ * Exported so the form pages (VehicleFormPage, MachineryFormPage) can check
+ * this before submitting — the fields below already show the same message
+ * inline, so submission is simply blocked rather than repeating the message.
+ */
+export function getComplianceDateErrors(value) {
+  return {
+    insurance: dateRangeError(value.insurance.startDate, value.insurance.expiryDate),
+    statePermit: dateRangeError(value.statePermit.startDate, value.statePermit.expiryDate),
+    puc: dateRangeError(value.puc.startDate, value.puc.expiryDate),
+  };
+}
+
 function Row({ title, children }) {
   return (
     <div className="border-b border-steel-100 py-4 last:border-b-0">
@@ -19,6 +51,8 @@ function Row({ title, children }) {
 }
 
 export default function ComplianceFields({ value, onChange }) {
+  const dateErrors = getComplianceDateErrors(value);
+
   function updateField(key, field) {
     return (event) => onChange({ ...value, [key]: { ...value[key], [field]: event.target.value } });
   }
@@ -90,7 +124,7 @@ export default function ComplianceFields({ value, onChange }) {
             />
           )}
         </Field>
-        <Field label="Insurance end date">
+        <Field label="Insurance end date" error={dateErrors.insurance}>
           {({ id, invalid, describedBy }) => (
             <Input
               id={id}
@@ -117,7 +151,7 @@ export default function ComplianceFields({ value, onChange }) {
             />
           )}
         </Field>
-        <Field label="State permit end date">
+        <Field label="State permit end date" error={dateErrors.statePermit}>
           {({ id, invalid, describedBy }) => (
             <Input
               id={id}
@@ -144,7 +178,7 @@ export default function ComplianceFields({ value, onChange }) {
             />
           )}
         </Field>
-        <Field label="PUC end date">
+        <Field label="PUC end date" error={dateErrors.puc}>
           {({ id, invalid, describedBy }) => (
             <Input
               id={id}

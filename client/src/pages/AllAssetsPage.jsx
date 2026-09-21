@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { machineryApi, vehiclesApi } from '../api/client';
 import { Alert, Badge, Input, Pagination, Select, Spinner, Table } from '../components/ui';
+import useSiteNames from '../hooks/useSiteNames';
 
 const PAGE_SIZE = 20;
 const MAX_FETCH = 100;
@@ -16,10 +17,6 @@ const STATUS_OPTIONS = [
   { value: '', label: 'Active (default)' },
   { value: 'archived', label: 'Archived' },
 ];
-
-function StatusBadge({ status }) {
-  return <Badge tone={status === 'archived' ? 'neutral' : 'success'}>{status}</Badge>;
-}
 
 function toRow(asset, assetType) {
   const isHoursBased = assetType === 'VEHICLE' ? asset.isHoursBased : true;
@@ -43,6 +40,7 @@ export default function AllAssetsPage() {
     sort: 'createdAt:desc',
   });
   const [rows, setRows] = useState(null);
+  const siteNames = useSiteNames();
   const [error, setError] = useState(null);
 
   const load = useCallback(async (activeFilters) => {
@@ -118,17 +116,17 @@ export default function AllAssetsPage() {
     {
       key: 'meterValue',
       label: 'Current meter',
-      render: (r) => `${Number(r.meterValue).toLocaleString()} ${r.meterLabel}`,
-    },
-    {
-      key: 'status',
-      label: 'Status',
       render: (r) => (
         <div className="flex items-center gap-1.5">
-          <StatusBadge status={r.status} />
+          <span>{`${Number(r.meterValue).toLocaleString()} ${r.meterLabel}`}</span>
           {r.isServiceDue && <Badge tone="warning">Service due</Badge>}
         </div>
       ),
+    },
+    {
+      key: 'currentSiteId',
+      label: 'Site',
+      render: (r) => siteNames[r.currentSiteId] ?? '—',
     },
     {
       key: 'actions',

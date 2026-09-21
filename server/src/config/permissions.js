@@ -12,6 +12,7 @@ const standardModule = Object.freeze({
   READ: BOTH,
   UPDATE: BOTH,
   DELETE: ADMIN_ONLY,
+  RESTORE: ADMIN_ONLY,
 });
 
 const PERMISSIONS = Object.freeze({
@@ -23,7 +24,22 @@ const PERMISSIONS = Object.freeze({
   FUEL: standardModule,
   COMPLIANCE: standardModule,
 
-  SITE: Object.freeze({ ...standardModule, ASSIGN: BOTH }),
+  // The Sites module belongs to the Admin. A Supervisor is tied to one site, so a
+  // site they created would be invisible the moment it existed, and a site they
+  // renamed or archived is one the Admin assigned them to — not theirs to change.
+  //
+  // READ stays open to both: a Supervisor still needs the name of their own site
+  // on an asset page and in the asset form. services/siteAccess.js already limits
+  // those reads to that one site, so READ never exposes another site.
+  //
+  // ASSIGN = moving a vehicle or machine from one site to another. Admin only:
+  // a Supervisor belongs to a single site and must not move assets out of it.
+  SITE: Object.freeze({
+    ...standardModule,
+    CREATE: ADMIN_ONLY,
+    UPDATE: ADMIN_ONLY,
+    ASSIGN: ADMIN_ONLY,
+  }),
 
   DOCUMENT: Object.freeze({
     CREATE: BOTH,

@@ -3,15 +3,12 @@ import { Link } from 'react-router-dom';
 import { vehiclesApi } from '../api/client';
 import { Alert, Badge, Button, Input, Pagination, Select, Spinner, Table } from '../components/ui';
 import Can from '../components/Can';
+import useSiteNames from '../hooks/useSiteNames';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'Active (default)' },
   { value: 'archived', label: 'Archived' },
 ];
-
-function StatusBadge({ status }) {
-  return <Badge tone={status === 'archived' ? 'neutral' : 'success'}>{status}</Badge>;
-}
 
 function ServiceDueBadge({ vehicle }) {
   if (!vehicle.isServiceDue) return null;
@@ -28,6 +25,7 @@ export default function VehiclesListPage() {
   });
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const siteNames = useSiteNames();
 
   const load = useCallback(async (activeFilters) => {
     setError(null);
@@ -72,20 +70,21 @@ export default function VehiclesListPage() {
       key: 'currentKM',
       label: 'Current meter',
       sortable: true,
-      render: (v) =>
-        v.isHoursBased
-          ? `${Number(v.currentHours).toLocaleString()} hrs`
-          : `${Number(v.currentKM).toLocaleString()} KM`,
-    },
-    {
-      key: 'status',
-      label: 'Status',
       render: (v) => (
         <div className="flex items-center gap-1.5">
-          <StatusBadge status={v.status} />
+          <span>
+            {v.isHoursBased
+              ? `${Number(v.currentHours).toLocaleString()} hrs`
+              : `${Number(v.currentKM).toLocaleString()} KM`}
+          </span>
           <ServiceDueBadge vehicle={v} />
         </div>
       ),
+    },
+    {
+      key: 'currentSiteId',
+      label: 'Site',
+      render: (v) => siteNames[v.currentSiteId] ?? '—',
     },
     {
       key: 'actions',

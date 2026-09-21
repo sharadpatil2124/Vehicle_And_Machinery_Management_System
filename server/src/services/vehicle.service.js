@@ -7,10 +7,21 @@ const { assertMeterNotDecreasing } = require('../utils/meter');
 const { parseListQuery, parseEnumFilter } = require('../utils/queryOptions');
 const { buildListResponse } = require('../utils/listResponse');
 const { createTenantScopedRepository } = require('./tenantScopedRepository');
-const { archiveEntity } = require('./archive.service');
+const { archiveEntity, restoreEntity } = require('./archive.service');
 const { recordCreate, recordUpdate } = require('./audit.service');
+const {
+  scopeToSite,
+  assertSiteAllowed,
+  assertSiteChangeAllowed,
+  supervisorSiteId,
+} = require('./siteAccess');
 const storage = require('./storage.service');
 const { assertSiteAssignable } = require('./site.service');
+const { recordSiteAssignment } = require('./siteAssignment.service');
+const {
+  assertChassisNumberAvailable,
+  assertRegistrationNumberAvailable,
+} = require('./assetIdentifier.service');
 const { saveComplianceDocuments } = require('./complianceDocument.service');
 const { getMandatoryDocTypes, createDocumentsForNewAsset } = require('./assetDocument.service');
 
@@ -25,9 +36,28 @@ function toPublic(vehicle) {
   return vehicle.toPublicJSON();
 }
 
+const ASSET_ID_PREFIX = 'VEH-';
+
+/**
+ * The next asset id for this tenant, for example "VEH-000007".
+ *
+ * It counts up from the highest id already in use, NOT from the number of
+ * rows. Deleting a vehicle leaves a gap in the sequence, and "row count + 1"
+ * then points at an id that still exists, so every new asset was rejected as a
+ * duplicate. Archived assets keep their ids, so they are included here too.
+ */
 async function generateAssetId(tenantId, { transaction } = {}) {
-  const count = await Vehicle.count({ where: { tenantId }, transaction, paranoid: false });
-  return `VEH-${String(count + 1).padStart(6, '0')}`;
+  const highest = await Vehicle.max('assetId', { where: { tenantId }, transaction, paranoid: false });
+  const nextNumber = highest ? Number(highest.slice(ASSET_ID_PREFIX.length)) + 1 : 1;
+  return `${ASSET_ID_PREFIX}${String(nextNumber).padStart(6, '0')}`;
+}
+
+/** True when the insert clashed on the generated asset id, not on data the user typed. */
+function isAssetIdCollision(error) {
+  return (
+    error.name === 'SequelizeUniqueConstraintError' &&
+    Object.keys(error.fields ?? {}).some((indexName) => indexName.includes('asset_id'))
+  );
 }
 
 function isHoursBasedType(type) {
@@ -208,27 +238,15 @@ function assertMandatoryDocuments(files) {
   throw AppError.badRequest(`${missing.join(' and ')} ${noun} required to create a vehicle`);
 }
 
-async function assertRegistrationAvailable(tenantId, registrationNumber, excludeId) {
-  const existing = await Vehicle.findOne({
-    where: {
-      tenantId,
-      registrationNumber,
-      ...(excludeId ? { id: { [Op.ne]: excludeId } } : {}),
-    },
-  });
-  if (existing) {
-    throw AppError.conflict('A vehicle with this registration number already exists');
-  }
-}
-
-async function listVehicles({ tenantId, query }) {
+async function listVehicles({ tenantId, auth, query }) {
   const { page, limit, offset, order } = parseListQuery(query, {
     sortableFields: SORTABLE_FIELDS,
     defaultSort: DEFAULT_SORT,
   });
 
   const status = parseEnumFilter(query.status, Vehicle.STATUSES, 'Status') ?? 'active';
-  const where = { status };
+  // A Supervisor only ever sees vehicles standing at their own site.
+  const where = scopeToSite({ status }, auth);
   if (query.fuelType) where.fuelType = query.fuelType;
 
   const search = typeof query.search === 'string' ? query.search.trim() : '';
@@ -245,21 +263,27 @@ async function listVehicles({ tenantId, query }) {
   return buildListResponse(rows.map(toPublic), { page, limit, total: count });
 }
 
-async function getVehicle({ tenantId, id }) {
+async function getVehicle({ tenantId, auth, id }) {
   const vehicle = await repo.findByPk(tenantId, id);
   if (!vehicle) throw AppError.notFound('Vehicle not found');
+  assertSiteAllowed(auth, vehicle.currentSiteId, 'Vehicle not found');
   return toPublic(vehicle);
 }
 
-async function createVehicle({ tenantId, actingUserId, payload, files }) {
+async function createVehicle({ tenantId, auth, actingUserId, payload, files }) {
   const baseInput = readVehicleBaseInput(payload);
   const siteInput = readCurrentSiteIdInput(payload);
+  // A Supervisor can only add a vehicle to their own site, so the site is taken
+  // from their account rather than from whatever the request asked for.
+  const ownSiteId = supervisorSiteId(auth);
+  if (ownSiteId !== null) siteInput.currentSiteId = ownSiteId;
   const meterInput = readMeterInputForCreate(payload, baseInput.type);
   const input = { ...baseInput, ...siteInput, ...meterInput };
   const compliance = parseComplianceField(payload.compliance);
 
   assertMandatoryDocuments(files);
-  await assertRegistrationAvailable(tenantId, input.registrationNumber);
+  await assertRegistrationNumberAvailable({ value: input.registrationNumber });
+  await assertChassisNumberAvailable({ value: input.chassisNumber });
   if (input.currentSiteId != null) {
     await assertSiteAssignable(tenantId, input.currentSiteId);
   }
@@ -285,8 +309,10 @@ async function createVehicle({ tenantId, actingUserId, payload, files }) {
           );
           break;
         } catch (error) {
+          // Only an asset-id clash is worth retrying. Anything else — a duplicate
+          // registration number, say — must surface with its own message at once.
           const isLastAttempt = attempt === ASSET_ID_GENERATION_ATTEMPTS;
-          if (error.name !== 'SequelizeUniqueConstraintError' || isLastAttempt) throw error;
+          if (!isAssetIdCollision(error) || isLastAttempt) throw error;
         }
       }
 
@@ -294,6 +320,16 @@ async function createVehicle({ tenantId, actingUserId, payload, files }) {
         { tenantId, entityType: 'Vehicle', entityId: created.id, performedBy: actingUserId, after: created },
         { transaction }
       );
+
+      await recordSiteAssignment({
+        tenantId,
+        assetType: 'VEHICLE',
+        assetId: created.assetId,
+        previousSiteId: null,
+        nextSiteId: created.currentSiteId,
+        actingUserId,
+        transaction,
+      });
 
       await saveComplianceDocuments({
         tenantId,
@@ -325,25 +361,32 @@ async function createVehicle({ tenantId, actingUserId, payload, files }) {
   }
 }
 
-async function updateVehicle({ tenantId, actingUserId, id, payload }) {
+async function updateVehicle({ tenantId, auth, actingUserId, id, payload }) {
   const vehicle = await repo.findByPk(tenantId, id);
   if (!vehicle) throw AppError.notFound('Vehicle not found');
+  assertSiteAllowed(auth, vehicle.currentSiteId, 'Vehicle not found');
 
   const baseInput = readVehicleBaseInput(payload, { partial: true });
 
   if (baseInput.registrationNumber && baseInput.registrationNumber !== vehicle.registrationNumber) {
-    await assertRegistrationAvailable(tenantId, baseInput.registrationNumber, id);
+    await assertRegistrationNumberAvailable({ value: baseInput.registrationNumber, excludeVehicleId: id });
+  }
+  if (baseInput.chassisNumber && baseInput.chassisNumber !== vehicle.chassisNumber) {
+    await assertChassisNumberAvailable({ value: baseInput.chassisNumber, excludeVehicleId: id });
   }
 
   const nextType = baseInput.type ?? vehicle.type;
   const meterInput = readMeterInputForUpdate(payload, vehicle, nextType);
   const siteInput = readCurrentSiteIdInput(payload, { partial: true });
+  assertSiteChangeAllowed(auth, vehicle.currentSiteId, siteInput);
   if (siteInput.currentSiteId != null) {
     await assertSiteAssignable(tenantId, siteInput.currentSiteId);
   }
   const compliance = parseComplianceField(payload.compliance);
 
   const before = vehicle.toJSON();
+  const previousSiteId = vehicle.currentSiteId;
+  const nextSiteId = 'currentSiteId' in siteInput ? siteInput.currentSiteId : previousSiteId;
 
   const updated = await sequelize.transaction(async (transaction) => {
     await vehicle.update(
@@ -360,6 +403,16 @@ async function updateVehicle({ tenantId, actingUserId, id, payload }) {
       { tenantId, entityType: 'Vehicle', entityId: vehicle.id, performedBy: actingUserId, before, after: vehicle },
       { transaction }
     );
+
+    await recordSiteAssignment({
+      tenantId,
+      assetType: 'VEHICLE',
+      assetId: vehicle.assetId,
+      previousSiteId,
+      nextSiteId,
+      actingUserId,
+      transaction,
+    });
 
     await saveComplianceDocuments({
       tenantId,
@@ -389,9 +442,22 @@ async function deleteVehicle({ tenantId, actingUserId, id, confirmation }) {
   return toPublic(archived);
 }
 
-async function getVehicleHistory({ tenantId, id }) {
+async function restoreVehicle({ tenantId, actingUserId, id }) {
+  const restored = await restoreEntity({
+    model: Vehicle,
+    entityType: 'Vehicle',
+    tenantId,
+    id,
+    performedBy: actingUserId,
+  });
+
+  return toPublic(restored);
+}
+
+async function getVehicleHistory({ tenantId, auth, id }) {
   const vehicle = await repo.findByPk(tenantId, id);
   if (!vehicle) throw AppError.notFound('Vehicle not found');
+  assertSiteAllowed(auth, vehicle.currentSiteId, 'Vehicle not found');
 
   const entries = await AuditLog.findAll({
     where: { tenantId, entityType: 'Vehicle', entityId: String(id) },
@@ -414,5 +480,6 @@ module.exports = {
   createVehicle,
   updateVehicle,
   deleteVehicle,
+  restoreVehicle,
   getVehicleHistory,
 };

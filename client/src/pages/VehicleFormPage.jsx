@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { vehiclesApi, sitesApi, complianceApi } from '../api/client';
 import { Alert, Button, Card, Field, Input, Select, Spinner } from '../components/ui';
-import ComplianceFields, { EMPTY_COMPLIANCE } from '../components/ComplianceFields';
+import ComplianceFields, { EMPTY_COMPLIANCE, getComplianceDateErrors } from '../components/ComplianceFields';
 import AssetDocumentFields from '../components/AssetDocumentFields';
 import { DOCUMENT_LABELS, getMissingMandatoryDocTypes } from '../config/assetDocuments';
 import { VEHICLE_TYPE_OPTIONS, HOURS_BASED_VEHICLE_TYPE } from '../config/vehicleTypes';
 import { FUEL_TYPE_OPTIONS } from '../config/fuelTypes';
 import { complianceSlotsToFormValue } from '../config/compliance';
+import { useAuth } from '../context/AuthContext';
+import { hasPermission } from '../config/permissions';
 
 const EMPTY_FORM = {
   registrationNumber: '',
@@ -43,6 +45,12 @@ export default function VehicleFormPage() {
   const { id } = useParams();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
+  const { user, role } = useAuth();
+
+  // Choosing the site is an Admin job. A Supervisor works at a single site, so
+  // the field below is locked to it (see server/src/services/siteAccess.js).
+  const canChooseSite = hasPermission(role, 'SITE', 'ASSIGN');
+  const lockedSiteId = user?.siteId ?? '';
 
   const [form, setForm] = useState(EMPTY_FORM);
   const isHeavy = form.type === HOURS_BASED_VEHICLE_TYPE;
@@ -82,6 +90,14 @@ export default function VehicleFormPage() {
   async function handleSubmit(event) {
     event.preventDefault();
     setSubmitError(null);
+
+    // Insurance / Permit (State) / PUC end dates must be after their start
+    // dates. The errors already show inline next to each field (see
+    // ComplianceFields), so submission is simply blocked here.
+    const complianceErrors = getComplianceDateErrors(compliance);
+    if (Object.values(complianceErrors).some(Boolean)) {
+      return;
+    }
 
     if (!isEdit) {
       const missing = getMissingMandatoryDocTypes('VEHICLE', documentFiles);
@@ -260,8 +276,9 @@ export default function VehicleFormPage() {
                   id={fieldId}
                   invalid={invalid}
                   describedBy={describedBy}
-                  value={form.currentSiteId}
+                  value={canChooseSite ? form.currentSiteId : lockedSiteId}
                   onChange={update('currentSiteId')}
+                  disabled={!canChooseSite}
                 >
                   <option value="">Unassigned</option>
                   {siteOptions.map((site) => (

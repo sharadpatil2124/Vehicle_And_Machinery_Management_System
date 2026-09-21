@@ -8,6 +8,8 @@ const { sequelize, Tenant, User } = require('../models');
 const AppError = require('../utils/AppError');
 const { requireText, requireEmail, requirePassword } = require('../utils/validation');
 const { recordAudit } = require('./audit.service');
+const { createSupervisorRecord } = require('./user.service');
+const emailService = require('./email.service');
 
 const INVALID_CREDENTIALS = 'Invalid email or password';
 
@@ -34,11 +36,22 @@ function buildSession(user, tenant) {
   };
 }
 
-async function signUp({ organizationName, name, email, password }) {
+function readSupervisorEntries(supervisors) {
+  if (!Array.isArray(supervisors)) return [];
+  return supervisors
+    .map((entry) => ({
+      name: typeof entry?.name === 'string' ? entry.name.trim() : '',
+      email: typeof entry?.email === 'string' ? entry.email.trim() : '',
+    }))
+    .filter((entry) => entry.name || entry.email);
+}
+
+async function signUp({ organizationName, name, email, password, supervisors }) {
   const cleanOrganizationName = requireText(organizationName, 'Organization name', { max: 150 });
   const cleanName = requireText(name, 'Name', { max: 150 });
   const cleanEmail = requireEmail(email);
   const cleanPassword = requirePassword(password);
+  const supervisorEntries = readSupervisorEntries(supervisors);
 
   if (await User.findOne({ where: { email: cleanEmail } })) {
     throw AppError.conflict('An account with this email already exists');
@@ -47,7 +60,7 @@ async function signUp({ organizationName, name, email, password }) {
   const passwordHash = await bcrypt.hash(cleanPassword, env.bcryptSaltRounds);
   const tenantId = generateTenantId();
 
-  const { tenant, user } = await sequelize.transaction(async (transaction) => {
+  const { tenant, user, createdSupervisors } = await sequelize.transaction(async (transaction) => {
     const createdTenant = await Tenant.create(
       {
         tenantId,
@@ -82,8 +95,30 @@ async function signUp({ organizationName, name, email, password }) {
       { transaction }
     );
 
-    return { tenant: createdTenant, user: createdUser };
+    const createdSupervisors = [];
+    for (const entry of supervisorEntries) {
+      const result = await createSupervisorRecord({
+        tenantId,
+        actingUserId: createdUser.id,
+        name: entry.name,
+        email: entry.email,
+        transaction,
+      });
+      createdSupervisors.push(result);
+    }
+
+    return { tenant: createdTenant, user: createdUser, createdSupervisors };
   });
+
+  for (const supervisor of createdSupervisors) {
+    await emailService.sendSupervisorInviteEmail({
+      to: supervisor.email,
+      name: supervisor.name,
+      organizationName: cleanOrganizationName,
+      resetUrl: supervisor.resetUrl,
+      expiresInMinutes: env.passwordResetTtlMinutes,
+    });
+  }
 
   const safeUser = await User.findByPk(user.id);
   return buildSession(safeUser, tenant);

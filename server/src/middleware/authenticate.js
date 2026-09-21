@@ -39,6 +39,10 @@ async function authenticate(req, _res, next) {
     userId: user.id,
     tenantId: user.tenantId,
     role: user.role,
+    // The Supervisor's assigned site, read from the database on every request
+    // (never from the token) so that changing it takes effect immediately.
+    // Always null for an Admin, who is not limited to one site.
+    siteId: user.siteId ?? null,
     email: user.email,
     name: user.name,
     organizationName: user.tenant.organizationName,

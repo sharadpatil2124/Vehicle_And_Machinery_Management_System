@@ -72,9 +72,9 @@ export const authApi = {
 
 export const usersApi = {
   list: () => api.get('/users'),
-  createSupervisor: (payload) => api.post('/users/supervisor', payload),
-  updateSupervisor: (payload) => api.put('/users/supervisor', payload),
-  setSupervisorStatus: (status) => api.patch('/users/supervisor/status', { status }),
+  createSupervisor: (payload) => api.post('/users/supervisors', payload),
+  updateSupervisor: (id, payload) => api.put(`/users/supervisors/${id}`, payload),
+  setSupervisorStatus: (id, status) => api.patch(`/users/supervisors/${id}/status`, { status }),
 };
 
 function toQueryString(params = {}) {
@@ -120,6 +120,7 @@ export const vehiclesApi = {
   create: (payload, files) => createAssetWithDocuments('/vehicles', payload, files),
   update: (id, payload) => api.put(`/vehicles/${id}`, payload),
   remove: (id, confirmation) => api.delete(`/vehicles/${id}`, { confirmation }),
+  restore: (id) => api.post(`/vehicles/${id}/restore`),
   history: (id) => api.get(`/vehicles/${id}/history`),
 };
 
@@ -188,15 +189,22 @@ export const machineryApi = {
   create: (payload, files) => createAssetWithDocuments('/machinery', payload, files),
   update: (id, payload) => api.put(`/machinery/${id}`, payload),
   remove: (id, confirmation) => api.delete(`/machinery/${id}`, { confirmation }),
+  restore: (id) => api.post(`/machinery/${id}/restore`),
   history: (id) => api.get(`/machinery/${id}/history`),
 };
 
 export const sitesApi = {
   list: (params) => api.get(`/sites${toQueryString(params)}`),
   get: (id) => api.get(`/sites/${id}`),
+  assets: (id) => api.get(`/sites/${id}/assets`),
   create: (payload) => api.post('/sites', payload),
   update: (id, payload) => api.put(`/sites/${id}`, payload),
   remove: (id, confirmation) => api.delete(`/sites/${id}`, { confirmation }),
+  restore: (id) => api.post(`/sites/${id}/restore`),
+};
+
+export const siteAssignmentsApi = {
+  history: (assetType, assetId) => api.get(`/site-assignments/${assetType}/${assetId}`),
 };
 
 export const complianceApi = {

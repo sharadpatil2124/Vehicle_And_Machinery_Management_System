@@ -1,11 +1,16 @@
 const env = require('../config/env');
 
-const LEVELS = ['debug', 'info', 'warn', 'error'];
+/**
+ * The terminal is kept deliberately quiet: the only things worth reading there
+ * are the password-reset / new-Supervisor links (printed by email.service.js)
+ * and the database connection status. Use this logger sparingly — for a real
+ * failure or a one-off startup fact, never for tracing or debugging.
+ */
+const LEVELS = ['info', 'warn', 'error'];
 
 function write(level, message, context) {
-  const entry = { level, message, time: new Date().toISOString(), ...context };
-
   if (env.isProduction) {
+    const entry = { level, message, time: new Date().toISOString(), ...context };
     process.stdout.write(`${JSON.stringify(entry)}\n`);
     return;
   }
@@ -17,10 +22,6 @@ function write(level, message, context) {
 const logger = {};
 for (const level of LEVELS) {
   logger[level] = (message, context) => write(level, message, context);
-}
-
-if (env.isProduction) {
-  logger.debug = () => {};
 }
 
 module.exports = logger;

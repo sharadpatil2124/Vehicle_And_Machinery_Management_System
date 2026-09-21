@@ -20,8 +20,8 @@ function toPublic(doc) {
   return doc.toPublicJSON();
 }
 
-async function listDocuments({ tenantId, assetType, assetId }) {
-  await resolveAsset(tenantId, assetType, assetId);
+async function listDocuments({ tenantId, auth, assetType, assetId }) {
+  await resolveAsset(tenantId, assetType, assetId, { auth });
 
   const docs = await AssetDocument.findAll({
     where: { tenantId, assetType, assetId },
@@ -41,11 +41,11 @@ async function listDocuments({ tenantId, assetType, assetId }) {
   });
 }
 
-async function uploadDocument({ tenantId, assetType, assetId, docType, actingUserId, file }) {
+async function uploadDocument({ tenantId, auth, assetType, assetId, docType, actingUserId, file }) {
   assertDocType(docType);
   if (!file) throw AppError.badRequest('A file is required');
 
-  await resolveAsset(tenantId, assetType, assetId);
+  await resolveAsset(tenantId, assetType, assetId, { auth });
 
   const existing = await AssetDocument.findOne({ where: { tenantId, assetType, assetId, docType } });
   const key = storage.buildKey(tenantId, assetType, assetId, docType, file.originalname);
@@ -120,9 +120,9 @@ async function uploadDocument({ tenantId, assetType, assetId, docType, actingUse
   }
 }
 
-async function getDocumentForDownload({ tenantId, assetType, assetId, docType }) {
+async function getDocumentForDownload({ tenantId, auth, assetType, assetId, docType }) {
   assertDocType(docType);
-  await resolveAsset(tenantId, assetType, assetId);
+  await resolveAsset(tenantId, assetType, assetId, { auth });
 
   const doc = await AssetDocument.findOne({ where: { tenantId, assetType, assetId, docType } });
   if (!doc) throw AppError.notFound('Document not found');

@@ -21,7 +21,6 @@ try {
 }
 
 const app = require('./app');
-const logger = require('./utils/logger');
 const { connectDatabase, disconnectDatabase } = require('./config/database');
 const { assertSchemaIsCurrent } = require('./config/migrator');
 
@@ -73,9 +72,7 @@ async function start() {
     ]);
   }
 
-  const server = app.listen(env.port, () => {
-    logger.info('API listening', { port: env.port, environment: env.nodeEnv });
-  });
+  const server = app.listen(env.port);
 
   server.on('error', (error) => {
     if (error.code === 'EADDRINUSE') {
@@ -88,22 +85,17 @@ async function start() {
     fail('Cannot start — server error:', [error.message]);
   });
 
-  function shutdown(signal) {
-    logger.info('Shutting down', { signal });
-
+  function shutdown() {
     server.close(async () => {
       await disconnectDatabase().catch(() => {});
       process.exit(0);
     });
 
-    setTimeout(() => {
-      logger.warn('Forcing shutdown after timeout');
-      process.exit(1);
-    }, 10000).unref();
+    setTimeout(() => process.exit(1), 10000).unref();
   }
 
-  process.on('SIGINT', () => shutdown('SIGINT'));
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 }
 
 start();

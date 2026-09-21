@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { sitesApi } from '../api/client';
-import { Alert, Badge, Button, Field, Input, Modal, Pagination, Spinner, Table } from '../components/ui';
+import { Alert, Badge, Button, Field, Input, Modal, Pagination, Select, Spinner, Table } from '../components/ui';
 import Can from '../components/Can';
 import DeleteWordModal from '../components/DeleteWordModal';
+
+const STATUS_OPTIONS = [
+  { value: '', label: 'Active (default)' },
+  { value: 'archived', label: 'Archived' },
+];
 
 function StatusBadge({ status }) {
   return <Badge tone={status === 'archived' ? 'neutral' : 'success'}>{status}</Badge>;
@@ -77,18 +82,23 @@ function SiteForm({ mode, initial, onCancel, onSaved }) {
 }
 
 export default function SitesPage() {
-  const [filters, setFilters] = useState({ search: '', page: 1 });
+  const [filters, setFilters] = useState({ search: '', status: '', page: 1 });
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [formState, setFormState] = useState(null);
   const [archiving, setArchiving] = useState(null);
   const [deletePending, setDeletePending] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
+  const [restoringId, setRestoringId] = useState(null);
 
   const load = useCallback(async (activeFilters) => {
     setError(null);
     try {
-      const response = await sitesApi.list({ search: activeFilters.search || undefined, page: activeFilters.page });
+      const response = await sitesApi.list({
+        search: activeFilters.search || undefined,
+        status: activeFilters.status || undefined,
+        page: activeFilters.page,
+      });
       setResult(response);
     } catch (err) {
       setError(err.message);
@@ -111,6 +121,19 @@ export default function SitesPage() {
       setDeleteError(err.message);
     } finally {
       setDeletePending(false);
+    }
+  }
+
+  async function handleRestore(site) {
+    setRestoringId(site.id);
+    setError(null);
+    try {
+      await sitesApi.restore(site.id);
+      await load(filters);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setRestoringId(null);
     }
   }
 
@@ -143,6 +166,18 @@ export default function SitesPage() {
               </button>
             )}
           </Can>
+          <Can resource="SITE" action="RESTORE">
+            {s.status === 'archived' && (
+              <button
+                type="button"
+                className="font-semibold text-brand-600 hover:underline disabled:opacity-60"
+                disabled={restoringId === s.id}
+                onClick={() => handleRestore(s)}
+              >
+                {restoringId === s.id ? 'Restoring…' : 'Restore'}
+              </button>
+            )}
+          </Can>
         </div>
       ),
     },
@@ -162,12 +197,22 @@ export default function SitesPage() {
 
       {error && <Alert tone="error">{error}</Alert>}
 
-      <div className="mb-4 max-w-sm">
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 sm:max-w-md">
         <Input
           placeholder="Search by name..."
           value={filters.search}
           onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value, page: 1 }))}
         />
+        <Select
+          value={filters.status}
+          onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value, page: 1 }))}
+        >
+          {STATUS_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </Select>
       </div>
 
       <div className="rounded border border-steel-200 bg-white">

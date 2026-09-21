@@ -1,0 +1,362 @@
+erDiagram
+
+    %%-- already exists in the project — shown only as anchors --%%
+    TENANT { varchar tenant_id PK }
+    USER { int id PK }
+    SITE { int id PK }
+    VEHICLE { int id PK, varchar asset_id UK }
+    MACHINERY { int id PK, varchar asset_id UK }
+
+    ITEM_CATEGORY {
+        bigint category_id PK
+        varchar tenant_id FK
+        bigint parent_category_id FK
+        varchar category_code UK
+        varchar category_name
+        varchar inventory_type
+        boolean is_active
+        datetime created_at
+        datetime updated_at
+    }
+
+    UNIT_OF_MEASURE {
+        bigint uom_id PK
+        varchar tenant_id FK
+        varchar uom_code UK
+        varchar uom_name
+        decimal conversion_factor
+        boolean is_active
+    }
+
+    ITEM {
+        bigint item_id PK
+        varchar tenant_id FK
+        bigint category_id FK
+        bigint base_uom_id FK
+        varchar item_code UK
+        varchar item_name
+        text description
+        varchar item_type
+        boolean is_hazardous
+        boolean batch_tracking_required
+        decimal minimum_stock_level
+        decimal reorder_level
+        decimal maximum_stock_level
+        varchar status
+        datetime created_at
+        datetime updated_at
+    }
+
+    SITE_ITEM {
+        bigint site_item_id PK
+        varchar tenant_id FK
+        int site_id FK
+        bigint item_id FK
+        decimal minimum_stock_level
+        decimal reorder_level
+        decimal maximum_stock_level
+        boolean is_active
+        datetime created_at
+        datetime updated_at
+    }
+
+    SUPPLIER {
+        bigint supplier_id PK
+        varchar tenant_id FK
+        varchar supplier_code UK
+        varchar supplier_name
+        varchar tax_registration_no
+        varchar contact_person
+        varchar phone
+        varchar email
+        text address
+        varchar status
+        datetime created_at
+        datetime updated_at
+    }
+
+    STORAGE_LOCATION {
+        bigint storage_location_id PK
+        varchar tenant_id FK
+        int site_id FK
+        varchar location_code
+        varchar location_name
+        varchar location_type
+        decimal capacity
+        varchar capacity_uom
+        boolean is_active
+        datetime created_at
+        datetime updated_at
+    }
+
+    PURCHASE {
+        bigint purchase_id PK
+        varchar tenant_id FK
+        int site_id FK
+        bigint supplier_id FK
+        varchar purchase_number UK
+        varchar supplier_invoice_number
+        date purchase_date
+        varchar purchased_by_name
+        int purchased_by_user_id FK
+        decimal subtotal_amount
+        decimal tax_amount
+        decimal total_purchase_amount
+        varchar currency_code
+        varchar status
+        text remarks
+        int created_by FK
+        datetime created_at
+        int approved_by FK
+        datetime approved_at
+        datetime updated_at
+    }
+
+    PURCHASE_ITEM {
+        bigint purchase_item_id PK
+        varchar tenant_id FK
+        bigint purchase_id FK
+        bigint item_id FK
+        bigint storage_location_id FK
+        decimal purchased_quantity
+        decimal received_quantity
+        bigint uom_id FK
+        decimal unit_price
+        decimal tax_percentage
+        decimal tax_amount
+        decimal line_total_amount
+        varchar batch_number
+        date manufacture_date
+        date expiry_date
+        varchar line_status
+        datetime created_at
+        datetime updated_at
+    }
+
+    DOCUMENT {
+        bigint document_id PK
+        varchar tenant_id FK
+        varchar entity_type
+        bigint entity_id
+        varchar document_type
+        varchar original_file_name
+        varchar object_key
+        varchar mime_type
+        bigint file_size_bytes
+        varchar checksum
+        int uploaded_by FK
+        datetime uploaded_at
+        boolean is_active
+    }
+
+    INVENTORY_TRANSACTION {
+        bigint inventory_transaction_id PK
+        varchar tenant_id FK
+        int site_id FK
+        bigint item_id FK
+        bigint storage_location_id FK
+        varchar transaction_number UK
+        varchar transaction_type
+        decimal quantity
+        bigint uom_id FK
+        decimal unit_cost
+        decimal total_cost
+        varchar reference_type
+        bigint reference_id
+        varchar reference_number
+        datetime transaction_at
+        varchar status
+        text remarks
+        int created_by FK
+        datetime created_at
+        bigint reversed_transaction_id FK
+    }
+
+    STOCK_BALANCE {
+        bigint stock_balance_id PK
+        varchar tenant_id FK
+        int site_id FK
+        bigint item_id FK
+        bigint storage_location_id FK
+        decimal quantity_on_hand
+        decimal reserved_quantity
+        decimal available_quantity
+        decimal average_unit_cost
+        datetime last_transaction_at
+        datetime updated_at
+    }
+
+    ASSET_ISSUE {
+        bigint asset_issue_id PK
+        varchar tenant_id FK
+        int site_id FK
+        varchar asset_type "VEHICLE or MACHINERY"
+        varchar asset_id "business id, e.g. VEH-000001"
+        varchar issue_number UK
+        datetime issue_date_time
+        decimal asset_meter_reading
+        varchar meter_type
+        varchar issued_to_person
+        int issued_by_user_id FK
+        varchar purpose
+        varchar status
+        text remarks
+        datetime created_at
+        datetime updated_at
+    }
+
+    ASSET_ISSUE_ITEM {
+        bigint asset_issue_item_id PK
+        varchar tenant_id FK
+        bigint asset_issue_id FK
+        bigint item_id FK
+        bigint storage_location_id FK
+        decimal issued_quantity
+        bigint uom_id FK
+        decimal unit_cost
+        decimal total_cost
+        bigint inventory_transaction_id FK
+        datetime created_at
+    }
+
+    ISSUE_REVERSAL {
+        bigint issue_reversal_id PK
+        varchar tenant_id FK
+        bigint asset_issue_id FK
+        varchar reversal_number UK
+        datetime reversal_date_time
+        varchar reason_code
+        text reason
+        int reversed_by FK
+        varchar status
+        datetime created_at
+    }
+
+    ISSUE_REVERSAL_ITEM {
+        bigint issue_reversal_item_id PK
+        varchar tenant_id FK
+        bigint issue_reversal_id FK
+        bigint asset_issue_item_id FK
+        decimal reversed_quantity
+        bigint inventory_transaction_id FK
+        datetime created_at
+    }
+
+    STOCK_ADJUSTMENT {
+        bigint adjustment_id PK
+        varchar tenant_id FK
+        int site_id FK
+        varchar adjustment_number UK
+        varchar adjustment_type
+        date adjustment_date
+        varchar reason_code
+        text reason_description
+        int requested_by FK
+        int approved_by FK
+        varchar status
+        datetime created_at
+        datetime approved_at
+    }
+
+    STOCK_ADJUSTMENT_ITEM {
+        bigint adjustment_item_id PK
+        varchar tenant_id FK
+        bigint adjustment_id FK
+        bigint item_id FK
+        bigint storage_location_id FK
+        decimal system_quantity
+        decimal counted_quantity
+        decimal adjustment_quantity
+        bigint uom_id FK
+        decimal unit_cost
+        bigint inventory_transaction_id FK
+    }
+
+    STOCK_TRANSFER {
+        bigint stock_transfer_id PK
+        varchar tenant_id FK
+        varchar transfer_number UK
+        int from_site_id FK
+        int to_site_id FK
+        int requested_by FK
+        datetime requested_at
+        int approved_by FK
+        datetime approved_at
+        int dispatched_by FK
+        datetime dispatched_at
+        int received_by FK
+        datetime received_at
+        varchar status
+        text remarks
+    }
+
+    STOCK_TRANSFER_ITEM {
+        bigint stock_transfer_item_id PK
+        varchar tenant_id FK
+        bigint stock_transfer_id FK
+        bigint item_id FK
+        bigint from_storage_location_id FK
+        bigint to_storage_location_id FK
+        decimal requested_quantity
+        decimal dispatched_quantity
+        decimal received_quantity
+        bigint uom_id FK
+        decimal unit_cost
+        bigint transfer_out_transaction_id FK
+        bigint transfer_in_transaction_id FK
+    }
+
+    TENANT ||--o{ ITEM_CATEGORY : scopes
+    TENANT ||--o{ UNIT_OF_MEASURE : scopes
+    TENANT ||--o{ ITEM : scopes
+    TENANT ||--o{ SUPPLIER : scopes
+    TENANT ||--o{ STORAGE_LOCATION : scopes
+    TENANT ||--o{ PURCHASE : scopes
+
+    ITEM_CATEGORY ||--o{ ITEM_CATEGORY : parent_of
+    ITEM_CATEGORY ||--o{ ITEM : groups
+    UNIT_OF_MEASURE ||--o{ ITEM : base_uom
+
+    SITE ||--o{ STORAGE_LOCATION : contains
+    SITE ||--o{ SITE_ITEM : configures
+    ITEM ||--o{ SITE_ITEM : configured_for
+
+    SITE ||--o{ PURCHASE : receives
+    SUPPLIER ||--o{ PURCHASE : supplies
+    PURCHASE ||--|{ PURCHASE_ITEM : contains
+    ITEM ||--o{ PURCHASE_ITEM : purchased
+    STORAGE_LOCATION ||--o{ PURCHASE_ITEM : received_at
+    UNIT_OF_MEASURE ||--o{ PURCHASE_ITEM : measured_in
+    PURCHASE ||--o{ DOCUMENT : supported_by
+
+    SITE ||--o{ STOCK_BALANCE : owns
+    ITEM ||--o{ STOCK_BALANCE : balances
+    STORAGE_LOCATION ||--o{ STOCK_BALANCE : stores
+
+    SITE ||--o{ INVENTORY_TRANSACTION : records
+    ITEM ||--o{ INVENTORY_TRANSACTION : moves
+    STORAGE_LOCATION ||--o{ INVENTORY_TRANSACTION : occurs_at
+    INVENTORY_TRANSACTION ||--o| INVENTORY_TRANSACTION : reverses
+
+    SITE ||--o{ ASSET_ISSUE : creates
+    VEHICLE ||--o{ ASSET_ISSUE : "consumes (when asset_type=VEHICLE)"
+    MACHINERY ||--o{ ASSET_ISSUE : "consumes (when asset_type=MACHINERY)"
+    ASSET_ISSUE ||--|{ ASSET_ISSUE_ITEM : contains
+    ASSET_ISSUE_ITEM ||--|| INVENTORY_TRANSACTION : posts
+
+    ASSET_ISSUE ||--o| ISSUE_REVERSAL : reversed_by
+    ISSUE_REVERSAL ||--|{ ISSUE_REVERSAL_ITEM : contains
+    ASSET_ISSUE_ITEM ||--o{ ISSUE_REVERSAL_ITEM : reverses
+    ISSUE_REVERSAL_ITEM ||--|| INVENTORY_TRANSACTION : posts
+
+    SITE ||--o{ STOCK_ADJUSTMENT : performs
+    STOCK_ADJUSTMENT ||--|{ STOCK_ADJUSTMENT_ITEM : contains
+    ITEM ||--o{ STOCK_ADJUSTMENT_ITEM : adjusts
+    STOCK_ADJUSTMENT_ITEM ||--o| INVENTORY_TRANSACTION : posts
+
+    SITE ||--o{ STOCK_TRANSFER : source
+    SITE ||--o{ STOCK_TRANSFER : destination
+    STOCK_TRANSFER ||--|{ STOCK_TRANSFER_ITEM : contains
+    ITEM ||--o{ STOCK_TRANSFER_ITEM : transfers
+
+    USER ||--o{ AUDIT_LOG : performs

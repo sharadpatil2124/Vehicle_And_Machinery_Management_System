@@ -16,6 +16,7 @@ import MachineryFormPage from './pages/MachineryFormPage';
 import MachineryDetailPage from './pages/MachineryDetailPage';
 import AllAssetsPage from './pages/AllAssetsPage';
 import SitesPage from './pages/SitesPage';
+import SiteManagementPage from './pages/site-management/SiteManagementPage';
 import ForbiddenPage from './pages/ForbiddenPage';
 import NotFoundPage from './pages/NotFoundPage';
 
@@ -52,7 +53,15 @@ export default function App() {
         <Route path="/machinery/:id" element={<MachineryDetailPage />} />
         <Route path="/machinery/:id/edit" element={<MachineryFormPage />} />
         <Route path="/assets" element={<AllAssetsPage />} />
-        <Route path="/sites" element={<SitesPage />} />
+        <Route
+          path="/sites"
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <SitesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/site-management" element={<SiteManagementPage />} />
         <Route path="/forbidden" element={<ForbiddenPage />} />
       </Route>
 

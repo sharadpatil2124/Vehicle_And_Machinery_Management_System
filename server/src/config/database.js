@@ -6,7 +6,9 @@ const sequelize = new Sequelize(env.db.name, env.db.user, env.db.password, {
   host: env.db.host,
   port: env.db.port,
   dialect: 'mysql',
-  logging: env.isProduction ? false : (sql) => logger.debug(sql),
+  // Never print SQL. Every query used to be written to the terminal in
+  // development, which buried the only output that matters (the email links).
+  logging: false,
   define: {
     underscored: true,
     timestamps: true,
@@ -21,27 +23,16 @@ const sequelize = new Sequelize(env.db.name, env.db.user, env.db.password, {
 });
 
 async function connectDatabase() {
-  try {
-    await sequelize.authenticate();
-    logger.info('Database connected', {
-      host: env.db.host,
-      port: env.db.port,
-      database: env.db.name,
-    });
-  } catch (error) {
-    logger.error('Database connection failed', {
-      host: env.db.host,
-      port: env.db.port,
-      database: env.db.name,
-      reason: error.message,
-    });
-    throw error;
-  }
+  await sequelize.authenticate();
+  logger.info('Database connected', {
+    host: env.db.host,
+    port: env.db.port,
+    database: env.db.name,
+  });
 }
 
 async function disconnectDatabase() {
   await sequelize.close();
-  logger.info('Database connection closed');
 }
 
 module.exports = { sequelize, connectDatabase, disconnectDatabase };

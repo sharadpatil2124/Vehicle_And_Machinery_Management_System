@@ -1,13 +1,14 @@
 const { Op } = require('sequelize');
 
-const { sequelize, Site } = require('../models');
+const { sequelize, Site, Vehicle, Machinery } = require('../models');
 const AppError = require('../utils/AppError');
 const { requireText, optionalText } = require('../utils/validation');
 const { parseListQuery, parseEnumFilter } = require('../utils/queryOptions');
 const { buildListResponse } = require('../utils/listResponse');
 const { createTenantScopedRepository } = require('./tenantScopedRepository');
-const { archiveEntity } = require('./archive.service');
+const { archiveEntity, restoreEntity } = require('./archive.service');
 const { recordCreate, recordUpdate } = require('./audit.service');
+const { scopeToSite, assertSiteAllowed } = require('./siteAccess');
 
 const repo = createTenantScopedRepository(Site);
 
@@ -31,14 +32,16 @@ function readSiteInput(payload, { partial = false } = {}) {
   return input;
 }
 
-async function listSites({ tenantId, query }) {
+async function listSites({ tenantId, auth, query }) {
   const { page, limit, offset, order } = parseListQuery(query, {
     sortableFields: SORTABLE_FIELDS,
     defaultSort: DEFAULT_SORT,
   });
 
   const status = parseEnumFilter(query.status, Site.STATUSES, 'Status') ?? 'active';
-  const where = { status };
+  // A Supervisor sees only the one site assigned to them. Here the site's own
+  // primary key is the column to match on, not `currentSiteId`.
+  const where = scopeToSite({ status }, auth, 'id');
 
   const search = typeof query.search === 'string' ? query.search.trim() : '';
   if (search) {
@@ -50,9 +53,10 @@ async function listSites({ tenantId, query }) {
   return buildListResponse(rows.map(toPublic), { page, limit, total: count });
 }
 
-async function getSite({ tenantId, id }) {
+async function getSite({ tenantId, auth, id }) {
   const site = await repo.findByPk(tenantId, id);
   if (!site) throw AppError.notFound('Site not found');
+  assertSiteAllowed(auth, site.id, 'Site not found');
   return toPublic(site);
 }
 
@@ -61,6 +65,22 @@ async function assertSiteAssignable(tenantId, siteId) {
   if (!site) throw AppError.badRequest('Site not found');
   if (site.status !== 'active') throw AppError.badRequest('Site is archived and cannot be assigned');
   return site;
+}
+
+async function listAssetsAtSite({ tenantId, auth, siteId }) {
+  const site = await repo.findByPk(tenantId, siteId);
+  if (!site) throw AppError.notFound('Site not found');
+  assertSiteAllowed(auth, site.id, 'Site not found');
+
+  const [vehicles, machinery] = await Promise.all([
+    Vehicle.findAll({ where: { tenantId, currentSiteId: siteId, status: 'active' } }),
+    Machinery.findAll({ where: { tenantId, currentSiteId: siteId, status: 'active' } }),
+  ]);
+
+  return [
+    ...vehicles.map((vehicle) => ({ assetType: 'VEHICLE', ...vehicle.toPublicJSON() })),
+    ...machinery.map((machine) => ({ assetType: 'MACHINERY', ...machine.toPublicJSON() })),
+  ];
 }
 
 async function createSite({ tenantId, actingUserId, payload }) {
@@ -84,9 +104,10 @@ async function createSite({ tenantId, actingUserId, payload }) {
   return toPublic(site);
 }
 
-async function updateSite({ tenantId, actingUserId, id, payload }) {
+async function updateSite({ tenantId, auth, actingUserId, id, payload }) {
   const site = await repo.findByPk(tenantId, id);
   if (!site) throw AppError.notFound('Site not found');
+  assertSiteAllowed(auth, site.id, 'Site not found');
 
   const input = readSiteInput(payload, { partial: true });
 
@@ -119,11 +140,25 @@ async function deleteSite({ tenantId, actingUserId, id, confirmation }) {
   return toPublic(archived);
 }
 
+async function restoreSite({ tenantId, actingUserId, id }) {
+  const restored = await restoreEntity({
+    model: Site,
+    entityType: 'Site',
+    tenantId,
+    id,
+    performedBy: actingUserId,
+  });
+
+  return toPublic(restored);
+}
+
 module.exports = {
   listSites,
   getSite,
+  listAssetsAtSite,
   createSite,
   updateSite,
   deleteSite,
+  restoreSite,
   assertSiteAssignable,
 };

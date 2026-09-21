@@ -8,6 +8,7 @@ const Machinery = require('./Machinery');
 const Site = require('./Site');
 const ComplianceDocument = require('./ComplianceDocument');
 const AssetDocument = require('./AssetDocument');
+const SiteAssignment = require('./SiteAssignment');
 const { ASSET_TYPES, registerAssetModel } = require('../services/asset.service');
 
 Tenant.hasMany(User, { foreignKey: 'tenantId', as: 'users' });
@@ -50,6 +51,12 @@ Machinery.belongsTo(Site, { foreignKey: 'currentSiteId', as: 'currentSite' });
 
 AssetDocument.belongsTo(User, { foreignKey: 'uploadedBy', as: 'uploader' });
 
+Tenant.hasMany(SiteAssignment, { foreignKey: 'tenantId', as: 'siteAssignments' });
+SiteAssignment.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
+Site.hasMany(SiteAssignment, { foreignKey: 'siteId', as: 'assignments' });
+SiteAssignment.belongsTo(Site, { foreignKey: 'siteId', as: 'site' });
+SiteAssignment.belongsTo(User, { foreignKey: 'assignedBy', as: 'assigner' });
+
 module.exports = {
   sequelize,
   Tenant,
@@ -61,4 +68,5 @@ module.exports = {
   Site,
   ComplianceDocument,
   AssetDocument,
+  SiteAssignment,
 };
