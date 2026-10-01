@@ -1,4 +1,3 @@
-
 function fail(title, lines) {
   process.stderr.write(`\n${title}\n\n`);
   for (const line of lines) process.stderr.write(`  ${line}\n`);

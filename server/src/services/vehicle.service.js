@@ -38,21 +38,12 @@ function toPublic(vehicle) {
 
 const ASSET_ID_PREFIX = 'VEH-';
 
-/**
- * The next asset id for this tenant, for example "VEH-000007".
- *
- * It counts up from the highest id already in use, NOT from the number of
- * rows. Deleting a vehicle leaves a gap in the sequence, and "row count + 1"
- * then points at an id that still exists, so every new asset was rejected as a
- * duplicate. Archived assets keep their ids, so they are included here too.
- */
 async function generateAssetId(tenantId, { transaction } = {}) {
   const highest = await Vehicle.max('assetId', { where: { tenantId }, transaction, paranoid: false });
   const nextNumber = highest ? Number(highest.slice(ASSET_ID_PREFIX.length)) + 1 : 1;
   return `${ASSET_ID_PREFIX}${String(nextNumber).padStart(6, '0')}`;
 }
 
-/** True when the insert clashed on the generated asset id, not on data the user typed. */
 function isAssetIdCollision(error) {
   return (
     error.name === 'SequelizeUniqueConstraintError' &&
@@ -245,7 +236,6 @@ async function listVehicles({ tenantId, auth, query }) {
   });
 
   const status = parseEnumFilter(query.status, Vehicle.STATUSES, 'Status') ?? 'active';
-  // A Supervisor only ever sees vehicles standing at their own site.
   const where = scopeToSite({ status }, auth);
   if (query.fuelType) where.fuelType = query.fuelType;
 
@@ -273,8 +263,6 @@ async function getVehicle({ tenantId, auth, id }) {
 async function createVehicle({ tenantId, auth, actingUserId, payload, files }) {
   const baseInput = readVehicleBaseInput(payload);
   const siteInput = readCurrentSiteIdInput(payload);
-  // A Supervisor can only add a vehicle to their own site, so the site is taken
-  // from their account rather than from whatever the request asked for.
   const ownSiteId = supervisorSiteId(auth);
   if (ownSiteId !== null) siteInput.currentSiteId = ownSiteId;
   const meterInput = readMeterInputForCreate(payload, baseInput.type);
@@ -309,8 +297,6 @@ async function createVehicle({ tenantId, auth, actingUserId, payload, files }) {
           );
           break;
         } catch (error) {
-          // Only an asset-id clash is worth retrying. Anything else — a duplicate
-          // registration number, say — must surface with its own message at once.
           const isLastAttempt = attempt === ASSET_ID_GENERATION_ATTEMPTS;
           if (!isAssetIdCollision(error) || isLastAttempt) throw error;
         }

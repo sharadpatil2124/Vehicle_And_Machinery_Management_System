@@ -70,9 +70,6 @@ export default function SignupPage() {
       errors.confirmPassword = 'Passwords do not match';
     }
 
-    // A row left completely blank is just an unused "add another" slot and is
-    // silently skipped; a row with only one side filled in is a mistake worth
-    // flagging rather than silently dropping.
     const supErrors = {};
     for (const row of supervisors) {
       const hasName = row.name.trim();

@@ -16,11 +16,23 @@ export const PERMISSIONS = Object.freeze({
   TYRE: standardModule,
   FUEL: standardModule,
   COMPLIANCE: standardModule,
-  // Mirrors server/src/config/permissions.js — the Sites module is Admin-only.
-  // READ stays open to both so a Supervisor can still see the name of their own
-  // site; the server limits that read to the one site assigned to them.
   SITE: { ...standardModule, CREATE: ADMIN_ONLY, UPDATE: ADMIN_ONLY, ASSIGN: ADMIN_ONLY },
   DOCUMENT: { CREATE: BOTH, READ: BOTH },
+
+  ITEM_CATEGORY: { ...standardModule, CREATE: ADMIN_ONLY, UPDATE: ADMIN_ONLY },
+  UOM: { ...standardModule, CREATE: ADMIN_ONLY, UPDATE: ADMIN_ONLY },
+  ITEM: { ...standardModule, CREATE: ADMIN_ONLY, UPDATE: ADMIN_ONLY },
+  SUPPLIER: { ...standardModule, CREATE: ADMIN_ONLY, UPDATE: ADMIN_ONLY },
+  STORAGE_LOCATION: { ...standardModule, CREATE: ADMIN_ONLY, UPDATE: ADMIN_ONLY },
+
+  PURCHASE: { CREATE: BOTH, READ: BOTH, UPDATE: BOTH, RECEIVE: BOTH },
+  STOCK: { READ: BOTH },
+
+  ASSET_ISSUE: { CREATE: BOTH, READ: BOTH, REVERSE: BOTH },
+
+  STOCK_ADJUSTMENT: { CREATE: BOTH, READ: BOTH },
+  STOCK_TRANSFER: { CREATE: ADMIN_ONLY, READ: ADMIN_ONLY, RECEIVE: ADMIN_ONLY },
+
   REPORTS: { VIEW: BOTH, PRINT: BOTH, EXPORT: ADMIN_ONLY },
   USERS: {
     LIST: ADMIN_ONLY,

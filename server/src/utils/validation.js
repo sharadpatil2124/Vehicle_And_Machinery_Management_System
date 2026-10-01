@@ -53,6 +53,11 @@ function optionalNumber(value, label, options = {}) {
   return requireNumber(value, label, options);
 }
 
+function optionalEmail(value) {
+  if (value === undefined || value === null || value === '') return null;
+  return requireEmail(value);
+}
+
 module.exports = {
   MIN_PASSWORD_LENGTH,
   requireText,
@@ -61,4 +66,5 @@ module.exports = {
   optionalText,
   requireNumber,
   optionalNumber,
+  optionalEmail,
 };

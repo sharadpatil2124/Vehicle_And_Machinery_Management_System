@@ -24,16 +24,6 @@ const PERMISSIONS = Object.freeze({
   FUEL: standardModule,
   COMPLIANCE: standardModule,
 
-  // The Sites module belongs to the Admin. A Supervisor is tied to one site, so a
-  // site they created would be invisible the moment it existed, and a site they
-  // renamed or archived is one the Admin assigned them to — not theirs to change.
-  //
-  // READ stays open to both: a Supervisor still needs the name of their own site
-  // on an asset page and in the asset form. services/siteAccess.js already limits
-  // those reads to that one site, so READ never exposes another site.
-  //
-  // ASSIGN = moving a vehicle or machine from one site to another. Admin only:
-  // a Supervisor belongs to a single site and must not move assets out of it.
   SITE: Object.freeze({
     ...standardModule,
     CREATE: ADMIN_ONLY,
@@ -45,6 +35,21 @@ const PERMISSIONS = Object.freeze({
     CREATE: BOTH,
     READ: BOTH,
   }),
+
+  ITEM_CATEGORY: Object.freeze({ ...standardModule, CREATE: ADMIN_ONLY, UPDATE: ADMIN_ONLY }),
+  UOM: Object.freeze({ ...standardModule, CREATE: ADMIN_ONLY, UPDATE: ADMIN_ONLY }),
+  ITEM: Object.freeze({ ...standardModule, CREATE: ADMIN_ONLY, UPDATE: ADMIN_ONLY }),
+  SUPPLIER: Object.freeze({ ...standardModule, CREATE: ADMIN_ONLY, UPDATE: ADMIN_ONLY }),
+  STORAGE_LOCATION: Object.freeze({ ...standardModule, CREATE: ADMIN_ONLY, UPDATE: ADMIN_ONLY }),
+
+  PURCHASE: Object.freeze({ CREATE: BOTH, READ: BOTH, UPDATE: BOTH, RECEIVE: BOTH }),
+
+  STOCK: Object.freeze({ READ: BOTH }),
+
+  ASSET_ISSUE: Object.freeze({ CREATE: BOTH, READ: BOTH, REVERSE: BOTH }),
+
+  STOCK_ADJUSTMENT: Object.freeze({ CREATE: BOTH, READ: BOTH }),
+  STOCK_TRANSFER: Object.freeze({ CREATE: ADMIN_ONLY, READ: ADMIN_ONLY, RECEIVE: ADMIN_ONLY }),
 
   REPORTS: Object.freeze({
     VIEW: BOTH,

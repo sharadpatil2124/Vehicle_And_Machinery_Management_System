@@ -23,10 +23,6 @@ async function findSupervisorById(tenantId, id) {
   return User.findOne({ where: { id, tenantId, role: ROLES.SUPERVISOR } });
 }
 
-/**
- * Checks the site the Admin picked for a Supervisor: it has to exist, belong to
- * the same organization, and still be active. Returns the site's id.
- */
 async function requireAssignableSiteId(tenantId, siteId, { transaction } = {}) {
   if (siteId === undefined || siteId === null || siteId === '') {
     throw AppError.badRequest('Select the site this supervisor will work at');
@@ -41,21 +37,9 @@ async function requireAssignableSiteId(tenantId, siteId, { transaction } = {}) {
   return site.id;
 }
 
-/**
- * The actual row-creation work, reused by both `createSupervisor` (adding one
- * supervisor after the organization already exists) and `auth.service.js#signUp`
- * (adding several while the organization is being created) — same account
- * shape either way: an unusable random password, replaced via a one-time
- * emailed link, so a real password never passes through the Admin or email.
- * Takes the caller's own transaction so a batch of supervisors created at
- * signup succeeds or fails together with the organization itself.
- */
 async function createSupervisorRecord({ tenantId, actingUserId, name, email, siteId, transaction }) {
   const cleanName = requireText(name, 'Name', { max: 150 });
   const cleanEmail = requireEmail(email);
-  // A Supervisor works at exactly one site. `siteId` is optional here only
-  // because sign-up creates supervisors before any site exists; the Admin then
-  // assigns each of them a site from the Organization Users page.
   const cleanSiteId =
     siteId === undefined || siteId === null || siteId === ''
       ? null
@@ -98,11 +82,6 @@ async function createSupervisorRecord({ tenantId, actingUserId, name, email, sit
   return { supervisor: created, resetUrl, name: cleanName, email: cleanEmail };
 }
 
-/**
- * A single supervisor, added to an organization that already exists. The Admin
- * must pick the one site this supervisor will be able to work with — every
- * other site's data stays invisible to them.
- */
 async function createSupervisor({ tenantId, actingUserId, name, email, siteId }) {
   const tenant = await Tenant.findByPk(tenantId);
   await requireAssignableSiteId(tenantId, siteId);
@@ -123,10 +102,6 @@ async function createSupervisor({ tenantId, actingUserId, name, email, siteId })
   return safeSupervisor.toPublicJSON();
 }
 
-/**
- * Only an Admin reaches this. A Supervisor can never edit their own account, so
- * this is also the only way the assigned site can ever change.
- */
 async function updateSupervisor({ tenantId, actingUserId, supervisorId, name, email, siteId }) {
   const cleanName = requireText(name, 'Name', { max: 150 });
   const cleanEmail = requireEmail(email);

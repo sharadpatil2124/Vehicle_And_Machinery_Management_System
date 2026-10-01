@@ -39,8 +39,6 @@ async function listSites({ tenantId, auth, query }) {
   });
 
   const status = parseEnumFilter(query.status, Site.STATUSES, 'Status') ?? 'active';
-  // A Supervisor sees only the one site assigned to them. Here the site's own
-  // primary key is the column to match on, not `currentSiteId`.
   const where = scopeToSite({ status }, auth, 'id');
 
   const search = typeof query.search === 'string' ? query.search.trim() : '';

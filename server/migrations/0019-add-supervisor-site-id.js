@@ -1,13 +1,5 @@
 const { DataTypes } = require('sequelize');
 
-/**
- * Gives every Supervisor one site.
- *
- * `site_id` is the single site a Supervisor may work with. It stays NULL for
- * Admins (they see every site in the organization), and it is nullable rather
- * than NOT NULL because supervisors already existed before this rule was added
- * and their Admin has to assign each of them a site afterwards.
- */
 async function up({ context: queryInterface }) {
   await queryInterface.addColumn('users', 'site_id', {
     type: DataTypes.INTEGER.UNSIGNED,

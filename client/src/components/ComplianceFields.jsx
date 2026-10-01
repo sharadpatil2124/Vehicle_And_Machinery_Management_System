@@ -9,14 +9,6 @@ export const EMPTY_COMPLIANCE = {
   puc: { startDate: '', expiryDate: '' },
 };
 
-/**
- * Insurance, Permit (State) and PUC each have a start date and an end date.
- * The end date must be strictly after the start date — not before it, and not
- * the same day either.
- *
- * Dates come from <input type="date"> as "YYYY-MM-DD" strings, so they can be
- * compared directly with < / === (no need to parse them into Date objects).
- */
 function dateRangeError(startDate, expiryDate) {
   if (!startDate || !expiryDate) return null;
   if (expiryDate < startDate) return 'End date cannot be before the start date';
@@ -24,15 +16,6 @@ function dateRangeError(startDate, expiryDate) {
   return null;
 }
 
-/**
- * The current validation errors for the three date-range compliance fields,
- * keyed the same way as `value` itself: { insurance, statePermit, puc }.
- * Each is either an error message or null.
- *
- * Exported so the form pages (VehicleFormPage, MachineryFormPage) can check
- * this before submitting — the fields below already show the same message
- * inline, so submission is simply blocked rather than repeating the message.
- */
 export function getComplianceDateErrors(value) {
   return {
     insurance: dateRangeError(value.insurance.startDate, value.insurance.expiryDate),

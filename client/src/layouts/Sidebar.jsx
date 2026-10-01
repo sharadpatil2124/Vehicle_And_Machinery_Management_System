@@ -40,8 +40,7 @@ export default function Sidebar({ open, onNavigate }) {
           <NavLink to="/assets" className={linkClasses} onClick={onNavigate}>
             All Assets
           </NavLink>
-          {/* Admin only: the Sites module creates and edits sites. A Supervisor is
-              assigned one site and never manages the list. */}
+          { }
           <Can roles={['admin']}>
             <NavLink to="/sites" className={linkClasses} onClick={onNavigate}>
               Sites
@@ -49,6 +48,21 @@ export default function Sidebar({ open, onNavigate }) {
           </Can>
           <NavLink to="/site-management" className={linkClasses} onClick={onNavigate}>
             Site Management
+          </NavLink>
+        </div>
+
+        <div>
+          <p className="px-3 pt-5 pb-1.5 text-[10px] font-bold tracking-[0.11em] text-steel-500 uppercase">
+            Inventory
+          </p>
+          <NavLink to="/inventory/catalog" className={linkClasses} onClick={onNavigate}>
+            Item Catalog
+          </NavLink>
+          <NavLink to="/inventory/movements" className={linkClasses} onClick={onNavigate}>
+            Stock Movements
+          </NavLink>
+          <NavLink to="/inventory/stock" className={linkClasses} onClick={onNavigate}>
+            Stock
           </NavLink>
         </div>
 

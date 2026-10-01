@@ -45,10 +45,6 @@ function readComplianceInput(docType, payload) {
 
   const startDate = requireDateOnly(payload.startDate, 'Start date');
   const expiryDate = requireDateOnly(payload.expiryDate, 'End date');
-  // The end date must be strictly after the start date — not before it, and
-  // not the same day either. Dates are "YYYY-MM-DD" strings, so they compare
-  // correctly with plain string operators; this is the backstop behind the
-  // matching client-side check in ComplianceFields.jsx.
   if (expiryDate < startDate) {
     throw AppError.badRequest('End date cannot be before the start date');
   }

@@ -56,7 +56,6 @@ function SupervisorForm({ mode, initial, sites, onCancel, onSaved }) {
   const [form, setForm] = useState({
     name: initial?.name ?? '',
     email: initial?.email ?? '',
-    // A supervisor works at exactly one site, so this is always required.
     siteId: initial?.siteId ? String(initial.siteId) : '',
   });
   const [error, setError] = useState(null);
@@ -217,7 +216,6 @@ export default function UsersPage() {
   const { user: currentUser } = useAuth();
 
   const [accounts, setAccounts] = useState(null);
-  // Active sites of this organization — the Admin picks one of these for each supervisor.
   const [sites, setSites] = useState([]);
   const [loadError, setLoadError] = useState(null);
   const [notice, setNotice] = useState(null);

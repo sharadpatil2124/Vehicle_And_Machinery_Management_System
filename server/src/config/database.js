@@ -6,8 +6,6 @@ const sequelize = new Sequelize(env.db.name, env.db.user, env.db.password, {
   host: env.db.host,
   port: env.db.port,
   dialect: 'mysql',
-  // Never print SQL. Every query used to be written to the terminal in
-  // development, which buried the only output that matters (the email links).
   logging: false,
   define: {
     underscored: true,

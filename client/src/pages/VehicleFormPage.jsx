@@ -47,8 +47,6 @@ export default function VehicleFormPage() {
   const navigate = useNavigate();
   const { user, role } = useAuth();
 
-  // Choosing the site is an Admin job. A Supervisor works at a single site, so
-  // the field below is locked to it (see server/src/services/siteAccess.js).
   const canChooseSite = hasPermission(role, 'SITE', 'ASSIGN');
   const lockedSiteId = user?.siteId ?? '';
 
@@ -91,9 +89,6 @@ export default function VehicleFormPage() {
     event.preventDefault();
     setSubmitError(null);
 
-    // Insurance / Permit (State) / PUC end dates must be after their start
-    // dates. The errors already show inline next to each field (see
-    // ComplianceFields), so submission is simply blocked here.
     const complianceErrors = getComplianceDateErrors(compliance);
     if (Object.values(complianceErrors).some(Boolean)) {
       return;

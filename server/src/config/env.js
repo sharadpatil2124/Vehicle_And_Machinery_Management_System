@@ -1,4 +1,3 @@
-// quiet: dotenv otherwise prints a "injected env (N) from .env" banner on every start.
 require('dotenv').config({ quiet: true });
 const path = require('node:path');
 

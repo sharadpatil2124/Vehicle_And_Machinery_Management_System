@@ -236,8 +236,7 @@ export default function SiteManagementPage() {
             Review who's at a site, and transfer a vehicle or machine to another one.
           </p>
         </div>
-        {/* Admin only: the Admin chooses which site to look at. A Supervisor has
-            just one site, and the page selects it for them automatically. */}
+        { }
         <Can roles={['admin']}>
           <Button variant="secondary" onClick={() => setPickerOpen(true)}>
             {siteDetail ? siteDetail.name : 'Select a site'}

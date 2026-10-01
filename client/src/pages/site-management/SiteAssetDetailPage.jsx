@@ -18,7 +18,6 @@ function formatDate(value) {
   return new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-/** Pairs consecutive assignment rows (oldest first) into "moved from X to Y" transfer events. */
 function toTransferEvents(history) {
   const chronological = [...history].sort((a, b) => new Date(a.assignedAt) - new Date(b.assignedAt));
   return chronological.map((entry, index) => ({
@@ -152,7 +151,6 @@ export default function SiteAssetDetailPage({ asset, sites, currentSiteId, onTra
         title={isVehicle ? asset.registrationNumber : (asset.name ?? asset.assetId)}
         subtitle={asset.assetId}
         actions={
-          // Admin only: a Supervisor works at one site and cannot move assets away from it.
           <Can resource="SITE" action="ASSIGN">
             <Button size="sm" onClick={() => setTransferOpen(true)}>
               Transfer to another site

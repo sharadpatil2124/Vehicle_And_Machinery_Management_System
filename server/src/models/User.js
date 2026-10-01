@@ -65,8 +65,6 @@ User.init(
       type: DataTypes.DATE,
       allowNull: true,
     },
-    // The one site a Supervisor may work with. Always null for an Admin, who
-    // sees every site in the organization.
     siteId: {
       type: DataTypes.INTEGER.UNSIGNED,
       allowNull: true,

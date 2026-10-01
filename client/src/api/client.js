@@ -212,3 +212,85 @@ export const complianceApi = {
   save: (assetType, assetId, docType, payload) =>
     api.put(`/compliance/${assetType}/${assetId}/${docType}`, payload),
 };
+
+export const itemCategoriesApi = {
+  list: (params) => api.get(`/item-categories${toQueryString(params)}`),
+  get: (id) => api.get(`/item-categories/${id}`),
+  create: (payload) => api.post('/item-categories', payload),
+  update: (id, payload) => api.put(`/item-categories/${id}`, payload),
+  remove: (id, confirmation) => api.delete(`/item-categories/${id}`, { confirmation }),
+  restore: (id) => api.post(`/item-categories/${id}/restore`),
+};
+
+export const unitsOfMeasureApi = {
+  list: (params) => api.get(`/units-of-measure${toQueryString(params)}`),
+  get: (id) => api.get(`/units-of-measure/${id}`),
+  create: (payload) => api.post('/units-of-measure', payload),
+  update: (id, payload) => api.put(`/units-of-measure/${id}`, payload),
+  remove: (id, confirmation) => api.delete(`/units-of-measure/${id}`, { confirmation }),
+  restore: (id) => api.post(`/units-of-measure/${id}/restore`),
+};
+
+export const itemsApi = {
+  list: (params) => api.get(`/items${toQueryString(params)}`),
+  get: (id) => api.get(`/items/${id}`),
+  create: (payload) => api.post('/items', payload),
+  update: (id, payload) => api.put(`/items/${id}`, payload),
+  remove: (id, confirmation) => api.delete(`/items/${id}`, { confirmation }),
+  restore: (id) => api.post(`/items/${id}/restore`),
+};
+
+export const suppliersApi = {
+  list: (params) => api.get(`/suppliers${toQueryString(params)}`),
+  get: (id) => api.get(`/suppliers/${id}`),
+  create: (payload) => api.post('/suppliers', payload),
+  update: (id, payload) => api.put(`/suppliers/${id}`, payload),
+  remove: (id, confirmation) => api.delete(`/suppliers/${id}`, { confirmation }),
+  restore: (id) => api.post(`/suppliers/${id}/restore`),
+};
+
+export const storageLocationsApi = {
+  list: (params) => api.get(`/storage-locations${toQueryString(params)}`),
+  get: (id) => api.get(`/storage-locations/${id}`),
+  create: (payload) => api.post('/storage-locations', payload),
+  update: (id, payload) => api.put(`/storage-locations/${id}`, payload),
+  remove: (id, confirmation) => api.delete(`/storage-locations/${id}`, { confirmation }),
+  restore: (id) => api.post(`/storage-locations/${id}/restore`),
+};
+
+export const purchasesApi = {
+  list: (params) => api.get(`/purchases${toQueryString(params)}`),
+  get: (id) => api.get(`/purchases/${id}`),
+  create: (payload) => api.post('/purchases', payload),
+  update: (id, payload) => api.put(`/purchases/${id}`, payload),
+  receive: (id, payload) => api.post(`/purchases/${id}/receive`, payload),
+};
+
+export const stockApi = {
+  balances: (params) => api.get(`/stock/balances${toQueryString(params)}`),
+  transactions: (params) => api.get(`/stock/transactions${toQueryString(params)}`),
+};
+
+export const assetIssuesApi = {
+  list: (params) => api.get(`/asset-issues${toQueryString(params)}`),
+  get: (id) => api.get(`/asset-issues/${id}`),
+  create: (payload) => api.post('/asset-issues', payload),
+};
+
+export const issueReversalsApi = {
+  get: (id) => api.get(`/issue-reversals/${id}`),
+  create: (payload) => api.post('/issue-reversals', payload),
+};
+
+export const stockAdjustmentsApi = {
+  list: (params) => api.get(`/stock-adjustments${toQueryString(params)}`),
+  get: (id) => api.get(`/stock-adjustments/${id}`),
+  create: (payload) => api.post('/stock-adjustments', payload),
+};
+
+export const stockTransfersApi = {
+  list: (params) => api.get(`/stock-transfers${toQueryString(params)}`),
+  get: (id) => api.get(`/stock-transfers/${id}`),
+  create: (payload) => api.post('/stock-transfers', payload),
+  receive: (id) => api.post(`/stock-transfers/${id}/receive`),
+};

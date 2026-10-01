@@ -121,22 +121,6 @@ const TRIGGERS = [
   },
 ];
 
-/**
- * Database-level backstop for Chassis Number / Registration Number
- * uniqueness (client's request: enforce it even against a raw SQL write that
- * bypasses the application entirely). A single UNIQUE INDEX cannot span two
- * different tables in MySQL, and "Chassis Number" spans `vehicles` and
- * `machinery` together (as `chassis_number` on one, `serial_number` on the
- * other — the machinery field is only labelled "Chassis Number" in the UI),
- * so this is done with triggers instead.
- *
- * The application's own pre-check (`assetIdentifier.service.js`) is what a
- * normal request actually hits — it runs first and produces a clean,
- * specific error. These triggers only fire when that check was skipped
- * entirely (a direct database write) or lost a race against a concurrent
- * request; `errorHandler.js` translates the raw SIGNAL error into the same
- * kind of response either way.
- */
 async function up({ context: queryInterface }) {
   for (const trigger of TRIGGERS) {
     await queryInterface.sequelize.query(`
