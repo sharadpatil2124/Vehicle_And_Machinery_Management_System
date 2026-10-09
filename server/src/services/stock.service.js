@@ -2,6 +2,7 @@ const { StockBalance, InventoryTransaction, Item, StorageLocation } = require('.
 const { parseListQuery, parseEnumFilter } = require('../utils/queryOptions');
 const { buildListResponse } = require('../utils/listResponse');
 const { scopeToSite, supervisorSiteId } = require('./siteAccess');
+const { costSummaryForBalances, keyOf } = require('./stockBatch.service');
 
 const BALANCE_SORTABLE_FIELDS = ['updatedAt', 'quantityOnHand'];
 const BALANCE_DEFAULT_SORT = 'updatedAt:desc';
@@ -51,7 +52,7 @@ async function listStockBalances({ tenantId, auth, query }) {
 
   const { rows, count } = await StockBalance.findAndCountAll({
     where,
-    order,
+    order: [...order, ['id', 'DESC']],
     limit,
     offset,
     include: [
@@ -64,7 +65,13 @@ async function listStockBalances({ tenantId, auth, query }) {
     ],
   });
 
-  return buildListResponse(rows.map(toPublicBalance), { page, limit, total: count });
+  const costs = await costSummaryForBalances(tenantId, rows);
+  const data = rows.map((row) => {
+    const cost = costs.get(keyOf(row)) ?? { batches: [], stockValue: 0, latestUnitCost: null, previousUnitCost: null };
+    return { ...toPublicBalance(row), ...cost };
+  });
+
+  return buildListResponse(data, { page, limit, total: count });
 }
 
 async function listInventoryTransactions({ tenantId, auth, query }) {
@@ -74,6 +81,7 @@ async function listInventoryTransactions({ tenantId, auth, query }) {
   });
 
   const where = scopeToSite({ tenantId }, auth, 'siteId');
+  if (query.siteId && supervisorSiteId(auth) === null) where.siteId = Number(query.siteId);
   if (query.itemId) where.itemId = Number(query.itemId);
   if (query.storageLocationId) where.storageLocationId = Number(query.storageLocationId);
   const transactionType = parseEnumFilter(
@@ -85,7 +93,7 @@ async function listInventoryTransactions({ tenantId, auth, query }) {
 
   const { rows, count } = await InventoryTransaction.findAndCountAll({
     where,
-    order,
+    order: [...order, ['id', 'DESC']],
     limit,
     offset,
     include: [

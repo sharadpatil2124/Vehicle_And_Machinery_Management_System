@@ -103,8 +103,17 @@ export default function PurchaseDetailPage() {
       label: 'Received',
       render: (row) => `${row.receivedQuantity.toLocaleString()} ${uomName(row.uomId)}`,
     },
-    { key: 'unitPrice', label: 'Unit price', render: (row) => row.unitPrice.toLocaleString() },
-    { key: 'lineTotalAmount', label: 'Line total', render: (row) => row.lineTotalAmount.toLocaleString() },
+    {
+      key: 'unitPriceInclTax',
+      label: 'Unit price (incl. tax)',
+      render: (row) => (
+        <div className="flex flex-col">
+          <span>{row.unitPriceInclTax.toLocaleString()}</span>
+          {row.taxPercentage > 0 && <span className="text-xs text-steel-500">incl. {row.taxPercentage}% tax</span>}
+        </div>
+      ),
+    },
+    { key: 'lineTotalAmount', label: 'Purchase price (incl. tax)', render: (row) => row.lineTotalAmount.toLocaleString() },
     { key: 'lineStatus', label: 'Status', render: (row) => <Badge tone={row.lineStatus === 'received' ? 'success' : 'neutral'}>{row.lineStatus}</Badge> },
   ];
 
@@ -140,9 +149,9 @@ export default function PurchaseDetailPage() {
           <Detail label="Site">{siteName}</Detail>
           <Detail label="Supplier">{supplierName}</Detail>
           <Detail label="Purchase date">{purchase.purchaseDate}</Detail>
-          <Detail label="Subtotal">{purchase.subtotalAmount.toLocaleString()}</Detail>
+          <Detail label="Subtotal (before tax)">{purchase.subtotalAmount.toLocaleString()}</Detail>
           <Detail label="Tax">{purchase.taxAmount.toLocaleString()}</Detail>
-          <Detail label="Total">{`${purchase.totalAmount.toLocaleString()} ${purchase.currencyCode}`}</Detail>
+          <Detail label="Total (incl. tax)">{`${purchase.totalAmount.toLocaleString()} ${purchase.currencyCode}`}</Detail>
           <Detail label="Remarks">{purchase.remarks}</Detail>
         </dl>
       </Card>

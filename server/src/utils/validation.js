@@ -53,6 +53,27 @@ function optionalNumber(value, label, options = {}) {
   return requireNumber(value, label, options);
 }
 
+const PHONE_ALLOWED_CHARACTERS = /^\+?[0-9\s\-()]+$/;
+const MIN_PHONE_DIGITS = 10;
+const MAX_PHONE_DIGITS = 15;
+
+function optionalPhone(value, label = 'Phone') {
+  if (value === undefined || value === null || value === '') return null;
+  const phone = typeof value === 'string' ? value.trim() : '';
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, '');
+  if (
+    !PHONE_ALLOWED_CHARACTERS.test(phone) ||
+    digits.length < MIN_PHONE_DIGITS ||
+    digits.length > MAX_PHONE_DIGITS
+  ) {
+    throw AppError.badRequest(
+      `${label} must be a valid number with ${MIN_PHONE_DIGITS}–${MAX_PHONE_DIGITS} digits (digits, spaces, + - ( ) only)`
+    );
+  }
+  return phone;
+}
+
 function optionalEmail(value) {
   if (value === undefined || value === null || value === '') return null;
   return requireEmail(value);
@@ -67,4 +88,5 @@ module.exports = {
   requireNumber,
   optionalNumber,
   optionalEmail,
+  optionalPhone,
 };

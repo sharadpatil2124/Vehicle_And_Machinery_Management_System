@@ -51,6 +51,10 @@ const PERMISSIONS = Object.freeze({
   STOCK_ADJUSTMENT: Object.freeze({ CREATE: BOTH, READ: BOTH }),
   STOCK_TRANSFER: Object.freeze({ CREATE: ADMIN_ONLY, READ: ADMIN_ONLY, RECEIVE: ADMIN_ONLY }),
 
+  FUEL_STATION: Object.freeze({ ...standardModule, CREATE: ADMIN_ONLY, UPDATE: ADMIN_ONLY }),
+  FUEL_COLLECTION: Object.freeze({ CREATE: BOTH, READ: BOTH, UPDATE: BOTH, RECEIVE: BOTH, CANCEL: ADMIN_ONLY }),
+  FUEL_STOCK: Object.freeze({ READ: BOTH }),
+
   REPORTS: Object.freeze({
     VIEW: BOTH,
     PRINT: BOTH,

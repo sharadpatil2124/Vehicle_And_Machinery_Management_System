@@ -18,7 +18,6 @@ export default function AppLayout() {
         />
       )}
 
-      {}
       <div className="flex min-w-0 flex-1 flex-col">
         <Header onToggleSidebar={() => setSidebarOpen((open) => !open)} />
         <main className="flex-1 p-4 sm:p-6">

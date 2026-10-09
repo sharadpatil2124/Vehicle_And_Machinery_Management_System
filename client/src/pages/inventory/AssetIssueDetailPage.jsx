@@ -147,7 +147,7 @@ export default function AssetIssueDetailPage() {
     { key: 'storageLocationId', label: 'Storage location', render: (row) => locationName(row.storageLocationId) },
     { key: 'issuedQuantity', label: 'Issued', render: (row) => row.issuedQuantity.toLocaleString() },
     { key: 'reversedQuantity', label: 'Reversed', render: (row) => row.reversedQuantity.toLocaleString() },
-    { key: 'unitCost', label: 'Unit cost', render: (row) => row.unitCost.toLocaleString() },
+    { key: 'unitCost', label: 'Unit cost (incl. tax)', render: (row) => row.unitCost.toLocaleString() },
     {
       key: 'actions',
       label: '',

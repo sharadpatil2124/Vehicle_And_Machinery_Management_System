@@ -2,7 +2,7 @@ const { Op } = require('sequelize');
 
 const { sequelize, Supplier } = require('../models');
 const AppError = require('../utils/AppError');
-const { requireText, optionalText, optionalEmail } = require('../utils/validation');
+const { requireText, optionalText, optionalEmail, optionalPhone } = require('../utils/validation');
 const { parseListQuery, parseEnumFilter } = require('../utils/queryOptions');
 const { buildListResponse } = require('../utils/listResponse');
 const { createTenantScopedRepository } = require('./tenantScopedRepository');
@@ -35,7 +35,7 @@ function readSupplierInput(payload, { partial = false } = {}) {
     input.contactPerson = optionalText(payload.contactPerson, 'Contact person', { max: 150 });
   }
   if (!partial || payload.phone !== undefined) {
-    input.phone = optionalText(payload.phone, 'Phone', { max: 30 });
+    input.phone = optionalPhone(payload.phone, 'Phone');
   }
   if (!partial || payload.email !== undefined) {
     input.email = optionalEmail(payload.email);

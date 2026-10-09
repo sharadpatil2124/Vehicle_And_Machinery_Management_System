@@ -294,3 +294,53 @@ export const stockTransfersApi = {
   create: (payload) => api.post('/stock-transfers', payload),
   receive: (id) => api.post(`/stock-transfers/${id}/receive`),
 };
+
+export const fuelStationsApi = {
+  list: (params) => api.get(`/fuel-stations${toQueryString(params)}`),
+  get: (id) => api.get(`/fuel-stations/${id}`),
+  create: (payload) => api.post('/fuel-stations', payload),
+  update: (id, payload) => api.put(`/fuel-stations/${id}`, payload),
+  remove: (id, confirmation) => api.delete(`/fuel-stations/${id}`, { confirmation }),
+  restore: (id) => api.post(`/fuel-stations/${id}/restore`),
+};
+
+export const fuelCollectionsApi = {
+  list: (params) => api.get(`/fuel-collections${toQueryString(params)}`),
+  get: (id) => api.get(`/fuel-collections/${id}`),
+  create: (payload) => api.post('/fuel-collections', payload),
+  update: (id, payload) => api.put(`/fuel-collections/${id}`, payload),
+  receive: (id, payload) => api.post(`/fuel-collections/${id}/receive`, payload),
+  cancel: (id, confirmation) => api.delete(`/fuel-collections/${id}`, { confirmation }),
+};
+
+export const siteFuelStockApi = {
+  list: (params) => api.get(`/site-fuel-stock${toQueryString(params)}`),
+  ledger: (params) => api.get(`/site-fuel-stock/ledger${toQueryString(params)}`),
+};
+
+
+export const fuelTransactionsApi = {
+  list: (params) => api.get(`/fuel-transactions${toQueryString(params)}`),
+  get: (id) => api.get(`/fuel-transactions/${id}`),
+  create: (payload) => api.post('/fuel-transactions', payload),
+  update: (id, payload) => api.put(`/fuel-transactions/${id}`, payload),
+  remove: (id, confirmation) => api.delete(`/fuel-transactions/${id}`, { confirmation }),
+  efficiency: (assetType, assetId) =>
+    api.get(`/fuel-transactions/efficiency/${encodeURIComponent(assetType)}/${encodeURIComponent(assetId)}`),
+};
+
+export const fuelReportsApi = {
+  siteRegister: (params) => api.get(`/fuel-reports/site-register${toQueryString(params)}`),
+  assetConsumption: (params) => api.get(`/fuel-reports/asset-consumption${toQueryString(params)}`),
+  collections: (params) => api.get(`/fuel-reports/collections${toQueryString(params)}`),
+};
+
+export const inventoryReportsApi = {
+  stockRegister: (params) => api.get(`/inventory-reports/stock-register${toQueryString(params)}`),
+  purchases: (params) => api.get(`/inventory-reports/purchases${toQueryString(params)}`),
+  partsByAsset: (params) => api.get(`/inventory-reports/parts-by-asset${toQueryString(params)}`),
+};
+
+export const dashboardApi = {
+  summary: () => api.get('/dashboard/summary'),
+};

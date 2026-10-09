@@ -24,6 +24,7 @@ export default function VehiclesListPage() {
     sort: 'createdAt:desc',
   });
   const [result, setResult] = useState(null);
+  const [overallTotal, setOverallTotal] = useState(null);
   const [error, setError] = useState(null);
   const siteNames = useSiteNames();
 
@@ -38,6 +39,7 @@ export default function VehiclesListPage() {
         sort: activeFilters.sort,
       });
       setResult(response);
+      if (!activeFilters.search && !activeFilters.fuelType) setOverallTotal(response.pagination.total);
     } catch (err) {
       setError(err.message);
     }
@@ -101,7 +103,17 @@ export default function VehiclesListPage() {
     <div>
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-steel-900">Vehicles</h1>
+          <h1 className="flex items-center gap-2 text-xl font-semibold text-steel-900">
+            Vehicles
+            {overallTotal !== null && (
+              <span
+                className="rounded-full bg-steel-100 px-2.5 py-0.5 text-sm font-semibold text-steel-700 tabular-nums"
+                aria-label={`${overallTotal.toLocaleString('en-IN')} total`}
+              >
+                {overallTotal.toLocaleString('en-IN')}
+              </span>
+            )}
+          </h1>
           <p className="mt-1 text-steel-500">KM-based assets in your fleet.</p>
         </div>
         <Can resource="VEHICLE" action="CREATE">

@@ -83,7 +83,7 @@ function StorageLocationForm({ mode, initial, sites, onCancel, onSaved }) {
         )}
       </Field>
 
-      <Field label="Location type" hint="Optional — e.g. Warehouse, Fuel Yard.">
+      <Field label="Location type" hint="Optional — e.g. Warehouse">
         {({ id, invalid, describedBy }) => (
           <Input
             id={id}
@@ -112,7 +112,7 @@ function StorageLocationForm({ mode, initial, sites, onCancel, onSaved }) {
           )}
         </Field>
 
-        <Field label="Capacity unit" hint="Free text, e.g. Litres.">
+        <Field label="Capacity unit" hint="Free text, e.g. Pieces.">
           {({ id, invalid, describedBy }) => (
             <Input
               id={id}
@@ -293,7 +293,6 @@ export default function StorageLocationsPage() {
             </option>
           ))}
         </Select>
-        { }
         {isAdmin && (
           <Select
             value={filters.siteId}

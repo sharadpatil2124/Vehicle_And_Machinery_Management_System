@@ -1,6 +1,6 @@
 const { Op } = require('sequelize');
 
-const { sequelize, StockTransfer, StockTransferItem, Item, StorageLocation, StockBalance, Site } = require('../models');
+const { sequelize, StockTransfer, StockTransferItem, Item, StorageLocation, Site } = require('../models');
 const AppError = require('../utils/AppError');
 const { optionalText, requireNumber, optionalNumber } = require('../utils/validation');
 const { parseListQuery } = require('../utils/queryOptions');
@@ -10,6 +10,7 @@ const { recordCreate, recordUpdate } = require('./audit.service');
 const { assertSiteAllowed, assertEitherSiteAllowed, supervisorSiteId } = require('./siteAccess');
 const { assertSiteAssignable } = require('./site.service');
 const { postInventoryTransaction } = require('./inventoryTransaction.service');
+const { previewOldestFirstCost } = require('./stockBatch.service');
 
 const repo = createTenantScopedRepository(StockTransfer);
 
@@ -172,10 +173,13 @@ async function createStockTransfer({ tenantId, auth, actingUserId, payload }) {
     await assertStorageLocationUsable(tenantId, line.fromStorageLocationId, fromSiteId, 'Source');
     await assertStorageLocationUsable(tenantId, line.toStorageLocationId, input.toSiteId, 'Destination');
 
-    const balance = await StockBalance.findOne({
-      where: { tenantId, siteId: fromSiteId, itemId: line.itemId, storageLocationId: line.fromStorageLocationId },
+    const estimate = await previewOldestFirstCost({
+      tenantId,
+      siteId: fromSiteId,
+      itemId: line.itemId,
+      storageLocationId: line.fromStorageLocationId,
+      quantity: line.quantity,
     });
-    const unitCost = balance ? Number(balance.averageUnitCost) : 0;
 
     lines.push({
       itemId: line.itemId,
@@ -183,8 +187,8 @@ async function createStockTransfer({ tenantId, auth, actingUserId, payload }) {
       toStorageLocationId: line.toStorageLocationId,
       uomId: item.baseUomId,
       quantity: line.quantity,
-      unitCost,
-      totalCost: Math.round(line.quantity * unitCost * 100) / 100,
+      unitCost: estimate.unitCost,
+      totalCost: estimate.totalCost,
     });
   }
 
@@ -264,7 +268,8 @@ async function receiveStockTransfer({ tenantId, auth, actingUserId, id }) {
         transactionType: 'TRANSFER_IN',
         direction: 'IN',
         quantity: Number(line.quantity),
-        unitCost: Number(line.unitCost),
+        unitCost: Number(postedOut.unitCost),
+        incomingBatches: postedOut.costPieces,
         referenceType: 'STOCK_TRANSFER_ITEM',
         referenceId: line.id,
         createdBy: actingUserId,
@@ -272,7 +277,12 @@ async function receiveStockTransfer({ tenantId, auth, actingUserId, id }) {
       });
 
       await line.update(
-        { transferOutTransactionId: postedOut.id, transferInTransactionId: postedIn.id },
+        {
+          transferOutTransactionId: postedOut.id,
+          transferInTransactionId: postedIn.id,
+          unitCost: Number(postedOut.unitCost),
+          totalCost: Number(postedOut.totalCost),
+        },
         { transaction }
       );
     }

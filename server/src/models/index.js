@@ -18,6 +18,8 @@ const Purchase = require('./Purchase');
 const PurchaseItem = require('./PurchaseItem');
 const InventoryTransaction = require('./InventoryTransaction');
 const StockBalance = require('./StockBalance');
+const StockBatch = require('./StockBatch');
+const StockBatchMovement = require('./StockBatchMovement');
 const AssetIssue = require('./AssetIssue');
 const AssetIssueItem = require('./AssetIssueItem');
 const IssueReversal = require('./IssueReversal');
@@ -26,6 +28,14 @@ const StockAdjustment = require('./StockAdjustment');
 const StockAdjustmentItem = require('./StockAdjustmentItem');
 const StockTransfer = require('./StockTransfer');
 const StockTransferItem = require('./StockTransferItem');
+const FuelTransaction = require('./FuelTransaction');
+const FuelStation = require('./FuelStation');
+const FuelCollection = require('./FuelCollection');
+const FuelCollectionContainer = require('./FuelCollectionContainer');
+const SiteFuelStock = require('./SiteFuelStock');
+const FuelStockLedger = require('./FuelStockLedger');
+const Tyre = require('./Tyre');
+const TyreAssignment = require('./TyreAssignment');
 const { ASSET_TYPES, registerAssetModel } = require('../services/asset.service');
 
 Tenant.hasMany(User, { foreignKey: 'tenantId', as: 'users' });
@@ -142,6 +152,14 @@ StockBalance.belongsTo(Site, { foreignKey: 'siteId', as: 'site' });
 StockBalance.belongsTo(Item, { foreignKey: 'itemId', as: 'item' });
 StockBalance.belongsTo(StorageLocation, { foreignKey: 'storageLocationId', as: 'storageLocation' });
 
+Tenant.hasMany(StockBatch, { foreignKey: 'tenantId', as: 'stockBatches' });
+StockBatch.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
+StockBatch.belongsTo(Item, { foreignKey: 'itemId', as: 'item' });
+StockBatch.belongsTo(InventoryTransaction, { foreignKey: 'inventoryTransactionId', as: 'inventoryTransaction' });
+StockBatch.hasMany(StockBatchMovement, { foreignKey: 'stockBatchId', as: 'movements' });
+StockBatchMovement.belongsTo(StockBatch, { foreignKey: 'stockBatchId', as: 'batch' });
+StockBatchMovement.belongsTo(InventoryTransaction, { foreignKey: 'inventoryTransactionId', as: 'inventoryTransaction' });
+
 Tenant.hasMany(AssetIssue, { foreignKey: 'tenantId', as: 'assetIssues' });
 AssetIssue.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
 Site.hasMany(AssetIssue, { foreignKey: 'siteId', as: 'assetIssues' });
@@ -210,6 +228,38 @@ StockTransferItem.belongsTo(InventoryTransaction, {
   as: 'transferInTransaction',
 });
 
+Tenant.hasMany(FuelTransaction, { foreignKey: 'tenantId', as: 'fuelTransactions' });
+FuelTransaction.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
+Site.hasMany(FuelTransaction, { foreignKey: 'siteId', as: 'fuelTransactions' });
+FuelTransaction.belongsTo(Site, { foreignKey: 'siteId', as: 'site' });
+FuelTransaction.belongsTo(FuelStation, { foreignKey: 'fuelStationId', as: 'fuelStation' });
+
+Tenant.hasMany(FuelStation, { foreignKey: 'tenantId', as: 'fuelStations' });
+FuelStation.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
+
+Tenant.hasMany(FuelCollection, { foreignKey: 'tenantId', as: 'fuelCollections' });
+FuelCollection.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
+FuelCollection.belongsTo(Site, { foreignKey: 'siteId', as: 'site' });
+FuelCollection.belongsTo(Vehicle, { foreignKey: 'carrierVehicleId', as: 'carrierVehicle' });
+FuelCollection.belongsTo(FuelStation, { foreignKey: 'fuelStationId', as: 'fuelStation' });
+FuelCollection.hasMany(FuelCollectionContainer, { foreignKey: 'collectionId', as: 'containers', onDelete: 'CASCADE' });
+FuelCollectionContainer.belongsTo(FuelCollection, { foreignKey: 'collectionId', as: 'collection' });
+
+Tenant.hasMany(SiteFuelStock, { foreignKey: 'tenantId', as: 'siteFuelStocks' });
+SiteFuelStock.belongsTo(Site, { foreignKey: 'siteId', as: 'site' });
+
+Tenant.hasMany(FuelStockLedger, { foreignKey: 'tenantId', as: 'fuelStockLedger' });
+FuelStockLedger.belongsTo(Site, { foreignKey: 'siteId', as: 'site' });
+
+Tenant.hasMany(Tyre, { foreignKey: 'tenantId', as: 'tyres' });
+Tyre.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
+Tyre.belongsTo(Site, { foreignKey: 'siteId', as: 'site' });
+Tyre.hasMany(TyreAssignment, { foreignKey: 'tyreId', as: 'assignments' });
+TyreAssignment.belongsTo(Tyre, { foreignKey: 'tyreId', as: 'tyre' });
+TyreAssignment.belongsTo(Vehicle, { foreignKey: 'vehicleId', as: 'vehicle' });
+Vehicle.hasMany(TyreAssignment, { foreignKey: 'vehicleId', as: 'tyreAssignments' });
+TyreAssignment.belongsTo(Site, { foreignKey: 'siteId', as: 'site' });
+
 module.exports = {
   sequelize,
   Tenant,
@@ -231,6 +281,8 @@ module.exports = {
   PurchaseItem,
   InventoryTransaction,
   StockBalance,
+  StockBatch,
+  StockBatchMovement,
   AssetIssue,
   AssetIssueItem,
   IssueReversal,
@@ -239,4 +291,12 @@ module.exports = {
   StockAdjustmentItem,
   StockTransfer,
   StockTransferItem,
+  FuelTransaction,
+  FuelStation,
+  FuelCollection,
+  FuelCollectionContainer,
+  SiteFuelStock,
+  FuelStockLedger,
+  Tyre,
+  TyreAssignment,
 };

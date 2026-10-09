@@ -5,7 +5,7 @@ export default function Table({ columns, rows, getRowKey, sort, onSort, emptyMes
         <thead>
           <tr className="border-b border-steel-200 text-xs font-semibold tracking-wide text-steel-500 uppercase">
             {columns.map((column) => (
-              <th key={column.key} scope="col" className="px-4 py-3 whitespace-nowrap">
+              <th key={column.key} scope="col" className={`px-4 py-3 whitespace-nowrap${column.align === 'right' ? ' text-right' : ''}`}>
                 {column.sortable ? (
                   <button
                     type="button"
@@ -35,7 +35,10 @@ export default function Table({ columns, rows, getRowKey, sort, onSort, emptyMes
             rows.map((row) => (
               <tr key={getRowKey(row)} className="hover:bg-steel-50">
                 {columns.map((column) => (
-                  <td key={column.key} className="px-4 py-3 whitespace-nowrap text-steel-700">
+                  <td
+                    key={column.key}
+                    className={`px-4 py-3 text-steel-700 ${column.wrap ? 'whitespace-normal' : 'whitespace-nowrap'}${column.align === 'right' ? ' text-right' : ''}`}
+                  >
                     {column.render ? column.render(row) : row[column.key]}
                   </td>
                 ))}

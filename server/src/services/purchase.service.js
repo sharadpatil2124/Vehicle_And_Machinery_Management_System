@@ -308,7 +308,7 @@ async function receivePurchase({ tenantId, auth, actingUserId, id, payload }) {
           transactionType: 'PURCHASE_RECEIPT',
           direction: 'IN',
           quantity: receivedQuantity,
-          unitCost: Number(line.unitPrice),
+          unitCost: line.unitPriceInclTax,
           referenceType: 'PURCHASE_ITEM',
           referenceId: line.id,
           createdBy: actingUserId,

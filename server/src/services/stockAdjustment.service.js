@@ -16,6 +16,7 @@ const { createTenantScopedRepository } = require('./tenantScopedRepository');
 const { recordCreate } = require('./audit.service');
 const { scopeToSite, assertSiteAllowed, supervisorSiteId } = require('./siteAccess');
 const { postInventoryTransaction } = require('./inventoryTransaction.service');
+const { latestUnitCost } = require('./stockBatch.service');
 
 const repo = createTenantScopedRepository(StockAdjustment);
 
@@ -139,8 +140,13 @@ async function createStockAdjustment({ tenantId, auth, actingUserId, payload }) 
       where: { tenantId, siteId, itemId: line.itemId, storageLocationId: line.storageLocationId },
     });
     const systemQuantity = balance ? Number(balance.quantityOnHand) : 0;
-    const unitCost = balance ? Number(balance.averageUnitCost) : 0;
     const adjustmentQuantity = Math.round((line.countedQuantity - systemQuantity) * 1000) / 1000;
+    const unitCost =
+      adjustmentQuantity > 0
+        ? await latestUnitCost({ tenantId, siteId, itemId: line.itemId, storageLocationId: line.storageLocationId })
+        : balance
+          ? Number(balance.averageUnitCost)
+          : 0;
 
     lines.push({
       itemId: line.itemId,
@@ -194,7 +200,10 @@ async function createStockAdjustment({ tenantId, auth, actingUserId, payload }) 
         transaction,
       });
 
-      await adjustmentItem.update({ inventoryTransactionId: posted.id }, { transaction });
+      await adjustmentItem.update(
+        { inventoryTransactionId: posted.id, unitCost: Number(posted.unitCost) },
+        { transaction }
+      );
     }
 
     await recordCreate(

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { stockApi, itemsApi, storageLocationsApi, sitesApi } from '../../api/client';
-import { Alert, Badge, Select, Spinner, Table } from '../../components/ui';
+import { Alert, Badge, Button, Modal, Select, Spinner, Table } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
 import useSiteNames from '../../hooks/useSiteNames';
 
@@ -33,6 +33,118 @@ function StockStatusBadge({ balance }) {
   return <Badge tone={tone}>{label}</Badge>;
 }
 
+const currencyFormatter = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 });
+const money = (value) => currencyFormatter.format(Number(value));
+const qty = (value) => Number(value).toLocaleString('en-IN', { maximumFractionDigits: 3 });
+
+const BIG_PRICE_JUMP = 0.1;
+const INLINE_BATCH_LIMIT = 3;
+
+const BATCH_SOURCE_LABEL = {
+  OPENING_BALANCE: 'Opening stock',
+  PURCHASE_RECEIPT: 'Purchase',
+  ISSUE_REVERSAL: 'Returned from issue',
+  ADJUSTMENT: 'Stock check',
+  TRANSFER_IN: 'Transfer in',
+};
+
+function LatestPrice({ balance }) {
+  const { latestUnitCost: latest, previousUnitCost: previous } = balance;
+  if (latest == null) return <span className="text-steel-400">—</span>;
+  if (previous == null) return <span className="font-semibold text-steel-900 tabular-nums">{money(latest)}</span>;
+
+  const rose = latest > previous;
+  const bigJump = rose && previous > 0 && (latest - previous) / previous > BIG_PRICE_JUMP;
+  return (
+    <div className="flex flex-col tabular-nums">
+      <span className="font-semibold text-steel-900">{money(latest)}</span>
+      <span className={`text-xs ${bigJump ? 'font-semibold text-warning-600' : 'text-steel-500'}`}>
+        {rose ? '▲' : '▼'} was {money(previous)}
+      </span>
+    </div>
+  );
+}
+
+function groupNeighboursByPrice(batches) {
+  const groups = [];
+  for (const batch of batches) {
+    const last = groups[groups.length - 1];
+    if (last && last.unitCost === batch.unitCost) {
+      last.remainingQuantity = Math.round((last.remainingQuantity + batch.remainingQuantity) * 1000) / 1000;
+    } else {
+      groups.push({ key: batch.id, unitCost: batch.unitCost, remainingQuantity: batch.remainingQuantity });
+    }
+  }
+  return groups;
+}
+
+function BoughtAt({ balance, onShowBatches }) {
+  const batches = balance.batches ?? [];
+  if (batches.length === 0) return <span className="text-steel-400">—</span>;
+
+  const groups = groupNeighboursByPrice(batches);
+  const hidden = groups.length - INLINE_BATCH_LIMIT;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {groups.slice(0, INLINE_BATCH_LIMIT).map((group) => (
+        <span key={group.key} className="rounded bg-steel-100 px-1.5 py-0.5 text-xs whitespace-nowrap text-steel-700 tabular-nums">
+          {money(group.unitCost)} ({qty(group.remainingQuantity)})
+        </span>
+      ))}
+      {batches.length > 1 && (
+        <button type="button" onClick={() => onShowBatches(balance)} className="text-xs font-semibold text-brand-600 hover:underline">
+          {hidden > 0 ? `+${hidden} more` : 'Details'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function BatchesModal({ balance, siteName, onClose }) {
+  const batches = balance?.batches ?? [];
+  const columns = [
+    {
+      key: 'receivedAt',
+      label: 'Bought on',
+      render: (b) => new Date(b.receivedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }),
+    },
+    { key: 'sourceType', label: 'Source', render: (b) => BATCH_SOURCE_LABEL[b.sourceType] ?? b.sourceType },
+    { key: 'unitCost', label: 'Price', render: (b) => <span className="tabular-nums">{money(b.unitCost)}</span> },
+    { key: 'remainingQuantity', label: 'In stock', render: (b) => <span className="tabular-nums">{qty(b.remainingQuantity)}</span> },
+    {
+      key: 'value',
+      label: 'Value',
+      render: (b) => <span className="tabular-nums">{money(b.remainingQuantity * b.unitCost)}</span>,
+    },
+  ];
+
+  return (
+    <Modal
+      wide
+      open={balance !== null}
+      onClose={onClose}
+      title={balance ? `${balance.itemName} — prices in stock` : ''}
+      description={
+        balance
+          ? `${siteName ?? ''}${balance.locationName ? ` · ${balance.locationName}` : ''}. Prices include tax. The oldest batch is used first when stock goes out.`
+          : undefined
+      }
+      footer={
+        <Button variant="secondary" onClick={onClose}>
+          Close
+        </Button>
+      }
+    >
+      <Table columns={columns} rows={batches} getRowKey={(b) => b.id} />
+      {balance && (
+        <p className="mt-3 text-sm font-semibold text-steel-900 tabular-nums">
+          Total: {qty(balance.availableQuantity)} units · {money(balance.stockValue)}
+        </p>
+      )}
+    </Modal>
+  );
+}
+
 function TabButton({ active, onClick, children }) {
   return (
     <button
@@ -60,6 +172,7 @@ export default function StockPage() {
   const [balances, setBalances] = useState(null);
   const [transactions, setTransactions] = useState(null);
   const [error, setError] = useState(null);
+  const [batchesFor, setBatchesFor] = useState(null);
   const siteNames = useSiteNames();
 
   useEffect(() => {
@@ -69,21 +182,31 @@ export default function StockPage() {
   }, [isAdmin]);
 
   useEffect(() => {
+    let cancelled = false;
     setError(null);
     const params = {
+      siteId: isAdmin ? filters.siteId || undefined : undefined,
       itemId: filters.itemId || undefined,
       storageLocationId: filters.storageLocationId || undefined,
       limit: 100,
     };
     if (tab === 'balances') {
-      stockApi.balances(params).then((r) => setBalances(r.data)).catch((err) => setError(err.message));
+      setBalances(null);
+      stockApi
+        .balances(params)
+        .then((r) => !cancelled && setBalances(r.data))
+        .catch((err) => !cancelled && setError(err.message));
     } else {
+      setTransactions(null);
       stockApi
         .transactions({ ...params, transactionType: filters.transactionType || undefined })
-        .then((r) => setTransactions(r.data))
-        .catch((err) => setError(err.message));
+        .then((r) => !cancelled && setTransactions(r.data))
+        .catch((err) => !cancelled && setError(err.message));
     }
-  }, [tab, filters]);
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, filters, isAdmin]);
 
   const locationOptions = useMemo(
     () => (isAdmin && filters.siteId ? storageLocations.filter((l) => String(l.siteId) === filters.siteId) : storageLocations),
@@ -100,7 +223,9 @@ export default function StockPage() {
     { key: 'siteId', label: 'Site', render: (b) => siteNames[b.siteId] ?? '—' },
     { key: 'locationName', label: 'Storage location' },
     { key: 'status', label: 'Status', render: (b) => <StockStatusBadge balance={b} /> },
-    { key: 'averageUnitCost', label: 'Avg. unit cost' },
+    { key: 'latestUnitCost', label: 'Latest price', render: (b) => <LatestPrice balance={b} /> },
+    { key: 'batches', label: 'Bought at', render: (b) => <BoughtAt balance={b} onShowBatches={setBatchesFor} /> },
+    { key: 'stockValue', label: 'Stock value', render: (b) => <span className="tabular-nums">{money(b.stockValue ?? 0)}</span> },
     {
       key: 'lastTransactionAt',
       label: 'Last movement',
@@ -109,11 +234,6 @@ export default function StockPage() {
   ];
 
   const transactionColumns = [
-    {
-      key: 'transactionAt',
-      label: 'Date',
-      render: (t) => new Date(t.transactionAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }),
-    },
     { key: 'transactionNumber', label: 'Reference' },
     {
       key: 'transactionType',
@@ -128,8 +248,13 @@ export default function StockPage() {
     { key: 'siteId', label: 'Site', render: (t) => siteNames[t.siteId] ?? '—' },
     { key: 'locationName', label: 'Storage location' },
     { key: 'quantity', label: 'Quantity' },
-    { key: 'unitCost', label: 'Unit cost' },
-    { key: 'totalCost', label: 'Total cost' },
+    { key: 'unitCost', label: 'Unit cost (incl. tax)' },
+    { key: 'totalCost', label: 'Total cost (incl. tax)' },
+    {
+      key: 'transactionAt',
+      label: 'Date',
+      render: (t) => new Date(t.transactionAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }),
+    },
   ];
 
   return (
@@ -137,7 +262,8 @@ export default function StockPage() {
       <div className="mb-5">
         <h1 className="text-xl font-semibold text-steel-900">Stock</h1>
         <p className="mt-1 text-steel-500">
-          {isAdmin ? 'Current stock and the full movement ledger, across every site.' : 'Current stock and the full movement ledger at your site.'}
+          {isAdmin ? 'Current stock and the full movement ledger, across every site.' : 'Current stock and the full movement ledger at your site.'}{' '}
+          All prices, costs and values include tax.
         </p>
       </div>
 
@@ -202,6 +328,8 @@ export default function StockPage() {
           <Table columns={transactionColumns} rows={transactions} getRowKey={(t) => t.id} emptyMessage="No transactions match these filters." />
         )}
       </div>
+
+      <BatchesModal balance={batchesFor} siteName={batchesFor ? siteNames[batchesFor.siteId] : null} onClose={() => setBatchesFor(null)} />
     </div>
   );
 }

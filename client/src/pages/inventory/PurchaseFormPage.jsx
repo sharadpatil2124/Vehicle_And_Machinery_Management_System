@@ -35,6 +35,31 @@ function toLineValues(items) {
   }));
 }
 
+const currency = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' });
+
+function LineTotals({ line }) {
+  const quantity = Number(line.purchasedQuantity);
+  const price = Number(line.unitPrice);
+  const tax = line.taxPercentage === '' ? 0 : Number(line.taxPercentage);
+  if (!(quantity > 0) || line.unitPrice === '' || !(price >= 0) || !(tax >= 0)) return null;
+
+  const subtotal = quantity * price;
+  const taxAmount = Math.round(subtotal * (tax / 100) * 100) / 100;
+  const lineTotal = Math.round((subtotal + taxAmount) * 100) / 100;
+  const priceInclTax = price * (1 + tax / 100);
+
+  return (
+    <div className="mb-2 flex flex-wrap gap-x-6 gap-y-1 rounded bg-steel-50 px-3 py-2 text-sm text-steel-700">
+      <span>
+        Unit price incl. tax: <span className="font-semibold text-steel-900 tabular-nums">{currency.format(priceInclTax)}</span>
+      </span>
+      <span>
+        Purchase price incl. tax: <span className="font-semibold text-steel-900 tabular-nums">{currency.format(lineTotal)}</span>
+      </span>
+    </div>
+  );
+}
+
 export default function PurchaseFormPage() {
   const { id } = useParams();
   const isEdit = Boolean(id);
@@ -314,7 +339,7 @@ export default function PurchaseFormPage() {
                       )}
                     </Field>
 
-                    <Field label="Unit price" required>
+                    <Field label="Unit price (before tax)" required hint="As printed on the bill. Tax is added using Tax %.">
                       {({ id: fieldId, invalid, describedBy }) => (
                         <Input
                           id={fieldId}
@@ -357,6 +382,8 @@ export default function PurchaseFormPage() {
                       )}
                     </Field>
                   </div>
+
+                  <LineTotals line={line} />
 
                   {lines.length > 1 && (
                     <button

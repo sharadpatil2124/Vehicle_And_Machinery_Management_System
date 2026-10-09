@@ -80,7 +80,7 @@ export default function StockTransferDetailPage() {
     { key: 'fromStorageLocationId', label: 'From location', render: (row) => row.fromLocationName ?? '—' },
     { key: 'toStorageLocationId', label: 'To location', render: (row) => row.toLocationName ?? '—' },
     { key: 'quantity', label: 'Quantity', render: (row) => row.quantity.toLocaleString() },
-    { key: 'unitCost', label: 'Unit cost', render: (row) => row.unitCost.toLocaleString() },
+    { key: 'unitCost', label: 'Unit cost (incl. tax)', render: (row) => row.unitCost.toLocaleString() },
   ];
 
   return (

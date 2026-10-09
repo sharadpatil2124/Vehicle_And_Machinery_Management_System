@@ -9,6 +9,7 @@ export default function DeleteWordModal({
   onConfirm,
   pending = false,
   error = null,
+  confirmLabel = 'Delete',
 }) {
   const [value, setValue] = useState('');
 
@@ -30,7 +31,7 @@ export default function DeleteWordModal({
             Cancel
           </Button>
           <Button variant="danger" disabled={!matches} loading={pending} onClick={onConfirm}>
-            Delete
+            {confirmLabel}
           </Button>
         </>
       }

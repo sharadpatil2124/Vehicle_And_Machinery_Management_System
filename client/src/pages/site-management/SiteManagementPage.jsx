@@ -236,7 +236,6 @@ export default function SiteManagementPage() {
             Review who's at a site, and transfer a vehicle or machine to another one.
           </p>
         </div>
-        { }
         <Can roles={['admin']}>
           <Button variant="secondary" onClick={() => setPickerOpen(true)}>
             {siteDetail ? siteDetail.name : 'Select a site'}

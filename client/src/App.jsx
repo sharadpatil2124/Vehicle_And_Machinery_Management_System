@@ -14,7 +14,6 @@ import VehicleDetailPage from './pages/VehicleDetailPage';
 import MachineryListPage from './pages/MachineryListPage';
 import MachineryFormPage from './pages/MachineryFormPage';
 import MachineryDetailPage from './pages/MachineryDetailPage';
-import AllAssetsPage from './pages/AllAssetsPage';
 import SitesPage from './pages/SitesPage';
 import SiteManagementPage from './pages/site-management/SiteManagementPage';
 import ItemCatalogPage from './pages/inventory/ItemCatalogPage';
@@ -28,6 +27,15 @@ import StockAdjustmentFormPage from './pages/inventory/StockAdjustmentFormPage';
 import StockAdjustmentDetailPage from './pages/inventory/StockAdjustmentDetailPage';
 import StockTransferFormPage from './pages/inventory/StockTransferFormPage';
 import StockTransferDetailPage from './pages/inventory/StockTransferDetailPage';
+import InventoryReportsPage from './pages/inventory/InventoryReportsPage';
+import FuelStockPage from './pages/fuel/FuelStockPage';
+import FuelCollectionsPage from './pages/fuel/FuelCollectionsPage';
+import FuelCollectionFormPage from './pages/fuel/FuelCollectionFormPage';
+import FuelCollectionDetailPage from './pages/fuel/FuelCollectionDetailPage';
+import FuelIssuesPage from './pages/fuel/FuelIssuesPage';
+import FuelIssueFormPage from './pages/fuel/FuelIssueFormPage';
+import FuelReportsPage from './pages/fuel/FuelReportsPage';
+import FuelStationsPage from './pages/fuel/FuelStationsPage';
 import ForbiddenPage from './pages/ForbiddenPage';
 import NotFoundPage from './pages/NotFoundPage';
 
@@ -63,7 +71,6 @@ export default function App() {
         <Route path="/machinery/new" element={<MachineryFormPage />} />
         <Route path="/machinery/:id" element={<MachineryDetailPage />} />
         <Route path="/machinery/:id/edit" element={<MachineryFormPage />} />
-        <Route path="/assets" element={<AllAssetsPage />} />
         <Route
           path="/sites"
           element={
@@ -74,14 +81,12 @@ export default function App() {
         />
         <Route path="/site-management" element={<SiteManagementPage />} />
 
-        { }
         <Route path="/inventory/catalog" element={<ItemCatalogPage />} />
 
-        { }
         <Route path="/inventory/stock" element={<StockPage />} />
 
-        { }
         <Route path="/inventory/movements" element={<StockMovementsPage />} />
+        <Route path="/inventory/reports" element={<InventoryReportsPage />} />
         <Route path="/inventory/purchases/new" element={<PurchaseFormPage />} />
         <Route path="/inventory/purchases/:id" element={<PurchaseDetailPage />} />
         <Route path="/inventory/purchases/:id/edit" element={<PurchaseFormPage />} />
@@ -102,6 +107,24 @@ export default function App() {
           element={
             <ProtectedRoute allowedRoles={['admin']}>
               <StockTransferDetailPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route path="/fuel/stock" element={<FuelStockPage />} />
+        <Route path="/fuel/collections" element={<FuelCollectionsPage />} />
+        <Route path="/fuel/collections/new" element={<FuelCollectionFormPage />} />
+        <Route path="/fuel/collections/:id" element={<FuelCollectionDetailPage />} />
+        <Route path="/fuel/collections/:id/edit" element={<FuelCollectionFormPage />} />
+        <Route path="/fuel/issues" element={<FuelIssuesPage />} />
+        <Route path="/fuel/issues/new" element={<FuelIssueFormPage />} />
+        <Route path="/fuel/issues/:id/edit" element={<FuelIssueFormPage />} />
+        <Route path="/fuel/reports" element={<FuelReportsPage />} />
+        <Route
+          path="/fuel/stations"
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <FuelStationsPage />
             </ProtectedRoute>
           }
         />

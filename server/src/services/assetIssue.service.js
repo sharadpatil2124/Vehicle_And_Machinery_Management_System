@@ -8,7 +8,6 @@ const {
   IssueReversalItem,
   Item,
   StorageLocation,
-  StockBalance,
 } = require('../models');
 const AppError = require('../utils/AppError');
 const { requireText, optionalText, requireNumber, optionalNumber } = require('../utils/validation');
@@ -118,11 +117,6 @@ async function assertStorageLocationUsable(tenantId, storageLocationId, siteId) 
   return location;
 }
 
-async function currentAverageCost(tenantId, siteId, itemId, storageLocationId) {
-  const balance = await StockBalance.findOne({ where: { tenantId, siteId, itemId, storageLocationId } });
-  return balance ? Number(balance.averageUnitCost) : 0;
-}
-
 async function listAssetIssues({ tenantId, auth, query }) {
   const { page, limit, offset, order } = parseListQuery(query, {
     sortableFields: SORTABLE_FIELDS,
@@ -139,9 +133,39 @@ async function listAssetIssues({ tenantId, auth, query }) {
   const search = typeof query.search === 'string' ? query.search.trim() : '';
   if (search) where.issueNumber = { [Op.like]: `%${search}%` };
 
-  const { rows, count } = await repo.findAndCountAll(tenantId, { where, order, limit, offset });
+  if (query.include !== 'items') {
+    const { rows, count } = await repo.findAndCountAll(tenantId, { where, order, limit, offset });
+    return buildListResponse(rows.map(toPublic), { page, limit, total: count });
+  }
 
-  return buildListResponse(rows.map(toPublic), { page, limit, total: count });
+  const { rows, count } = await repo.findAndCountAll(tenantId, {
+    where,
+    order: [...order, ['id', 'DESC'], [{ model: AssetIssueItem, as: 'items' }, 'id', 'ASC']],
+    limit,
+    offset,
+    distinct: true,
+    include: [
+      {
+        model: AssetIssueItem,
+        as: 'items',
+        include: [
+          { model: Item, as: 'item', attributes: ['itemName'] },
+          { model: StorageLocation, as: 'storageLocation', attributes: ['locationName'] },
+        ],
+      },
+    ],
+  });
+
+  const data = rows.map((issue) => ({
+    ...issue.toPublicJSON(),
+    items: issue.items.map((line) => ({
+      ...line.toPublicJSON(),
+      itemName: line.item?.itemName ?? null,
+      locationName: line.storageLocation?.locationName ?? null,
+    })),
+  }));
+
+  return buildListResponse(data, { page, limit, total: count });
 }
 
 async function getAssetIssue({ tenantId, auth, id }) {
@@ -166,14 +190,13 @@ async function createAssetIssue({ tenantId, auth, actingUserId, payload }) {
   for (const line of itemsInput) {
     const item = await assertItemUsable(tenantId, line.itemId);
     await assertStorageLocationUsable(tenantId, line.storageLocationId, siteId);
-    const unitCost = await currentAverageCost(tenantId, siteId, line.itemId, line.storageLocationId);
     lines.push({
       itemId: line.itemId,
       storageLocationId: line.storageLocationId,
       uomId: item.baseUomId,
       issuedQuantity: line.issuedQuantity,
-      unitCost,
-      totalCost: Math.round(line.issuedQuantity * unitCost * 100) / 100,
+      unitCost: 0,
+      totalCost: 0,
     });
   }
 
@@ -222,7 +245,6 @@ async function createAssetIssue({ tenantId, auth, actingUserId, payload }) {
         transactionType: 'ISSUE',
         direction: 'OUT',
         quantity: line.issuedQuantity,
-        unitCost: line.unitCost,
         referenceType: 'ASSET_ISSUE_ITEM',
         referenceId: issueItem.id,
         transactionAt: input.issueDateTime,
@@ -230,7 +252,10 @@ async function createAssetIssue({ tenantId, auth, actingUserId, payload }) {
         transaction,
       });
 
-      await issueItem.update({ inventoryTransactionId: posted.id }, { transaction });
+      await issueItem.update(
+        { inventoryTransactionId: posted.id, unitCost: Number(posted.unitCost), totalCost: Number(posted.totalCost) },
+        { transaction }
+      );
     }
 
     await recordCreate(

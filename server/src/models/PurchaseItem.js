@@ -4,6 +4,10 @@ const { sequelize } = require('../config/database');
 const PURCHASE_ITEM_LINE_STATUSES = ['pending', 'received'];
 
 class PurchaseItem extends Model {
+  get unitPriceInclTax() {
+    return Math.round(Number(this.unitPrice) * (1 + Number(this.taxPercentage) / 100) * 10000) / 10000;
+  }
+
   toPublicJSON() {
     return {
       id: this.id,
@@ -14,6 +18,7 @@ class PurchaseItem extends Model {
       purchasedQuantity: Number(this.purchasedQuantity),
       receivedQuantity: Number(this.receivedQuantity),
       unitPrice: Number(this.unitPrice),
+      unitPriceInclTax: this.unitPriceInclTax,
       taxPercentage: Number(this.taxPercentage),
       taxAmount: Number(this.taxAmount),
       lineTotalAmount: Number(this.lineTotalAmount),

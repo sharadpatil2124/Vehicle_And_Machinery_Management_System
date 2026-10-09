@@ -18,6 +18,14 @@ const assetIssueRoutes = require('./assetIssue.routes');
 const issueReversalRoutes = require('./issueReversal.routes');
 const stockAdjustmentRoutes = require('./stockAdjustment.routes');
 const stockTransferRoutes = require('./stockTransfer.routes');
+const fuelTransactionRoutes = require('./fuelTransaction.routes');
+const fuelStationRoutes = require('./fuelStation.routes');
+const fuelCollectionRoutes = require('./fuelCollection.routes');
+const siteFuelStockRoutes = require('./siteFuelStock.routes');
+const fuelReportRoutes = require('./fuelReport.routes');
+const tyreRoutes = require('./tyre.routes');
+const dashboardRoutes = require('./dashboard.routes');
+const inventoryReportRoutes = require('./inventoryReport.routes');
 const { sequelize } = require('../config/database');
 
 const router = express.Router();
@@ -54,5 +62,17 @@ router.use('/issue-reversals', issueReversalRoutes);
 
 router.use('/stock-adjustments', stockAdjustmentRoutes);
 router.use('/stock-transfers', stockTransferRoutes);
+
+router.use('/fuel-transactions', fuelTransactionRoutes);
+router.use('/fuel-stations', fuelStationRoutes);
+router.use('/fuel-collections', fuelCollectionRoutes);
+router.use('/site-fuel-stock', siteFuelStockRoutes);
+router.use('/fuel-reports', fuelReportRoutes);
+
+router.use('/tyres', tyreRoutes);
+
+router.use('/dashboard', dashboardRoutes);
+
+router.use('/inventory-reports', inventoryReportRoutes);
 
 module.exports = router;

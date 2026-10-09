@@ -13,6 +13,24 @@ function StatusBadge({ status }) {
   return <Badge tone={status === 'archived' ? 'neutral' : 'success'}>{status}</Badge>;
 }
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const PHONE_PATTERN = /^\+?[0-9\s\-()]+$/;
+
+function validateSupplier(form) {
+  const errors = {};
+  if (!form.supplierName.trim()) errors.supplierName = 'Enter the supplier name.';
+  const email = form.email.trim();
+  if (email && !EMAIL_PATTERN.test(email)) errors.email = 'Enter a valid email';
+  const phone = form.phone.trim();
+  if (phone) {
+    const digits = phone.replace(/\D/g, '');
+    if (!PHONE_PATTERN.test(phone) || digits.length < 10 || digits.length > 15) {
+      errors.phone = 'Enter a valid phone number';
+    }
+  }
+  return errors;
+}
+
 function SupplierForm({ mode, initial, onCancel, onSaved }) {
   const [form, setForm] = useState({
     supplierName: initial?.supplierName ?? '',
@@ -23,13 +41,21 @@ function SupplierForm({ mode, initial, onCancel, onSaved }) {
     address: initial?.address ?? '',
   });
   const [error, setError] = useState(null);
+  const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
-  const update = (field) => (event) => setForm((f) => ({ ...f, [field]: event.target.value }));
+  const update = (field) => (event) => {
+    const value = event.target.value;
+    setForm((f) => ({ ...f, [field]: value }));
+    setErrors((e) => ({ ...e, [field]: undefined }));
+  };
 
   async function handleSubmit(event) {
     event.preventDefault();
     setError(null);
+    const found = validateSupplier(form);
+    setErrors(found);
+    if (Object.keys(found).length > 0) return;
     setSubmitting(true);
     try {
       const payload = {
@@ -57,7 +83,7 @@ function SupplierForm({ mode, initial, onCancel, onSaved }) {
       <Alert tone="error">{error}</Alert>
 
       <div className="grid gap-x-4 sm:grid-cols-2">
-        <Field label="Supplier name" required>
+        <Field label="Supplier name" required error={errors.supplierName}>
           {({ id, invalid, describedBy }) => (
             <Input
               id={id}
@@ -97,9 +123,11 @@ function SupplierForm({ mode, initial, onCancel, onSaved }) {
           )}
         </Field>
 
-        <Field label="Phone">
+        <Field label="Phone" error={errors.phone}>
           {({ id, invalid, describedBy }) => (
             <Input
+              type="tel"
+              inputMode="tel"
               id={id}
               invalid={invalid}
               describedBy={describedBy}
@@ -110,7 +138,7 @@ function SupplierForm({ mode, initial, onCancel, onSaved }) {
           )}
         </Field>
 
-        <Field label="Email">
+        <Field label="Email" error={errors.email}>
           {({ id, invalid, describedBy }) => (
             <Input
               id={id}
