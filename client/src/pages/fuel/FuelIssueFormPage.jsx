@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { fuelTransactionsApi, fuelStationsApi, machineryApi, siteFuelStockApi, vehiclesApi } from '../../api/client';
+import { fuelTransactionsApi, machineryApi, siteFuelStockApi, vehiclesApi, listAll } from '../../api/client';
 import { Alert, Button, Card, Field, Input, Select, Spinner } from '../../components/ui';
 import useSiteNames from '../../hooks/useSiteNames';
 import {
@@ -12,6 +12,7 @@ import {
   formatNumber,
   meterTypeForAsset,
   meterUnitLabel,
+  nowTimeOnly,
   todayDateOnly,
 } from '../../config/fuel';
 
@@ -51,16 +52,16 @@ export default function FuelIssueFormPage() {
     assetType: searchParams.get('assetType') === 'MACHINERY' ? 'MACHINERY' : 'VEHICLE',
     assetId: searchParams.get('assetId') ?? '',
     txnDate: todayDateOnly(),
+    txnTime: nowTimeOnly(),
     quantity: '',
     pricePerLitre: '',
-    fuelStationId: '',
+    fuelStationName: '',
     meterReading: '',
     notes: '',
   });
   const [existing, setExisting] = useState(null);
   const [vehicles, setVehicles] = useState(null);
   const [machinery, setMachinery] = useState(null);
-  const [stations, setStations] = useState([]);
   const [stock, setStock] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [errors, setErrors] = useState({});
@@ -68,7 +69,6 @@ export default function FuelIssueFormPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    fuelStationsApi.list({ limit: 100 }).then((r) => setStations(r.data)).catch(() => setStations([]));
     if (isEdit) {
       fuelTransactionsApi
         .get(id)
@@ -80,9 +80,10 @@ export default function FuelIssueFormPage() {
             assetType: r.assetType,
             assetId: r.assetId,
             txnDate: r.txnDate,
+            txnTime: r.txnTime ?? '',
             quantity: String(r.quantity),
             pricePerLitre: r.source === 'DIRECT_PUMP' ? String(r.pricePerLitre) : '',
-            fuelStationId: r.fuelStationId ? String(r.fuelStationId) : '',
+            fuelStationName: r.fuelStationName ?? '',
             meterReading: String(r.meterReading),
             notes: r.notes ?? '',
           });
@@ -90,8 +91,8 @@ export default function FuelIssueFormPage() {
         .catch((err) => setLoadError(err.message));
       return;
     }
-    vehiclesApi.list({ limit: 100 }).then((r) => setVehicles(r.data)).catch(() => setVehicles([]));
-    machineryApi.list({ limit: 100 }).then((r) => setMachinery(r.data)).catch(() => setMachinery([]));
+    listAll(vehiclesApi.list).then((r) => setVehicles(r.data)).catch(() => setVehicles([]));
+    listAll(machineryApi.list, { sort: 'rcpl:asc' }).then((r) => setMachinery(r.data)).catch(() => setMachinery([]));
   }, [id, isEdit]);
 
   const assetOptions = useMemo(() => {
@@ -161,6 +162,11 @@ export default function FuelIssueFormPage() {
     if (!isEdit && !form.assetId) found.assetId = 'Select an asset.';
     if (!form.txnDate) found.txnDate = 'Enter the date.';
     else if (form.txnDate > todayDateOnly()) found.txnDate = 'The date cannot be in the future.';
+    if (!form.txnTime) {
+      if (!isEdit || existing?.txnTime) found.txnTime = 'Enter the time.';
+    } else if (form.txnDate === todayDateOnly() && form.txnTime > nowTimeOnly()) {
+      found.txnTime = 'The time cannot be in the future.';
+    }
     if (form.quantity === '') found.quantity = 'Enter the litres.';
     else if (!(quantity > 0)) found.quantity = 'Litres must be greater than 0.';
     else if (!isEdit && form.source === 'SITE_STOCK' && stock && quantity > stock.quantityOnHand) {
@@ -184,13 +190,14 @@ export default function FuelIssueFormPage() {
 
     const payload = {
       txnDate: form.txnDate,
+      txnTime: form.txnTime || null,
       quantity,
       meterReading: Number(form.meterReading),
       notes: form.notes.trim() || undefined,
     };
     if (form.source === 'DIRECT_PUMP') {
       payload.pricePerLitre = Number(form.pricePerLitre);
-      payload.fuelStationId = form.fuelStationId ? Number(form.fuelStationId) : null;
+      payload.fuelStationName = form.fuelStationName.trim() || null;
     }
 
     setSubmitting(true);
@@ -278,7 +285,7 @@ export default function FuelIssueFormPage() {
                     <Select id={fieldId} invalid={invalid} describedBy={describedBy} value={form.assetId} onChange={update('assetId')}>
                       <option value="">{assetOptions.length ? 'Select an asset' : 'No active assets'}</option>
                       {assetOptions.map((a) => (
-                        <option key={a.assetId} value={a.assetId}>
+                        <option key={a.assetId} value={a.assetId} data-added={a.id}>
                           {assetDisplayName(form.assetType, a)} ({a.assetId}) · {a.fuelType}
                           {a.currentSiteId && siteNames[a.currentSiteId] ? ` — ${siteNames[a.currentSiteId]}` : ''}
                         </option>
@@ -325,10 +332,27 @@ export default function FuelIssueFormPage() {
             </Field>
 
             <Field
+              label="Time"
+              required={!isEdit || Boolean(existing?.txnTime)}
+              error={errors.txnTime}
+              hint={isEdit && !existing?.txnTime ? 'No time was recorded for this older entry. Optional.' : undefined}
+            >
+              {({ id: fieldId, invalid, describedBy }) => (
+                <Input id={fieldId} invalid={invalid} describedBy={describedBy} type="time" value={form.txnTime} onChange={update('txnTime')} />
+              )}
+            </Field>
+
+            <Field
               label={meterLabel}
               required
               error={errors.meterReading}
-              hint={!isEdit && !selectedAsset ? 'Select an asset first.' : reading != null ? `Current reading on the asset: ${formatNumber(reading)} ${unit}` : undefined}
+              hint={
+                !isEdit && !selectedAsset
+                  ? 'Select an asset first.'
+                  : reading != null
+                    ? `Current reading on the asset: ${formatNumber(reading)} ${unit}. A higher reading updates the asset and its service-due status.`
+                    : "A higher reading than the asset's updates the asset and its service-due status."
+              }
             >
               {({ id: fieldId, invalid, describedBy }) => (
                 <Input
@@ -373,16 +397,17 @@ export default function FuelIssueFormPage() {
                     <Input id={fieldId} invalid={invalid} describedBy={describedBy} type="number" min={0} step="any" value={form.pricePerLitre} onChange={update('pricePerLitre')} />
                   )}
                 </Field>
-                <Field label="Fuel station" hint="Optional.">
+                <Field label="Fuel station" hint="Optional. Type the name of the pump.">
                   {({ id: fieldId, describedBy }) => (
-                    <Select id={fieldId} describedBy={describedBy} value={form.fuelStationId} onChange={update('fuelStationId')}>
-                      <option value="">Not recorded</option>
-                      {stations.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.stationName}
-                        </option>
-                      ))}
-                    </Select>
+                    <Input
+                      id={fieldId}
+                      describedBy={describedBy}
+                      value={form.fuelStationName}
+                      onChange={update('fuelStationName')}
+                      maxLength={150}
+                      autoComplete="off"
+                      placeholder="e.g. HP Pump, Satara highway"
+                    />
                   )}
                 </Field>
               </>

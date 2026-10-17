@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { stockApi } from '../api/client';
+import { stockApi, listAll } from '../api/client';
 
 export default function useItemIdsInStock(siteId) {
   const [itemIds, setItemIds] = useState(() => new Set());
@@ -10,8 +10,7 @@ export default function useItemIdsInStock(siteId) {
       return undefined;
     }
     let cancelled = false;
-    stockApi
-      .balances({ siteId, limit: 100 })
+    listAll(stockApi.balances, { siteId })
       .then((response) => {
         if (cancelled) return;
         const inStock = response.data.filter((balance) => balance.availableQuantity > 0);

@@ -34,8 +34,12 @@ const FuelCollection = require('./FuelCollection');
 const FuelCollectionContainer = require('./FuelCollectionContainer');
 const SiteFuelStock = require('./SiteFuelStock');
 const FuelStockLedger = require('./FuelStockLedger');
-const Tyre = require('./Tyre');
-const TyreAssignment = require('./TyreAssignment');
+const TyreType = require('./TyreType');
+const TyrePurchase = require('./TyrePurchase');
+const TyrePurchaseItem = require('./TyrePurchaseItem');
+const TyreStock = require('./TyreStock');
+const TyreFitment = require('./TyreFitment');
+const Maintenance = require('./Maintenance');
 const { ASSET_TYPES, registerAssetModel } = require('../services/asset.service');
 
 Tenant.hasMany(User, { foreignKey: 'tenantId', as: 'users' });
@@ -251,14 +255,18 @@ SiteFuelStock.belongsTo(Site, { foreignKey: 'siteId', as: 'site' });
 Tenant.hasMany(FuelStockLedger, { foreignKey: 'tenantId', as: 'fuelStockLedger' });
 FuelStockLedger.belongsTo(Site, { foreignKey: 'siteId', as: 'site' });
 
-Tenant.hasMany(Tyre, { foreignKey: 'tenantId', as: 'tyres' });
-Tyre.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
-Tyre.belongsTo(Site, { foreignKey: 'siteId', as: 'site' });
-Tyre.hasMany(TyreAssignment, { foreignKey: 'tyreId', as: 'assignments' });
-TyreAssignment.belongsTo(Tyre, { foreignKey: 'tyreId', as: 'tyre' });
-TyreAssignment.belongsTo(Vehicle, { foreignKey: 'vehicleId', as: 'vehicle' });
-Vehicle.hasMany(TyreAssignment, { foreignKey: 'vehicleId', as: 'tyreAssignments' });
-TyreAssignment.belongsTo(Site, { foreignKey: 'siteId', as: 'site' });
+TyrePurchase.hasMany(TyrePurchaseItem, { foreignKey: 'purchaseId', as: 'items' });
+TyrePurchaseItem.belongsTo(TyrePurchase, { foreignKey: 'purchaseId', as: 'purchase' });
+TyrePurchaseItem.belongsTo(TyreType, { foreignKey: 'tyreTypeId', as: 'tyreType' });
+TyrePurchase.belongsTo(Site, { foreignKey: 'siteId', as: 'site' });
+TyreStock.belongsTo(TyreType, { foreignKey: 'tyreTypeId', as: 'tyreType' });
+TyreStock.belongsTo(Site, { foreignKey: 'siteId', as: 'site' });
+TyreFitment.belongsTo(TyreType, { foreignKey: 'tyreTypeId', as: 'tyreType' });
+TyreFitment.belongsTo(Site, { foreignKey: 'siteId', as: 'site' });
+
+Tenant.hasMany(Maintenance, { foreignKey: 'tenantId', as: 'maintenance' });
+Maintenance.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
+Maintenance.belongsTo(Site, { foreignKey: 'siteId', as: 'site' });
 
 module.exports = {
   sequelize,
@@ -297,6 +305,10 @@ module.exports = {
   FuelCollectionContainer,
   SiteFuelStock,
   FuelStockLedger,
-  Tyre,
-  TyreAssignment,
+  TyreType,
+  TyrePurchase,
+  TyrePurchaseItem,
+  TyreStock,
+  TyreFitment,
+  Maintenance,
 };

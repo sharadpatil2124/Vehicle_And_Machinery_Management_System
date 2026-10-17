@@ -13,8 +13,6 @@ class Item extends Model {
       itemName: this.itemName,
       description: this.description,
       itemType: this.itemType,
-      isHazardous: this.isHazardous,
-      batchTrackingRequired: this.batchTrackingRequired,
       minimumStockLevel: this.minimumStockLevel == null ? null : Number(this.minimumStockLevel),
       reorderLevel: this.reorderLevel == null ? null : Number(this.reorderLevel),
       maximumStockLevel: this.maximumStockLevel == null ? null : Number(this.maximumStockLevel),
@@ -65,16 +63,6 @@ Item.init(
     itemType: {
       type: DataTypes.STRING(50),
       allowNull: true,
-    },
-    isHazardous: {
-      type: DataTypes.BOOLEAN,
-      allowNull: false,
-      defaultValue: false,
-    },
-    batchTrackingRequired: {
-      type: DataTypes.BOOLEAN,
-      allowNull: false,
-      defaultValue: false,
     },
     minimumStockLevel: {
       type: DataTypes.DECIMAL(14, 3),

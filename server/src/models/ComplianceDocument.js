@@ -1,23 +1,26 @@
 const { DataTypes, Model } = require('sequelize');
 const { sequelize } = require('../config/database');
 
-const DOC_TYPES = ['ROAD_TAX', 'NATIONAL_PERMIT', 'INSURANCE', 'STATE_PERMIT', 'PUC'];
+const DOC_TYPES = ['ROAD_TAX', 'NATIONAL_PERMIT', 'INSURANCE', 'STATE_PERMIT', 'FITNESS'];
 const ROAD_TAX_TYPES = ['OTT', 'LTT', 'OTHER'];
 const ASSET_TYPES = ['VEHICLE', 'MACHINERY'];
 const EXPIRY_WARNING_DAYS = 15;
 
-function daysBetween(from, to) {
-  const start = new Date(from);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(to);
-  end.setHours(0, 0, 0, 0);
-  return Math.round((end - start) / 86400000);
+function localDate(dateOnly) {
+  const [year, month, day] = String(dateOnly).split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function daysUntil(dateOnly) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((localDate(dateOnly) - today) / 86400000);
 }
 
 class ComplianceDocument extends Model {
   get daysRemaining() {
     if (!this.expiryDate) return null;
-    return daysBetween(new Date(), this.expiryDate);
+    return daysUntil(this.expiryDate);
   }
 
   get status() {
@@ -28,6 +31,13 @@ class ComplianceDocument extends Model {
     return 'VALID';
   }
 
+  get severity() {
+    const status = this.status;
+    if (status === 'EXPIRED') return 'CRITICAL';
+    if (status === 'EXPIRING_SOON') return 'PRIORITY';
+    return null;
+  }
+
   toPublicJSON() {
     return {
       id: this.id,
@@ -35,10 +45,12 @@ class ComplianceDocument extends Model {
       assetId: this.assetId,
       docType: this.docType,
       roadTaxType: this.roadTaxType,
+      documentNumber: this.documentNumber,
       startDate: this.startDate,
       expiryDate: this.expiryDate,
       status: this.status,
       daysRemaining: this.daysRemaining,
+      severity: this.severity,
       createdBy: this.createdBy,
       updatedBy: this.updatedBy,
       createdAt: this.createdAt,
@@ -73,6 +85,10 @@ ComplianceDocument.init(
     },
     roadTaxType: {
       type: DataTypes.ENUM(...ROAD_TAX_TYPES),
+      allowNull: true,
+    },
+    documentNumber: {
+      type: DataTypes.STRING(64),
       allowNull: true,
     },
     startDate: {

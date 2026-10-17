@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { inventoryReportsApi } from '../../api/client';
-import { Alert, Input, Pagination, Select, Spinner, Table, Tabs } from '../../components/ui';
+import { Alert, Input, Select, Spinner, Tabs } from '../../components/ui';
+import ReportTable from '../../components/ReportTable';
 import { useAuth } from '../../context/AuthContext';
 import useSiteNames from '../../hooks/useSiteNames';
 import { firstOfMonthDateOnly, formatCurrency, formatDateOnly, formatNumber, todayDateOnly } from '../../config/fuel';
@@ -12,7 +13,6 @@ const TABS = [
   { value: 'assets', label: 'Parts by asset' },
 ];
 
-const PAGE_SIZE = 10;
 const muted = <span className="text-steel-300">—</span>;
 const money = (v) => <span className="tabular-nums">{formatCurrency(v)}</span>;
 
@@ -58,65 +58,7 @@ function ItemName({ name, code }) {
   );
 }
 
-function ReportSection({ title, noun, rows, columns, searchText, defaultSort, emptyMessage }) {
-  const [search, setSearch] = useState('');
-  const [sort, setSort] = useState(defaultSort);
-  const [page, setPage] = useState(1);
-
-  const term = search.trim().toLowerCase();
-  const filtered = term ? rows.filter((r) => searchText(r).toLowerCase().includes(term)) : rows;
-  const sortColumn = columns.find((c) => c.key === sort.field);
-  const sorted = [...filtered].sort((a, b) => {
-    const left = sortColumn.sortValue(a);
-    const right = sortColumn.sortValue(b);
-    const order = typeof left === 'string' ? left.localeCompare(right) : left - right;
-    return sort.direction === 'asc' ? order : -order;
-  });
-  const pages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  const currentPage = Math.min(page, pages);
-  const visible = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-
-  function handleSort(field) {
-    const isText = typeof columns.find((c) => c.key === field).sortValue(rows[0] ?? {}) === 'string';
-    setSort((s) => ({ field, direction: s.field === field ? (s.direction === 'desc' ? 'asc' : 'desc') : isText ? 'asc' : 'desc' }));
-    setPage(1);
-  }
-
-  return (
-    <section className="rounded border border-steel-200 bg-white">
-      <header className="flex flex-col gap-3 border-b border-steel-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-sm font-semibold text-steel-900">{title}</h2>
-          <p className="text-xs text-steel-500">
-            {rows.length} {rows.length === 1 ? noun : `${noun}s`}
-          </p>
-        </div>
-        {rows.length > PAGE_SIZE && (
-          <div className="sm:w-64">
-            <Input
-              placeholder={`Search ${noun}s...`}
-              aria-label={`Search ${noun}s`}
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-            />
-          </div>
-        )}
-      </header>
-      <Table
-        columns={columns}
-        rows={visible}
-        getRowKey={(r) => `${noun}-${r.key ?? r.itemId ?? `${r.assetType}-${r.assetId}`}`}
-        sort={sort}
-        onSort={handleSort}
-        emptyMessage={term ? `No ${noun}s match "${search.trim()}".` : emptyMessage}
-      />
-      {sorted.length > PAGE_SIZE && <Pagination page={currentPage} pages={pages} total={sorted.length} onPageChange={setPage} />}
-    </section>
-  );
-}
+const inventoryRowKey = (noun) => (r) => `${noun}-${r.key ?? r.itemId ?? `${r.assetType}-${r.assetId}`}`;
 
 function RegisterReport({ data }) {
   const t = data.totals;
@@ -142,15 +84,16 @@ function RegisterReport({ data }) {
     <>
       <Summary
         items={[
-          ['Opening stock value', formatCurrency(t.opening), `At start of ${formatDateOnly(data.dateFrom)}`],
+          ['Opening stock value', formatCurrency(t.opening), data.dateFrom ? `At start of ${formatDateOnly(data.dateFrom)}` : 'Before the first record'],
           ['Purchased', formatCurrency(t.purchased), 'Received into stock'],
           ['Used', formatCurrency(t.used), 'Issued to assets, less returns'],
-          ['Closing stock value', formatCurrency(t.closing), `At end of ${formatDateOnly(data.dateTo)}`],
+          ['Closing stock value', formatCurrency(t.closing), data.dateTo ? `At end of ${formatDateOnly(data.dateTo)}` : 'All records to date'],
         ]}
       />
-      <ReportSection
+      <ReportTable
         title="Stock by item"
         noun="item"
+        getRowKey={inventoryRowKey('item')}
         rows={data.rows}
         columns={columns}
         searchText={(r) => `${r.itemName} ${r.itemCode}`}
@@ -216,18 +159,20 @@ function PurchaseReport({ data }) {
         ]}
       />
       <div className="flex flex-col gap-5">
-        <ReportSection
+        <ReportTable
           title="By supplier"
           noun="supplier"
+          getRowKey={inventoryRowKey('supplier')}
           rows={data.bySupplier}
           columns={supplierColumns}
           searchText={(r) => r.label ?? ''}
           defaultSort={{ field: 'total', direction: 'desc' }}
           emptyMessage="No purchases received in this period."
         />
-        <ReportSection
+        <ReportTable
           title="By item"
           noun="item"
+          getRowKey={inventoryRowKey('item')}
           rows={data.byItem}
           columns={itemColumns}
           searchText={(r) => `${r.label} ${r.itemCode}`}
@@ -290,9 +235,10 @@ function AssetReport({ data }) {
           ['Total parts cost', formatCurrency(t.netCost), 'Issued, less returns'],
         ]}
       />
-      <ReportSection
+      <ReportTable
         title="Parts cost by vehicle and machine"
         noun="asset"
+        getRowKey={inventoryRowKey('asset')}
         rows={data.rows}
         columns={columns}
         searchText={(r) => `${r.assetLabel ?? ''} ${r.assetId}`}
@@ -363,7 +309,7 @@ export default function InventoryReportsPage() {
           <Select aria-label="Site" value={filters.siteId} onChange={(e) => setFilters((f) => ({ ...f, siteId: e.target.value }))}>
             <option value="">All sites</option>
             {Object.entries(siteNames).map(([siteId, name]) => (
-              <option key={siteId} value={siteId}>
+              <option key={siteId} value={siteId} data-added={siteId}>
                 {name}
               </option>
             ))}

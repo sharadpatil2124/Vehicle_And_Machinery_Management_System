@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { machineryApi, sitesApi, complianceApi } from '../api/client';
+import { machineryApi, sitesApi, complianceApi, listAll } from '../api/client';
 import { Alert, Button, Card, Field, Input, Select, Spinner } from '../components/ui';
 import ComplianceFields, { EMPTY_COMPLIANCE, getComplianceDateErrors } from '../components/ComplianceFields';
 import AssetDocumentFields from '../components/AssetDocumentFields';
@@ -9,9 +9,11 @@ import { complianceSlotsToFormValue } from '../config/compliance';
 import { useAuth } from '../context/AuthContext';
 import { hasPermission } from '../config/permissions';
 
+const RCPL_TAKEN = 'This RCPL is already in use by another machine';
+
 const EMPTY_FORM = {
   name: '',
-  registrationNumber: '',
+  rcpl: '',
   type: '',
   modelNumber: '',
   serialNumber: '',
@@ -25,7 +27,7 @@ const EMPTY_FORM = {
 function toFormValues(machine) {
   return {
     name: machine.name ?? '',
-    registrationNumber: machine.registrationNumber ?? '',
+    rcpl: machine.rcpl ?? '',
     type: machine.type,
     modelNumber: machine.modelNumber ?? '',
     serialNumber: machine.serialNumber ?? '',
@@ -55,6 +57,8 @@ export default function MachineryFormPage() {
   const [loadError, setLoadError] = useState(null);
   const [submitError, setSubmitError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [rcplError, setRcplError] = useState(null);
+  const latestRcpl = useRef('');
 
   useEffect(() => {
     if (!isEdit) return;
@@ -62,6 +66,7 @@ export default function MachineryFormPage() {
       .get(id)
       .then(async (response) => {
         setForm(toFormValues(response.data));
+        latestRcpl.current = response.data.rcpl ?? '';
         setOriginalServiceIntervalHours(response.data.serviceIntervalHours);
         const complianceResponse = await complianceApi.list('MACHINERY', response.data.assetId);
         setCompliance(complianceSlotsToFormValue(complianceResponse.data));
@@ -71,14 +76,38 @@ export default function MachineryFormPage() {
   }, [id, isEdit]);
 
   useEffect(() => {
-    sitesApi
-      .list({ limit: 100 })
+    listAll(sitesApi.list)
       .then((response) => setSiteOptions(response.data))
       .catch(() => {});
   }, []);
 
   function update(field) {
     return (event) => setForm((f) => ({ ...f, [field]: event.target.value }));
+  }
+
+  function updateRcpl(event) {
+    const rcpl = event.target.value.toUpperCase();
+    latestRcpl.current = rcpl;
+    setForm((f) => ({ ...f, rcpl }));
+    setRcplError(null);
+  }
+
+  async function findRcplError(value) {
+    const rcpl = value.trim();
+    if (!rcpl) return 'RCPL is required';
+    try {
+      const response = await machineryApi.rcplAvailability({ rcpl, excludeId: isEdit ? id : undefined });
+      return response.data.available ? null : RCPL_TAKEN;
+    } catch {
+      return null;
+    }
+  }
+
+  async function handleRcplBlur() {
+    const checked = form.rcpl;
+    if (!checked.trim()) return;
+    const message = await findRcplError(checked);
+    if (latestRcpl.current === checked) setRcplError(message);
   }
 
   async function handleSubmit(event) {
@@ -92,12 +121,20 @@ export default function MachineryFormPage() {
 
     setSubmitting(true);
 
+    const rcplProblem = await findRcplError(form.rcpl);
+    if (rcplProblem) {
+      setRcplError(rcplProblem);
+      setSubmitting(false);
+      return;
+    }
+
     const nextServiceIntervalHours = Number(form.serviceIntervalHours);
     const intervalChanged = !isEdit || nextServiceIntervalHours !== originalServiceIntervalHours;
 
     const { serviceIntervalHours: _omit, currentSiteId, ...formWithoutInterval } = form;
     const payload = {
       ...formWithoutInterval,
+      rcpl: form.rcpl.trim(),
       year: form.year === '' ? null : Number(form.year),
       currentHours: Number(form.currentHours),
       currentSiteId: currentSiteId === '' ? null : Number(currentSiteId),
@@ -111,7 +148,8 @@ export default function MachineryFormPage() {
         : await machineryApi.create(payload, documentFiles);
       navigate(`/machinery/${response.data.id}`);
     } catch (err) {
-      setSubmitError(err.message);
+      if (/RCPL/.test(err.message)) setRcplError(err.message);
+      else setSubmitError(err.message);
     } finally {
       setSubmitting(false);
     }
@@ -157,15 +195,18 @@ export default function MachineryFormPage() {
               )}
             </Field>
 
-            <Field label="Registration number">
+            <Field label="RCPL" required error={rcplError} hint="Unique for each machine. Saved in capital letters.">
               {({ id: fieldId, invalid, describedBy }) => (
                 <Input
                   id={fieldId}
                   invalid={invalid}
                   describedBy={describedBy}
-                  value={form.registrationNumber}
-                  onChange={update('registrationNumber')}
+                  value={form.rcpl}
+                  onChange={updateRcpl}
+                  onBlur={handleRcplBlur}
                   maxLength={32}
+                  autoCapitalize="characters"
+                  required
                 />
               )}
             </Field>
@@ -257,7 +298,7 @@ export default function MachineryFormPage() {
                 >
                   <option value="">Unassigned</option>
                   {siteOptions.map((site) => (
-                    <option key={site.id} value={site.id}>
+                    <option key={site.id} value={site.id} data-added={site.id}>
                       {site.name}
                       {site.location ? ` — ${site.location}` : ''}
                     </option>

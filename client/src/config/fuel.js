@@ -54,6 +54,17 @@ export function todayDateOnly() {
   return `${now.getFullYear()}-${month}-${day}`;
 }
 
+export function nowTimeOnly() {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+}
+
+export function formatTimeOnly(value) {
+  if (!value) return '';
+  const [hours, minutes] = value.split(':').map(Number);
+  return new Date(2000, 0, 1, hours, minutes).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
 export function firstOfMonthDateOnly() {
   return `${todayDateOnly().slice(0, 8)}01`;
 }
@@ -64,8 +75,13 @@ export function formatDateOnly(value) {
   return new Date(year, month - 1, day).toLocaleDateString(undefined, { dateStyle: 'medium' });
 }
 
+export function machineryLabel(machine) {
+  if (!machine) return '';
+  return [machine.rcpl, machine.name].filter(Boolean).join(' · ') || machine.assetId;
+}
+
 export function assetDisplayName(assetType, asset) {
   if (!asset) return '';
   if (assetType === 'VEHICLE') return asset.registrationNumber;
-  return asset.name || asset.registrationNumber || asset.serialNumber || asset.assetId;
+  return machineryLabel(asset);
 }

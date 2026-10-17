@@ -15,11 +15,13 @@ class FuelTransaction extends Model {
       source: this.source,
       fuelType: this.fuelType,
       fuelStationId: this.fuelStationId,
+      fuelStationName: this.fuelStationName,
       ledgerEntryId: this.ledgerEntryId,
       reversalLedgerEntryId: this.reversalLedgerEntryId,
       assetType: this.assetType,
       assetId: this.assetId,
       txnDate: this.txnDate,
+      txnTime: this.txnTime ? String(this.txnTime).slice(0, 5) : null,
       quantity: Number(this.quantity),
       pricePerLitre: Number(this.pricePerLitre),
       amount: Number(this.amount),
@@ -67,6 +69,10 @@ FuelTransaction.init(
       allowNull: true,
       references: { model: 'fuel_stations', key: 'id' },
     },
+    fuelStationName: {
+      type: DataTypes.STRING(150),
+      allowNull: true,
+    },
     ledgerEntryId: {
       type: DataTypes.INTEGER.UNSIGNED,
       allowNull: true,
@@ -89,6 +95,10 @@ FuelTransaction.init(
       type: DataTypes.DATEONLY,
       allowNull: false,
     },
+    txnTime: {
+      type: DataTypes.TIME,
+      allowNull: true,
+    },
     quantity: {
       type: DataTypes.DECIMAL(12, 3),
       allowNull: false,
@@ -108,6 +118,10 @@ FuelTransaction.init(
     meterType: {
       type: DataTypes.ENUM(...METER_TYPES),
       allowNull: false,
+    },
+    assetMeterBefore: {
+      type: DataTypes.DECIMAL(14, 2),
+      allowNull: true,
     },
     notes: {
       type: DataTypes.TEXT,

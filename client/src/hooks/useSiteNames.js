@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { sitesApi } from '../api/client';
+import { sitesApi, listAll } from '../api/client';
 
 export default function useSiteNames() {
   const [siteNames, setSiteNames] = useState({});
 
   useEffect(() => {
-    Promise.all([sitesApi.list({ limit: 100 }), sitesApi.list({ status: 'archived', limit: 100 })])
+    Promise.all([listAll(sitesApi.list), listAll(sitesApi.list, { status: 'archived' })])
       .then(([active, archived]) => {
         const names = {};
         for (const site of [...active.data, ...archived.data]) {

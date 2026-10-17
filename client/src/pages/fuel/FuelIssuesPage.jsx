@@ -6,12 +6,7 @@ import Can from '../../components/Can';
 import DeleteWordModal from '../../components/DeleteWordModal';
 import { useAuth } from '../../context/AuthContext';
 import useSiteNames from '../../hooks/useSiteNames';
-import { SOURCE_LABEL, formatCurrency, formatDateOnly, formatLitres, formatNumber, meterUnitLabel } from '../../config/fuel';
-
-function assetDetailPath(row) {
-  if (!row.assetRecordId) return null;
-  return row.assetType === 'VEHICLE' ? `/vehicles/${row.assetRecordId}` : `/machinery/${row.assetRecordId}`;
-}
+import { SOURCE_LABEL, formatCurrency, formatDateOnly, formatLitres, formatNumber, formatTimeOnly, meterUnitLabel } from '../../config/fuel';
 
 export default function FuelIssuesPage() {
   const location = useLocation();
@@ -106,22 +101,25 @@ export default function FuelIssuesPage() {
   const [sortField, sortDirection] = filters.sort.split(':');
 
   const columns = [
-    { key: 'txnDate', label: 'Date', sortable: true, render: (r) => formatDateOnly(r.txnDate) },
+    {
+      key: 'txnDate',
+      label: 'Date & time',
+      sortable: true,
+      render: (r) => (
+        <div className="flex flex-col">
+          <span>{formatDateOnly(r.txnDate)}</span>
+          {r.txnTime && <span className="text-xs text-steel-500 tabular-nums">{formatTimeOnly(r.txnTime)}</span>}
+        </div>
+      ),
+    },
     {
       key: 'asset',
       label: 'Asset',
       render: (r) => {
-        const path = assetDetailPath(r);
         const label = r.assetLabel ?? r.assetId;
         return (
           <div className="flex flex-col">
-            {path ? (
-              <Link to={path} className="font-semibold text-brand-600 hover:underline">
-                {label}
-              </Link>
-            ) : (
-              <span className="font-semibold text-steel-900">{label}</span>
-            )}
+            <span className="font-semibold text-steel-900">{label}</span>
             <span className="text-xs text-steel-500">
               {r.assetId} · {r.assetType === 'VEHICLE' ? 'Vehicle' : 'Machinery'}
             </span>
@@ -216,7 +214,7 @@ export default function FuelIssuesPage() {
       )}
 
       <div className={`mb-4 grid gap-3 sm:grid-cols-2 ${isAdmin ? 'lg:grid-cols-7' : 'lg:grid-cols-6'}`}>
-        <Input placeholder="Search asset ID..." value={filters.search} onChange={(e) => updateFilter('search', e.target.value)} disabled={Boolean(assetFilter)} />
+        <Input placeholder="Search asset ID, RCPL or registration no..." title="Search by asset ID, machinery RCPL or vehicle registration number"value={filters.search} onChange={(e) => updateFilter('search', e.target.value)} disabled={Boolean(assetFilter)} />
         <Select value={assetFilter ? assetFilter.assetType : filters.assetType} onChange={(e) => updateFilter('assetType', e.target.value)} disabled={Boolean(assetFilter)}>
           <option value="">All asset types</option>
           <option value="VEHICLE">Vehicles</option>
@@ -231,7 +229,7 @@ export default function FuelIssuesPage() {
           <Select value={filters.siteId} onChange={(e) => updateFilter('siteId', e.target.value)}>
             <option value="">All sites</option>
             {Object.entries(siteNames).map(([siteId, name]) => (
-              <option key={siteId} value={siteId}>
+              <option key={siteId} value={siteId} data-added={siteId}>
                 {name}
               </option>
             ))}
@@ -273,7 +271,7 @@ export default function FuelIssuesPage() {
         title="Delete this fuel issue?"
         description={
           deleteTarget
-            ? `${formatLitres(deleteTarget.quantity)} for ${deleteTarget.assetLabel ?? deleteTarget.assetId} on ${formatDateOnly(deleteTarget.txnDate)}.${
+            ? `${formatLitres(deleteTarget.quantity)} for ${deleteTarget.assetLabel ?? deleteTarget.assetId} on ${formatDateOnly(deleteTarget.txnDate)}${deleteTarget.txnTime ? ` at ${formatTimeOnly(deleteTarget.txnTime)}` : ''}.${
                 deleteTarget.source === 'SITE_STOCK' ? ' The fuel goes back into site stock at its original cost.' : ''
               }`
             : undefined

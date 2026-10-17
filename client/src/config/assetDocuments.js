@@ -8,7 +8,7 @@ export const DOCUMENT_LABELS = {
 };
 
 export function getMandatoryDocTypes(assetType) {
-  return assetType === 'VEHICLE' ? ['RC', 'PUC'] : [];
+  return assetType === 'VEHICLE' ? ['RC'] : [];
 }
 
 export function getMissingMandatoryDocTypes(assetType, files) {

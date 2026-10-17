@@ -4,6 +4,14 @@ const { sequelize } = require('../config/database');
 const MACHINERY_STATUSES = ['active', 'archived'];
 const FUEL_TYPES = ['Diesel', 'Petrol', 'CNG'];
 
+function normalizeRcpl(value) {
+  return value.trim().toUpperCase();
+}
+
+function machineryLabel(machine) {
+  return [machine.rcpl, machine.name].filter(Boolean).join(' · ') || machine.assetId;
+}
+
 class Machinery extends Model {
   get isServiceDue() {
     return Number(this.currentHours) >= Number(this.nextServiceHours);
@@ -14,7 +22,7 @@ class Machinery extends Model {
       id: this.id,
       assetId: this.assetId,
       name: this.name,
-      registrationNumber: this.registrationNumber,
+      rcpl: this.rcpl,
       type: this.type,
       modelNumber: this.modelNumber,
       serialNumber: this.serialNumber,
@@ -55,9 +63,12 @@ Machinery.init(
       type: DataTypes.STRING(150),
       allowNull: true,
     },
-    registrationNumber: {
+    rcpl: {
       type: DataTypes.STRING(32),
-      allowNull: true,
+      allowNull: false,
+      set(value) {
+        this.setDataValue('rcpl', typeof value === 'string' ? normalizeRcpl(value) : value);
+      },
     },
     type: {
       type: DataTypes.STRING(100),
@@ -131,5 +142,7 @@ Machinery.init(
 
 Machinery.STATUSES = MACHINERY_STATUSES;
 Machinery.FUEL_TYPES = FUEL_TYPES;
+Machinery.normalizeRcpl = normalizeRcpl;
+Machinery.label = machineryLabel;
 
 module.exports = Machinery;

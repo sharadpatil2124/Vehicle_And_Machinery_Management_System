@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { stockTransfersApi, itemsApi, storageLocationsApi, sitesApi } from '../../api/client';
+import { stockTransfersApi, itemsApi, storageLocationsApi, sitesApi, listAll } from '../../api/client';
 import { Alert, Button, Card, Field, Input, Select } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
 import useItemIdsInStock from '../../hooks/useItemIdsInStock';
+import { todayDateOnly } from '../../config/fuel';
 
 const EMPTY_LINE = { itemId: '', fromStorageLocationId: '', toStorageLocationId: '', quantity: '' };
 
@@ -12,7 +13,7 @@ export default function StockTransferFormPage() {
   const { user, role } = useAuth();
   const isAdmin = role === 'admin';
 
-  const [form, setForm] = useState({ fromSiteId: '', toSiteId: '', transferDate: '', remarks: '' });
+  const [form, setForm] = useState({ fromSiteId: '', toSiteId: '', transferDate: todayDateOnly(), remarks: '' });
   const [lines, setLines] = useState([{ ...EMPTY_LINE }]);
   const [items, setItems] = useState([]);
   const [storageLocations, setStorageLocations] = useState([]);
@@ -24,9 +25,9 @@ export default function StockTransferFormPage() {
   const itemIdsInStock = useItemIdsInStock(effectiveFromSiteId);
 
   useEffect(() => {
-    itemsApi.list({ limit: 100 }).then((r) => setItems(r.data)).catch(() => setItems([]));
-    storageLocationsApi.list({ limit: 100 }).then((r) => setStorageLocations(r.data)).catch(() => setStorageLocations([]));
-    sitesApi.list({ limit: 100 }).then((r) => setSites(r.data)).catch(() => setSites([]));
+    listAll(itemsApi.list).then((r) => setItems(r.data)).catch(() => setItems([]));
+    listAll(storageLocationsApi.list).then((r) => setStorageLocations(r.data)).catch(() => setStorageLocations([]));
+    listAll(sitesApi.list).then((r) => setSites(r.data)).catch(() => setSites([]));
   }, []);
 
   const fromLocations = useMemo(
@@ -117,7 +118,7 @@ export default function StockTransferFormPage() {
                   <Select id={fieldId} invalid={invalid} describedBy={describedBy} value={form.fromSiteId} onChange={updateForm('fromSiteId')} required>
                     <option value="">Select a site</option>
                     {sites.map((site) => (
-                      <option key={site.id} value={site.id}>
+                      <option key={site.id} value={site.id} data-added={site.id}>
                         {site.name}
                       </option>
                     ))}
@@ -137,7 +138,7 @@ export default function StockTransferFormPage() {
                   {sites
                     .filter((site) => String(site.id) !== effectiveFromSiteId)
                     .map((site) => (
-                      <option key={site.id} value={site.id}>
+                      <option key={site.id} value={site.id} data-added={site.id}>
                         {site.name}
                       </option>
                     ))}
@@ -182,7 +183,7 @@ export default function StockTransferFormPage() {
                             {items
                               .filter((it) => it.status === 'active' && itemIdsInStock.has(it.id))
                               .map((it) => (
-                                <option key={it.id} value={it.id}>
+                                <option key={it.id} value={it.id} data-added={it.id}>
                                   {it.itemName}
                                 </option>
                               ))}
@@ -218,7 +219,7 @@ export default function StockTransferFormPage() {
                           >
                             <option value="">Select a location</option>
                             {fromLocations.map((loc) => (
-                              <option key={loc.id} value={loc.id}>
+                              <option key={loc.id} value={loc.id} data-added={loc.id}>
                                 {loc.locationName}
                               </option>
                             ))}
@@ -238,7 +239,7 @@ export default function StockTransferFormPage() {
                           >
                             <option value="">Select a location</option>
                             {toLocations.map((loc) => (
-                              <option key={loc.id} value={loc.id}>
+                              <option key={loc.id} value={loc.id} data-added={loc.id}>
                                 {loc.locationName}
                               </option>
                             ))}

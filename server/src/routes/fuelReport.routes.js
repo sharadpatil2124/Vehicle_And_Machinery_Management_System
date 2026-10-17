@@ -12,4 +12,8 @@ router.get('/asset-consumption', requirePermission('REPORTS', 'VIEW'), fuelRepor
 
 router.get('/collections', requirePermission('REPORTS', 'VIEW'), fuelReportController.collections);
 
+router.get('/collections/by-station', requirePermission('REPORTS', 'VIEW'), fuelReportController.collectionsByStation);
+
+router.get('/collections/by-carrier', requirePermission('REPORTS', 'VIEW'), fuelReportController.collectionsByCarrier);
+
 module.exports = router;

@@ -9,6 +9,8 @@ router.use(authenticated);
 
 router.get('/', requirePermission('MACHINERY', 'READ'), machineryController.list);
 
+router.get('/rcpl-availability', requirePermission('MACHINERY', 'READ'), machineryController.rcplAvailability);
+
 router.post(
   '/',
   requirePermission('MACHINERY', 'CREATE'),

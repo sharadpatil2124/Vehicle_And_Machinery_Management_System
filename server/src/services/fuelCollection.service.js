@@ -138,6 +138,11 @@ async function listFuelCollections({ tenantId, auth, query }) {
   const search = typeof query.search === 'string' ? query.search.trim() : '';
   if (search) {
     where[Op.or] = [{ collectionNumber: { [Op.like]: `%${search}%` } }, { billNumber: { [Op.like]: `%${search}%` } }];
+    const carriers = await Vehicle.findAll({
+      where: { tenantId, registrationNumber: { [Op.like]: `%${search}%` } },
+      attributes: ['id'],
+    });
+    if (carriers.length) where[Op.or].push({ carrierVehicleId: carriers.map((v) => v.id) });
   }
 
   const { rows, count } = await repo.findAndCountAll(tenantId, {

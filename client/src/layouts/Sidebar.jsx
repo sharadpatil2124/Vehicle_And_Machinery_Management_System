@@ -88,6 +88,24 @@ export default function Sidebar({ open, onNavigate }) {
           </NavLink>
         </NavSection>
 
+        <NavSection title="Maintenance" paths={['/maintenance']}>
+          <NavLink to="/maintenance/preventive" className={linkClasses} onClick={onNavigate}>
+            Preventive Maintenance
+          </NavLink>
+          <NavLink to="/maintenance/breakdowns" className={linkClasses} onClick={onNavigate}>
+            Breakdown Maintenance
+          </NavLink>
+          <NavLink to="/maintenance/history" className={linkClasses} onClick={onNavigate}>
+            Maintenance History
+          </NavLink>
+        </NavSection>
+
+        <NavSection title="Compliance" paths={['/compliance']}>
+          <NavLink to="/compliance" className={linkClasses} onClick={onNavigate}>
+            Compliance Documents
+          </NavLink>
+        </NavSection>
+
         <NavSection title="Fuel" paths={['/fuel']}>
           <NavLink to="/fuel/stock" className={linkClasses} onClick={onNavigate}>
             Fuel Stock
@@ -106,6 +124,21 @@ export default function Sidebar({ open, onNavigate }) {
               Fuel Stations
             </NavLink>
           </Can>
+        </NavSection>
+
+        <NavSection title="Tyres" paths={['/tyres']}>
+          <NavLink to="/tyres/stock" className={linkClasses} onClick={onNavigate}>
+            Tyre Stock
+          </NavLink>
+          <NavLink to="/tyres/purchases" className={linkClasses} onClick={onNavigate}>
+            Tyre Purchases
+          </NavLink>
+          <NavLink to="/tyres/fitting" className={linkClasses} onClick={onNavigate}>
+            Tyre Fitting
+          </NavLink>
+          <NavLink to="/tyres/reports" className={linkClasses} onClick={onNavigate}>
+            Tyre Reports
+          </NavLink>
         </NavSection>
 
         <NavSection title="Inventory" paths={['/inventory']}>

@@ -1,6 +1,7 @@
 const { Op, Transaction } = require('sequelize');
 
 const { sequelize, FuelTransaction, FuelStation, Vehicle, Machinery } = require('../models');
+const { machineAssetIdsMatchingRcpl, vehicleAssetIdsMatchingRegistration } = require('./assetIdentifier.service');
 const AppError = require('../utils/AppError');
 const { requireText, optionalText, requireNumber, optionalNumber } = require('../utils/validation');
 const { parseListQuery, parseEnumFilter } = require('../utils/queryOptions');
@@ -11,6 +12,7 @@ const { scopeToSite, assertSiteAllowed, supervisorSiteId } = require('./siteAcce
 const { resolveAsset, ASSET_TYPES } = require('./asset.service');
 const { assertStationUsable } = require('./fuelStation.service');
 const { postFuelMovement } = require('./fuelStock.service');
+const { lockAsset, settleMeterFromFuel } = require('./assetMeter.service');
 const {
   STORABLE_FUEL_TYPES,
   roundQuantity,
@@ -51,9 +53,22 @@ function readAssetInput(payload) {
   return { assetType, assetId };
 }
 
+const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)(:[0-5]\d)?$/;
+
+function readTime(value) {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return null;
+  if (typeof value !== 'string' || !TIME_PATTERN.test(value.trim())) {
+    throw AppError.badRequest('Time must be a valid time (HH:MM)');
+  }
+  return `${value.trim().slice(0, 5)}:00`;
+}
+
 function readCommonInput(payload) {
+  const txnTime = readTime(payload.txnTime);
   return {
     txnDate: requireBusinessDate(payload.txnDate, 'Date'),
+    ...(txnTime === undefined ? {} : { txnTime }),
     meterReading: roundMoney(requireNumber(payload.meterReading, 'Meter reading', { min: 0 })),
     notes: optionalText(payload.notes, 'Notes', { max: 2000 }),
   };
@@ -63,62 +78,85 @@ function readQuantity(payload) {
   return roundQuantity(requirePositive(payload.quantity, 'Quantity (litres)'));
 }
 
-async function readDirectPumpInput(tenantId, payload, { currentStationId = null } = {}) {
-  const quantity = readQuantity(payload);
-  const pricePerLitre = roundMoney(requirePositive(payload.pricePerLitre, 'Price per litre'));
-  const fuelStationId =
-    payload.fuelStationId === undefined
-      ? currentStationId
-      : optionalNumber(payload.fuelStationId, 'Fuel station', { min: 1 });
+async function readStationInput(tenantId, payload, currentStationId) {
+  if (payload.fuelStationName !== undefined) {
+    const raw = payload.fuelStationName;
+    const name = optionalText(typeof raw === 'string' ? raw.trim() : raw, 'Fuel station', { max: 150 });
+    if (!name) return { fuelStationId: null, fuelStationName: null };
+    const listed = await FuelStation.findOne({ where: { tenantId, status: 'active', stationName: name }, attributes: ['id'] });
+    return listed ? { fuelStationId: listed.id, fuelStationName: null } : { fuelStationId: null, fuelStationName: name };
+  }
+  if (payload.fuelStationId === undefined) return {};
+  const fuelStationId = optionalNumber(payload.fuelStationId, 'Fuel station', { min: 1 });
   if (fuelStationId != null && fuelStationId !== currentStationId) {
     await assertStationUsable(tenantId, fuelStationId);
   }
-  return { quantity, pricePerLitre, amount: roundMoney(quantity * pricePerLitre), fuelStationId };
+  return { fuelStationId, fuelStationName: null };
+}
+
+async function readDirectPumpInput(tenantId, payload, { currentStationId = null } = {}) {
+  const quantity = readQuantity(payload);
+  const pricePerLitre = roundMoney(requirePositive(payload.pricePerLitre, 'Price per litre'));
+  const station = await readStationInput(tenantId, payload, currentStationId);
+  return { quantity, pricePerLitre, amount: roundMoney(quantity * pricePerLitre), ...station };
+}
+
+function sequenceKey(time, id) {
+  return [time ? String(time).slice(0, 8) : '', id];
+}
+
+function compareKeys(a, b) {
+  if (a[0] !== b[0]) return a[0] < b[0] ? -1 : 1;
+  return a[1] - b[1];
+}
+
+function recordedAt(entry) {
+  return entry.txnTime ? `${entry.txnDate} ${String(entry.txnTime).slice(0, 5)}` : entry.txnDate;
 }
 
 async function assertMeterInSequence(
   tenantId,
-  { assetType, assetId, meterType, txnDate, meterReading, excludeId },
+  { assetType, assetId, meterType, txnDate, txnTime = null, meterReading, excludeId },
   { transaction } = {}
 ) {
   const base = { tenantId, assetType, assetId, meterType, status: 'active' };
+  const others = excludeId ? { id: { [Op.ne]: excludeId } } : {};
 
-  const earlier = excludeId
-    ? { [Op.or]: [{ txnDate: { [Op.lt]: txnDate } }, { txnDate, id: { [Op.lt]: excludeId } }] }
-    : { txnDate: { [Op.lte]: txnDate } };
-  const later = excludeId
-    ? { [Op.or]: [{ txnDate: { [Op.gt]: txnDate } }, { txnDate, id: { [Op.gt]: excludeId } }] }
-    : { txnDate: { [Op.gt]: txnDate } };
-
-  const [previous, next] = await Promise.all([
+  const [earlierDay, laterDay, sameDay] = await Promise.all([
     FuelTransaction.findOne({
-      where: { ...base, ...earlier },
-      order: [['txnDate', 'DESC'], ['id', 'DESC']],
+      where: { ...base, txnDate: { [Op.lt]: txnDate } },
+      order: [['txnDate', 'DESC'], ['txnTime', 'DESC'], ['id', 'DESC']],
       transaction,
     }),
     FuelTransaction.findOne({
-      where: { ...base, ...later },
-      order: [['txnDate', 'ASC'], ['id', 'ASC']],
+      where: { ...base, txnDate: { [Op.gt]: txnDate } },
+      order: [['txnDate', 'ASC'], ['txnTime', 'ASC'], ['id', 'ASC']],
       transaction,
     }),
+    FuelTransaction.findAll({ where: { ...base, ...others, txnDate }, transaction }),
   ]);
+
+  const own = sequenceKey(txnTime, excludeId ?? Infinity);
+  const ordered = sameDay
+    .map((entry) => ({ entry, key: sequenceKey(entry.txnTime, entry.id) }))
+    .sort((a, b) => compareKeys(a.key, b.key));
+  const before = ordered.filter((x) => compareKeys(x.key, own) < 0);
+  const after = ordered.filter((x) => compareKeys(x.key, own) > 0);
+  const previous = before.length ? before[before.length - 1].entry : earlierDay;
+  const next = after.length ? after[0].entry : laterDay;
 
   const unit = meterUnit(meterType);
 
   if (previous && meterReading < Number(previous.meterReading)) {
     throw AppError.badRequest(
-      `Meter reading cannot be lower than ${Number(previous.meterReading).toLocaleString('en-IN')} ${unit}, recorded on ${previous.txnDate}`
+      `Meter reading cannot be lower than ${Number(previous.meterReading).toLocaleString('en-IN')} ${unit}, recorded on ${recordedAt(previous)}`
     );
   }
   if (next && meterReading > Number(next.meterReading)) {
     throw AppError.badRequest(
-      `Meter reading cannot be higher than ${Number(next.meterReading).toLocaleString('en-IN')} ${unit}, recorded on a later entry (${next.txnDate})`
+      `Meter reading cannot be higher than ${Number(next.meterReading).toLocaleString('en-IN')} ${unit}, recorded on a later entry (${recordedAt(next)})`
     );
   }
-}
-
-async function lockAsset(asset, transaction) {
-  await asset.constructor.findOne({ where: { id: asset.id }, lock: transaction.LOCK.UPDATE, transaction });
 }
 
 function assetLabelKey(assetType, assetId) {
@@ -137,7 +175,7 @@ async function withLabels(tenantId, records) {
     machineIds.length
       ? Machinery.findAll({
           where: { tenantId, assetId: machineIds },
-          attributes: ['id', 'assetId', 'name', 'registrationNumber', 'serialNumber'],
+          attributes: ['id', 'assetId', 'name', 'rcpl'],
         })
       : [],
     stationIds.length ? FuelStation.findAll({ where: { tenantId, id: stationIds }, attributes: ['id', 'stationName'] }) : [],
@@ -149,7 +187,7 @@ async function withLabels(tenantId, records) {
   }
   for (const m of machines) {
     labels.set(assetLabelKey('MACHINERY', m.assetId), {
-      label: m.name || m.registrationNumber || m.serialNumber || m.assetId,
+      label: Machinery.label(m),
       recordId: m.id,
     });
   }
@@ -162,7 +200,7 @@ async function withLabels(tenantId, records) {
       ...json,
       assetLabel: found?.label ?? null,
       assetRecordId: found?.recordId ?? null,
-      fuelStationName: stationNames.get(record.fuelStationId) ?? null,
+      fuelStationName: record.fuelStationName ?? stationNames.get(record.fuelStationId) ?? null,
     };
   });
 }
@@ -194,11 +232,19 @@ async function listFuelTransactions({ tenantId, auth, query }) {
   }
 
   const search = typeof query.search === 'string' ? query.search.trim() : '';
-  if (search) where.assetId = { [Op.like]: `%${search}%` };
+  if (search) {
+    const [machineIds, vehicleIds] = await Promise.all([
+      machineAssetIdsMatchingRcpl(tenantId, search),
+      vehicleAssetIdsMatchingRegistration(tenantId, search),
+    ]);
+    where[Op.or] = [{ assetId: { [Op.like]: `%${search}%` } }];
+    if (machineIds.length) where[Op.or].push({ assetType: 'MACHINERY', assetId: machineIds });
+    if (vehicleIds.length) where[Op.or].push({ assetType: 'VEHICLE', assetId: vehicleIds });
+  }
 
   const { rows, count } = await repo.findAndCountAll(tenantId, {
     where,
-    order: [...order, ['id', 'DESC']],
+    order: [...order, ...order.filter(([field]) => field === 'txnDate').map(([, direction]) => ['txnTime', direction]), ['id', 'DESC']],
     limit,
     offset,
   });
@@ -247,10 +293,10 @@ async function createFuelTransaction({ tenantId, auth, actingUserId, payload }) 
     }
 
     created = await sequelize.transaction(async (transaction) => {
-      await lockAsset(asset, transaction);
+      const locked = await lockAsset(asset, transaction);
       await assertMeterInSequence(
         tenantId,
-        { assetType, assetId, meterType, txnDate: common.txnDate, meterReading: common.meterReading },
+        { assetType, assetId, meterType, txnDate: common.txnDate, txnTime: common.txnTime ?? null, meterReading: common.meterReading },
         { transaction }
       );
 
@@ -287,8 +333,20 @@ async function createFuelTransaction({ tenantId, auth, actingUserId, payload }) 
         transaction,
       });
 
+      const assetMeterBefore = await settleMeterFromFuel({
+        tenantId,
+        assetType,
+        assetId,
+        asset: locked,
+        meterType,
+        fuelId: record.id,
+        nextReading: common.meterReading,
+        actingUserId,
+        transaction,
+      });
+
       await record.update(
-        { pricePerLitre: Number(ledger.unitCost), amount: Number(ledger.totalCost), ledgerEntryId: ledger.id },
+        { pricePerLitre: Number(ledger.unitCost), amount: Number(ledger.totalCost), ledgerEntryId: ledger.id, assetMeterBefore },
         { transaction }
       );
 
@@ -303,10 +361,10 @@ async function createFuelTransaction({ tenantId, auth, actingUserId, payload }) 
     const direct = await readDirectPumpInput(tenantId, payload);
 
     created = await sequelize.transaction(async (transaction) => {
-      await lockAsset(asset, transaction);
+      const locked = await lockAsset(asset, transaction);
       await assertMeterInSequence(
         tenantId,
-        { assetType, assetId, meterType, txnDate: common.txnDate, meterReading: common.meterReading },
+        { assetType, assetId, meterType, txnDate: common.txnDate, txnTime: common.txnTime ?? null, meterReading: common.meterReading },
         { transaction }
       );
 
@@ -326,6 +384,19 @@ async function createFuelTransaction({ tenantId, auth, actingUserId, payload }) 
         },
         { transaction }
       );
+
+      const assetMeterBefore = await settleMeterFromFuel({
+        tenantId,
+        assetType,
+        assetId,
+        asset: locked,
+        meterType,
+        fuelId: record.id,
+        nextReading: common.meterReading,
+        actingUserId,
+        transaction,
+      });
+      if (assetMeterBefore != null) await record.update({ assetMeterBefore }, { transaction });
 
       await recordCreate(
         { tenantId, entityType: 'FuelTransaction', entityId: record.id, performedBy: actingUserId, after: record },
@@ -369,7 +440,7 @@ async function updateFuelTransaction({ tenantId, auth, actingUserId, id, payload
   const asset = await resolveAsset(tenantId, record.assetType, record.assetId);
 
   await sequelize.transaction(async (transaction) => {
-    await lockAsset(asset, transaction);
+    const locked = await lockAsset(asset, transaction);
     await assertMeterInSequence(
       tenantId,
       {
@@ -377,14 +448,28 @@ async function updateFuelTransaction({ tenantId, auth, actingUserId, id, payload
         assetId: record.assetId,
         meterType: record.meterType,
         txnDate: changes.txnDate,
+        txnTime: changes.txnTime === undefined ? record.txnTime : changes.txnTime,
         meterReading: changes.meterReading,
         excludeId: record.id,
       },
       { transaction }
     );
 
+    const assetMeterBefore = await settleMeterFromFuel({
+      tenantId,
+      assetType: record.assetType,
+      assetId: record.assetId,
+      asset: locked,
+      meterType: record.meterType,
+      fuelId: record.id,
+      previous: record,
+      nextReading: changes.meterReading,
+      actingUserId,
+      transaction,
+    });
+
     const before = record.toJSON();
-    await record.update({ ...changes, updatedBy: actingUserId }, { transaction });
+    await record.update({ ...changes, assetMeterBefore, updatedBy: actingUserId }, { transaction });
 
     await recordUpdate(
       { tenantId, entityType: 'FuelTransaction', entityId: record.id, performedBy: actingUserId, before, after: record },
@@ -400,13 +485,17 @@ async function deleteFuelTransaction({ tenantId, actingUserId, id, confirmation 
     throw AppError.badRequest('Type DELETE to confirm this action.');
   }
 
+  const existing = await FuelTransaction.findOne({ where: { tenantId, id } });
+  if (!existing) throw AppError.notFound('Fuel transaction not found');
+  const asset = await resolveAsset(tenantId, existing.assetType, existing.assetId);
+
   const archived = await sequelize.transaction(async (transaction) => {
+    const locked = await lockAsset(asset, transaction);
     const record = await FuelTransaction.findOne({
       where: { tenantId, id },
       transaction,
       lock: Transaction.LOCK.UPDATE,
     });
-    if (!record) throw AppError.notFound('Fuel transaction not found');
     if (record.status === 'archived') throw AppError.conflict('This fuel entry is already deleted');
 
     let reversalLedgerEntryId = null;
@@ -428,6 +517,18 @@ async function deleteFuelTransaction({ tenantId, actingUserId, id, confirmation 
       });
       reversalLedgerEntryId = reversal.id;
     }
+
+    await settleMeterFromFuel({
+      tenantId,
+      assetType: record.assetType,
+      assetId: record.assetId,
+      asset: locked,
+      meterType: record.meterType,
+      fuelId: record.id,
+      previous: record,
+      actingUserId,
+      transaction,
+    });
 
     await record.update(
       { status: 'archived', archivedAt: new Date(), archivedBy: actingUserId, reversalLedgerEntryId },
@@ -452,7 +553,7 @@ async function getFuelEfficiency({ tenantId, auth, assetType: rawAssetType, asse
 
   const entries = await FuelTransaction.findAll({
     where: { tenantId, assetType, assetId, meterType, status: 'active' },
-    order: [['txnDate', 'ASC'], ['id', 'ASC']],
+    order: [['txnDate', 'ASC'], ['txnTime', 'ASC'], ['id', 'ASC']],
   });
 
   return summariseEfficiency({ assetType, assetId, meterType, entries });

@@ -28,6 +28,13 @@ import StockAdjustmentDetailPage from './pages/inventory/StockAdjustmentDetailPa
 import StockTransferFormPage from './pages/inventory/StockTransferFormPage';
 import StockTransferDetailPage from './pages/inventory/StockTransferDetailPage';
 import InventoryReportsPage from './pages/inventory/InventoryReportsPage';
+import TyreStockPage from './pages/tyres/TyreStockPage';
+import TyrePurchasesPage from './pages/tyres/TyrePurchasesPage';
+import TyrePurchaseFormPage from './pages/tyres/TyrePurchaseFormPage';
+import TyrePurchaseDetailPage from './pages/tyres/TyrePurchaseDetailPage';
+import TyreFittingPage from './pages/tyres/TyreFittingPage';
+import TyreFitFormPage from './pages/tyres/TyreFitFormPage';
+import TyreReportsPage from './pages/tyres/TyreReportsPage';
 import FuelStockPage from './pages/fuel/FuelStockPage';
 import FuelCollectionsPage from './pages/fuel/FuelCollectionsPage';
 import FuelCollectionFormPage from './pages/fuel/FuelCollectionFormPage';
@@ -36,6 +43,10 @@ import FuelIssuesPage from './pages/fuel/FuelIssuesPage';
 import FuelIssueFormPage from './pages/fuel/FuelIssueFormPage';
 import FuelReportsPage from './pages/fuel/FuelReportsPage';
 import FuelStationsPage from './pages/fuel/FuelStationsPage';
+import PreventiveMaintenancePage from './pages/maintenance/PreventiveMaintenancePage';
+import BreakdownMaintenancePage from './pages/maintenance/BreakdownMaintenancePage';
+import MaintenanceHistoryPage from './pages/maintenance/MaintenanceHistoryPage';
+import ComplianceDocumentsPage from './pages/compliance/ComplianceDocumentsPage';
 import ForbiddenPage from './pages/ForbiddenPage';
 import NotFoundPage from './pages/NotFoundPage';
 
@@ -80,6 +91,13 @@ export default function App() {
           }
         />
         <Route path="/site-management" element={<SiteManagementPage />} />
+
+        <Route path="/maintenance" element={<Navigate to="/maintenance/preventive" replace />} />
+        <Route path="/maintenance/preventive" element={<PreventiveMaintenancePage />} />
+        <Route path="/maintenance/breakdowns" element={<BreakdownMaintenancePage />} />
+        <Route path="/maintenance/history" element={<MaintenanceHistoryPage />} />
+
+        <Route path="/compliance" element={<ComplianceDocumentsPage />} />
 
         <Route path="/inventory/catalog" element={<ItemCatalogPage />} />
 
@@ -128,6 +146,15 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+
+        <Route path="/tyres" element={<Navigate to="/tyres/stock" replace />} />
+        <Route path="/tyres/stock" element={<TyreStockPage />} />
+        <Route path="/tyres/purchases" element={<TyrePurchasesPage />} />
+        <Route path="/tyres/purchases/new" element={<TyrePurchaseFormPage />} />
+        <Route path="/tyres/purchases/:id" element={<TyrePurchaseDetailPage />} />
+        <Route path="/tyres/fitting" element={<TyreFittingPage />} />
+        <Route path="/tyres/fitting/new" element={<TyreFitFormPage />} />
+        <Route path="/tyres/reports" element={<TyreReportsPage />} />
 
         <Route path="/forbidden" element={<ForbiddenPage />} />
       </Route>

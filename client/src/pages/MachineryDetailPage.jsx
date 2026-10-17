@@ -6,6 +6,7 @@ import Can from '../components/Can';
 import DeleteWordModal from '../components/DeleteWordModal';
 import AssetDocumentsCard from '../components/AssetDocumentsCard';
 import InventoryHistoryCard from '../components/InventoryHistoryCard';
+import MaintenanceHistoryCard from '../components/maintenance/MaintenanceHistoryCard';
 
 function Detail({ label, children }) {
   return (
@@ -105,7 +106,7 @@ export default function MachineryDetailPage() {
           <Link to="/machinery" className="text-sm font-semibold text-brand-600 hover:underline">
             ← All machinery
           </Link>
-          <h1 className="mt-1 text-xl font-semibold text-steel-900">{machine.assetId}</h1>
+          <h1 className="mt-1 text-xl font-semibold text-steel-900">{machine.rcpl}</h1>
           <div className="mt-1 flex items-center gap-1.5">
             <Badge tone={machine.status === 'archived' ? 'neutral' : 'success'}>{machine.status}</Badge>
             {machine.isServiceDue && <Badge tone="warning">Service due</Badge>}
@@ -114,6 +115,13 @@ export default function MachineryDetailPage() {
 
         {machine.status === 'active' ? (
           <div className="flex gap-2">
+            <Button
+              as={Link}
+              to={`/compliance?assetType=MACHINERY&assetId=${encodeURIComponent(machine.assetId)}`}
+              variant="secondary"
+            >
+              Compliance
+            </Button>
             <Can resource="MACHINERY" action="UPDATE">
               <Button as={Link} to={`/machinery/${machine.id}/edit`} variant="secondary">
                 Edit
@@ -139,9 +147,9 @@ export default function MachineryDetailPage() {
 
       <Card title="Machine details">
         <dl className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <Detail label="RCPL">{machine.rcpl}</Detail>
           <Detail label="Asset ID">{machine.assetId}</Detail>
           <Detail label="Machinery name">{machine.name}</Detail>
-          <Detail label="Registration number">{machine.registrationNumber}</Detail>
           <Detail label="Type">{machine.type}</Detail>
           <Detail label="Fuel type">{machine.fuelType}</Detail>
           <Detail label="Year">{machine.year}</Detail>
@@ -164,6 +172,10 @@ export default function MachineryDetailPage() {
       </Card>
 
       <AssetDocumentsCard assetType="MACHINERY" assetId={machine.assetId} />
+
+      <Can resource="MAINTENANCE" action="READ">
+        <MaintenanceHistoryCard assetType="MACHINERY" asset={machine} onAssetChanged={load} />
+      </Can>
 
       <Can resource="ASSET_ISSUE" action="READ">
         <InventoryHistoryCard assetType="MACHINERY" assetId={machine.assetId} />

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { assetIssuesApi, issueReversalsApi, itemsApi, storageLocationsApi } from '../../api/client';
+import { assetIssuesApi, issueReversalsApi, itemsApi, storageLocationsApi, listAll } from '../../api/client';
 import { Alert, Badge, Button, Card, Field, Input, Modal, Spinner, Table } from '../../components/ui';
 import Can from '../../components/Can';
 
@@ -121,7 +121,7 @@ export default function AssetIssueDetailPage() {
   }, [load]);
 
   useEffect(() => {
-    Promise.all([itemsApi.list({ limit: 100 }), storageLocationsApi.list({ limit: 100 })])
+    Promise.all([listAll(itemsApi.list), listAll(storageLocationsApi.list)])
       .then(([items, locations]) => setLookups({ items: items.data, locations: locations.data }))
       .catch(() => {});
   }, []);
@@ -190,7 +190,6 @@ export default function AssetIssueDetailPage() {
           <Detail label="Meter reading">{issue.assetMeterReading != null ? `${issue.assetMeterReading.toLocaleString()} ${issue.meterType ?? ''}` : null}</Detail>
           <Detail label="Issued to">{issue.issuedToPerson}</Detail>
           <Detail label="Purpose">{issue.purpose}</Detail>
-          <Detail label="Remarks">{issue.remarks}</Detail>
         </dl>
       </Card>
 

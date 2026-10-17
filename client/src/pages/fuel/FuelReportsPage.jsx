@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fuelReportsApi } from '../../api/client';
-import { Alert, Input, Pagination, Select, Spinner, Table, Tabs } from '../../components/ui';
+import { Alert, Input, Select, Spinner, Tabs } from '../../components/ui';
+import ReportTable from '../../components/ReportTable';
 import { useAuth } from '../../context/AuthContext';
 import useSiteNames from '../../hooks/useSiteNames';
 import { firstOfMonthDateOnly, formatCurrency, formatLitres, todayDateOnly } from '../../config/fuel';
@@ -26,10 +27,11 @@ function Pair({ amount }) {
 function Summary({ items }) {
   return (
     <dl className="mb-4 grid gap-4 rounded border border-steel-200 bg-white px-5 py-4 sm:grid-cols-2 lg:grid-cols-4">
-      {items.map(([label, value, tone]) => (
+      {items.map(([label, value, tone, detail]) => (
         <div key={label}>
           <dt className="text-xs font-semibold tracking-wide text-steel-500 uppercase">{label}</dt>
           <dd className={`mt-1 text-lg font-semibold tabular-nums ${tone ?? 'text-steel-900'}`}>{value}</dd>
+          {detail && <dd className="mt-0.5 text-xs text-steel-500 tabular-nums">{detail}</dd>}
         </div>
       ))}
     </dl>
@@ -38,14 +40,16 @@ function Summary({ items }) {
 
 function RegisterReport({ data }) {
   const columns = [
-    { key: 'siteName', label: 'Site' },
-    { key: 'fuelType', label: 'Fuel' },
-    { key: 'opening', label: 'Opening', render: (r) => <Pair amount={r.opening} /> },
-    { key: 'received', label: 'Received', render: (r) => <Pair amount={r.received} /> },
-    { key: 'issued', label: 'Issued', render: (r) => <Pair amount={r.issued} /> },
+    { key: 'siteName', label: 'Site', sortable: true, sortValue: (r) => r.siteName ?? '' },
+    { key: 'fuelType', label: 'Fuel', sortable: true, sortValue: (r) => r.fuelType ?? '' },
+    { key: 'opening', label: 'Opening', sortable: true, sortValue: (r) => r.opening.value, render: (r) => <Pair amount={r.opening} /> },
+    { key: 'received', label: 'Received', sortable: true, sortValue: (r) => r.received.value, render: (r) => <Pair amount={r.received} /> },
+    { key: 'issued', label: 'Issued', sortable: true, sortValue: (r) => r.issued.value, render: (r) => <Pair amount={r.issued} /> },
     {
       key: 'closing',
       label: 'Closing',
+      sortable: true,
+      sortValue: (r) => r.closing.value,
       render: (r) => (
         <span className="font-semibold">
           <Pair amount={r.closing} />
@@ -55,6 +59,8 @@ function RegisterReport({ data }) {
     {
       key: 'transitLoss',
       label: 'Transit loss',
+      sortable: true,
+      sortValue: (r) => r.transitLoss.value,
       render: (r) =>
         r.transitLoss.quantity > 0 ? (
           <span className="text-danger-600">
@@ -64,24 +70,40 @@ function RegisterReport({ data }) {
           <span className="text-steel-400">—</span>
         ),
     },
-    { key: 'inTransitNow', label: 'In transit now', render: (r) => (r.inTransitNow > 0 ? qty(r.inTransitNow) : <span className="text-steel-400">—</span>) },
+    { key: 'inTransitNow', label: 'In transit now', sortable: true, sortValue: (r) => r.inTransitNow, render: (r) => (r.inTransitNow > 0 ? qty(r.inTransitNow) : <span className="text-steel-400">—</span>) },
+    {
+      key: 'directPump',
+      label: 'Direct at pump',
+      sortable: true,
+      sortValue: (r) => r.directPump.value,
+      render: (r) => (r.directPump.fills > 0 ? <Pair amount={r.directPump} /> : <span className="text-steel-400">—</span>),
+    },
   ];
 
   const sum = (pick) => data.rows.reduce((t, r) => t + pick(r), 0);
+  const collected = sum((r) => r.collected.amount);
+  const issuedFromStock = sum((r) => r.issued.value);
+  const atPump = sum((r) => r.directPump.value);
 
   return (
     <>
       <Summary
         items={[
-          ['Fuel bought', formatCurrency(sum((r) => r.collected.amount))],
-          ['Fuel issued', formatCurrency(sum((r) => r.issued.value))],
+          ['Fuel bought', formatCurrency(collected + atPump), null, `Collections ${formatCurrency(collected)} · At pump ${formatCurrency(atPump)}`],
+          ['Fuel issued', formatCurrency(issuedFromStock + atPump), null, `Site stock ${formatCurrency(issuedFromStock)} · At pump ${formatCurrency(atPump)}`],
           ['Transit loss', formatCurrency(sum((r) => r.transitLoss.value)), 'text-danger-600'],
           ['Closing stock value', formatCurrency(sum((r) => r.closing.value))],
         ]}
       />
-      <div className="rounded border border-steel-200 bg-white">
-        <Table columns={columns} rows={data.rows} getRowKey={(r) => `${r.siteId}-${r.fuelType}`} emptyMessage="No fuel movements in this period." />
-      </div>
+      <ReportTable
+        noun="site"
+        rows={data.rows}
+        columns={columns}
+        getRowKey={(r) => `${r.siteId}-${r.fuelType}`}
+        searchText={(r) => `${r.siteName ?? ''} ${r.fuelType ?? ''}`}
+        subtitle={() => `${data.rows.length} ${data.rows.length === 1 ? 'row' : 'rows'} (site and fuel type)`}
+        emptyMessage="No fuel movements in this period."
+      />
     </>
   );
 }
@@ -91,6 +113,8 @@ function AssetReport({ data }) {
     {
       key: 'asset',
       label: 'Asset',
+      sortable: true,
+      sortValue: (r) => r.assetLabel ?? r.assetId,
       render: (r) => (
         <div className="flex flex-col">
           <span className="font-semibold text-steel-900">{r.assetLabel ?? r.assetId}</span>
@@ -100,11 +124,11 @@ function AssetReport({ data }) {
         </div>
       ),
     },
-    { key: 'entryCount', label: 'Fills' },
-    { key: 'totalLitres', label: 'Litres', render: (r) => qty(r.totalLitres) },
-    { key: 'siteStockLitres', label: 'From site stock', render: (r) => qty(r.siteStockLitres) },
-    { key: 'directPumpLitres', label: 'Direct at pump', render: (r) => qty(r.directPumpLitres) },
-    { key: 'totalCost', label: 'Cost', render: (r) => <span className="font-semibold">{money(r.totalCost)}</span> },
+    { key: 'entryCount', label: 'Fills', sortable: true, sortValue: (r) => r.entryCount },
+    { key: 'totalLitres', label: 'Litres', sortable: true, sortValue: (r) => r.totalLitres, render: (r) => qty(r.totalLitres) },
+    { key: 'siteStockLitres', label: 'From site stock', sortable: true, sortValue: (r) => r.siteStockLitres, render: (r) => qty(r.siteStockLitres) },
+    { key: 'directPumpLitres', label: 'Direct at pump', sortable: true, sortValue: (r) => r.directPumpLitres, render: (r) => qty(r.directPumpLitres) },
+    { key: 'totalCost', label: 'Cost', sortable: true, sortValue: (r) => r.totalCost, render: (r) => <span className="font-semibold">{money(r.totalCost)}</span> },
   ];
 
   return (
@@ -116,14 +140,17 @@ function AssetReport({ data }) {
           ['Total fuel cost', formatCurrency(data.totals.cost)],
         ]}
       />
-      <div className="rounded border border-steel-200 bg-white">
-        <Table columns={columns} rows={data.rows} getRowKey={(r) => `${r.assetType}-${r.assetId}-${r.meterType}`} emptyMessage="No fuel issued in this period." />
-      </div>
+      <ReportTable
+        noun="asset"
+        rows={data.rows}
+        columns={columns}
+        getRowKey={(r) => `${r.assetType}-${r.assetId}-${r.meterType}`}
+        searchText={(r) => `${r.assetLabel ?? ''} ${r.assetId}`}
+        emptyMessage="No fuel issued in this period."
+      />
     </>
   );
 }
-
-const BREAKDOWN_PAGE_SIZE = 10;
 
 function splitCarrierLabel(label) {
   const match = /^(.*) \(([^()]+)\)$/.exec(label ?? '');
@@ -131,27 +158,6 @@ function splitCarrierLabel(label) {
 }
 
 function CollectionBreakdown({ title, noun, nameHeading, rows, splitName = false }) {
-  const [search, setSearch] = useState('');
-  const [sort, setSort] = useState({ field: 'amount', direction: 'desc' });
-  const [page, setPage] = useState(1);
-
-  const term = search.trim().toLowerCase();
-  const filtered = term ? rows.filter((r) => (r.label ?? '').toLowerCase().includes(term)) : rows;
-  const sorted = [...filtered].sort((a, b) => {
-    const left = sort.field === 'label' ? (a.label ?? '').toLowerCase() : Number(a[sort.field] ?? 0);
-    const right = sort.field === 'label' ? (b.label ?? '').toLowerCase() : Number(b[sort.field] ?? 0);
-    const order = left < right ? -1 : left > right ? 1 : 0;
-    return sort.direction === 'asc' ? order : -order;
-  });
-  const pages = Math.max(1, Math.ceil(sorted.length / BREAKDOWN_PAGE_SIZE));
-  const currentPage = Math.min(page, pages);
-  const visible = sorted.slice((currentPage - 1) * BREAKDOWN_PAGE_SIZE, currentPage * BREAKDOWN_PAGE_SIZE);
-
-  function handleSort(field) {
-    setSort((s) => ({ field, direction: s.field === field && s.direction === 'desc' ? 'asc' : field === 'label' ? 'asc' : 'desc' }));
-    setPage(1);
-  }
-
   const muted = <span className="text-steel-400">—</span>;
   const columns = [
     {
@@ -159,6 +165,7 @@ function CollectionBreakdown({ title, noun, nameHeading, rows, splitName = false
       label: nameHeading,
       sortable: true,
       wrap: true,
+      sortValue: (r) => (r.label ?? '').toLowerCase(),
       render: (r) => {
         const { primary, secondary } = splitName ? splitCarrierLabel(r.label) : { primary: r.label ?? '—', secondary: null };
         return (
@@ -169,13 +176,14 @@ function CollectionBreakdown({ title, noun, nameHeading, rows, splitName = false
         );
       },
     },
-    { key: 'trips', label: 'Trips', sortable: true, align: 'right', render: (r) => <span className="tabular-nums">{r.trips}</span> },
-    { key: 'collectedQuantity', label: 'Collected', sortable: true, align: 'right', render: (r) => qty(r.collectedQuantity) },
-    { key: 'receivedQuantity', label: 'Received', sortable: true, align: 'right', render: (r) => qty(r.receivedQuantity) },
+    { key: 'trips', label: 'Trips', sortable: true, sortValue: (r) => r.trips, align: 'right', render: (r) => <span className="tabular-nums">{r.trips}</span> },
+    { key: 'collectedQuantity', label: 'Collected', sortable: true, sortValue: (r) => r.collectedQuantity, align: 'right', render: (r) => qty(r.collectedQuantity) },
+    { key: 'receivedQuantity', label: 'Received', sortable: true, sortValue: (r) => r.receivedQuantity, align: 'right', render: (r) => qty(r.receivedQuantity) },
     {
       key: 'shortageQuantity',
       label: 'Transit loss',
       sortable: true,
+      sortValue: (r) => r.shortageQuantity,
       align: 'right',
       render: (r) =>
         r.shortageQuantity > 0 ? (
@@ -191,47 +199,30 @@ function CollectionBreakdown({ title, noun, nameHeading, rows, splitName = false
       key: 'inTransit',
       label: 'In transit',
       sortable: true,
+      sortValue: (r) => r.inTransit,
       align: 'right',
       render: (r) =>
         r.inTransit > 0 ? <span className="tabular-nums text-warning-600">{r.inTransit} {r.inTransit === 1 ? 'trip' : 'trips'}</span> : muted,
     },
-    { key: 'amount', label: 'Spend', sortable: true, align: 'right', render: (r) => <span className="font-semibold">{money(r.amount)}</span> },
+    { key: 'amount', label: 'Spend', sortable: true, sortValue: (r) => r.amount, align: 'right', render: (r) => <span className="font-semibold">{money(r.amount)}</span> },
   ];
 
   return (
-    <section className="rounded border border-steel-200 bg-white">
-      <header className="flex flex-col gap-3 border-b border-steel-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-sm font-semibold text-steel-900">{title}</h2>
-          <p className="text-xs text-steel-500">
-            {rows.length} {rows.length === 1 ? noun : `${noun}s`} · sorted by {columns.find((c) => c.key === sort.field)?.label.toLowerCase()},{' '}
-            {sort.direction === 'desc' ? 'highest first' : sort.field === 'label' ? 'A–Z' : 'lowest first'}
-          </p>
-        </div>
-        {rows.length > BREAKDOWN_PAGE_SIZE && (
-          <div className="sm:w-64">
-            <Input
-              placeholder={`Search ${noun}s...`}
-              aria-label={`Search ${noun}s`}
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-            />
-          </div>
-        )}
-      </header>
-      <Table
-        columns={columns}
-        rows={visible}
-        getRowKey={(r) => `${noun}-${r.key}`}
-        sort={sort}
-        onSort={handleSort}
-        emptyMessage={term ? `No ${noun}s match "${search.trim()}".` : 'No collections in this period.'}
-      />
-      {sorted.length > BREAKDOWN_PAGE_SIZE && <Pagination page={currentPage} pages={pages} total={sorted.length} onPageChange={setPage} />}
-    </section>
+    <ReportTable
+      title={title}
+      noun={noun}
+      rows={rows}
+      columns={columns}
+      getRowKey={(r) => `${noun}-${r.key}`}
+      searchText={(r) => r.label ?? ''}
+      defaultSort={{ field: 'amount', direction: 'desc' }}
+      subtitle={(sort) =>
+        `${rows.length} ${rows.length === 1 ? noun : `${noun}s`} · sorted by ${columns.find((c) => c.key === sort.field)?.label.toLowerCase()}, ${
+          sort.direction === 'desc' ? 'highest first' : sort.field === 'label' ? 'A–Z' : 'lowest first'
+        }`
+      }
+      emptyMessage="No collections in this period."
+    />
   );
 }
 
@@ -313,7 +304,7 @@ export default function FuelReportsPage() {
           <Select value={filters.siteId} onChange={(e) => setFilters((f) => ({ ...f, siteId: e.target.value }))}>
             <option value="">All sites</option>
             {Object.entries(siteNames).map(([siteId, name]) => (
-              <option key={siteId} value={siteId}>
+              <option key={siteId} value={siteId} data-added={siteId}>
                 {name}
               </option>
             ))}

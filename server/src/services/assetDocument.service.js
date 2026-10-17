@@ -7,7 +7,7 @@ const storage = require('./storage.service');
 const { DOC_TYPES } = AssetDocument;
 
 function getMandatoryDocTypes(assetType) {
-  return assetType === 'VEHICLE' ? ['RC', 'PUC'] : [];
+  return assetType === 'VEHICLE' ? ['RC'] : [];
 }
 
 function assertDocType(docType) {

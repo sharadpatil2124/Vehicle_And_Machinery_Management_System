@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { assetIssuesApi, vehiclesApi, machineryApi, itemsApi, storageLocationsApi } from '../../api/client';
+import { assetIssuesApi, vehiclesApi, machineryApi, itemsApi, storageLocationsApi, listAll } from '../../api/client';
 import { Alert, Button, Card, Field, Input, Select, Spinner } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
 import useSiteNames from '../../hooks/useSiteNames';
 import useItemIdsInStock from '../../hooks/useItemIdsInStock';
+import { machineryLabel } from '../../config/fuel';
 
 const EMPTY_LINE = { itemId: '', storageLocationId: '', issuedQuantity: '' };
 
 function assetLabel(assetType, asset) {
-  return assetType === 'VEHICLE' ? asset.registrationNumber : (asset.name ?? asset.assetId);
+  return assetType === 'VEHICLE' ? asset.registrationNumber : machineryLabel(asset);
 }
 
 export default function AssetIssueFormPage() {
@@ -25,7 +26,6 @@ export default function AssetIssueFormPage() {
     assetMeterReading: '',
     issuedToPerson: '',
     purpose: '',
-    remarks: '',
   });
   const [lines, setLines] = useState([{ ...EMPTY_LINE }]);
 
@@ -38,10 +38,10 @@ export default function AssetIssueFormPage() {
   const itemIdsInStock = useItemIdsInStock(form.siteId);
 
   useEffect(() => {
-    vehiclesApi.list({ limit: 100 }).then((r) => setVehicles(r.data)).catch(() => setVehicles([]));
-    machineryApi.list({ limit: 100 }).then((r) => setMachinery(r.data)).catch(() => setMachinery([]));
-    itemsApi.list({ limit: 100 }).then((r) => setItems(r.data)).catch(() => setItems([]));
-    storageLocationsApi.list({ limit: 100 }).then((r) => setStorageLocations(r.data)).catch(() => setStorageLocations([]));
+    listAll(vehiclesApi.list).then((r) => setVehicles(r.data)).catch(() => setVehicles([]));
+    listAll(machineryApi.list, { sort: 'rcpl:asc' }).then((r) => setMachinery(r.data)).catch(() => setMachinery([]));
+    listAll(itemsApi.list).then((r) => setItems(r.data)).catch(() => setItems([]));
+    listAll(storageLocationsApi.list).then((r) => setStorageLocations(r.data)).catch(() => setStorageLocations([]));
   }, []);
 
   const assetOptions = useMemo(() => {
@@ -103,7 +103,6 @@ export default function AssetIssueFormPage() {
       assetMeterReading: form.assetMeterReading === '' ? undefined : Number(form.assetMeterReading),
       issuedToPerson: form.issuedToPerson || undefined,
       purpose: form.purpose || undefined,
-      remarks: form.remarks || undefined,
       items: filledLines.map((line) => ({
         itemId: Number(line.itemId),
         storageLocationId: Number(line.storageLocationId),
@@ -148,7 +147,7 @@ export default function AssetIssueFormPage() {
                 >
                   {isAdmin && <option value="">Select a site</option>}
                   {Object.entries(siteNames).map(([siteId, name]) => (
-                    <option key={siteId} value={siteId}>
+                    <option key={siteId} value={siteId} data-added={siteId}>
                       {name}
                     </option>
                   ))}
@@ -184,7 +183,7 @@ export default function AssetIssueFormPage() {
                   {(assetOptions ?? [])
                     .filter((a) => a.status === 'active')
                     .map((a) => (
-                      <option key={a.assetId} value={a.assetId}>
+                      <option key={a.assetId} value={a.assetId} data-added={a.id}>
                         {assetLabel(form.assetType, a)} ({a.assetId})
                       </option>
                     ))}
@@ -218,12 +217,6 @@ export default function AssetIssueFormPage() {
                 <Input id={fieldId} invalid={invalid} describedBy={describedBy} value={form.purpose} onChange={updateForm('purpose')} maxLength={255} />
               )}
             </Field>
-
-            <Field label="Remarks">
-              {({ id: fieldId, invalid, describedBy }) => (
-                <Input id={fieldId} invalid={invalid} describedBy={describedBy} value={form.remarks} onChange={updateForm('remarks')} maxLength={2000} />
-              )}
-            </Field>
           </div>
 
           <div className="mt-6 border-t border-steel-200 pt-5">
@@ -250,7 +243,7 @@ export default function AssetIssueFormPage() {
                             {items
                               .filter((it) => it.status === 'active' && itemIdsInStock.has(it.id))
                               .map((it) => (
-                                <option key={it.id} value={it.id}>
+                                <option key={it.id} value={it.id} data-added={it.id}>
                                   {it.itemName}
                                 </option>
                               ))}
@@ -270,7 +263,7 @@ export default function AssetIssueFormPage() {
                           >
                             <option value="">Select a location</option>
                             {locationsAtAssetSite.map((loc) => (
-                              <option key={loc.id} value={loc.id}>
+                              <option key={loc.id} value={loc.id} data-added={loc.id}>
                                 {loc.locationName}
                               </option>
                             ))}

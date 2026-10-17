@@ -72,7 +72,6 @@ const PERMISSIONS = Object.freeze({
   DASHBOARD: Object.freeze({
     VIEW: BOTH,
     VIEW_SUMMARY_METRICS: BOTH,
-    VIEW_COST_METRICS: ADMIN_ONLY,
   }),
 });
 

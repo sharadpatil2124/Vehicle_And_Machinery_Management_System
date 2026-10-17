@@ -6,6 +6,7 @@ import Can from '../components/Can';
 import DeleteWordModal from '../components/DeleteWordModal';
 import AssetDocumentsCard from '../components/AssetDocumentsCard';
 import InventoryHistoryCard from '../components/InventoryHistoryCard';
+import MaintenanceHistoryCard from '../components/maintenance/MaintenanceHistoryCard';
 
 function Detail({ label, children }) {
   return (
@@ -114,6 +115,13 @@ export default function VehicleDetailPage() {
 
         {vehicle.status === 'active' ? (
           <div className="flex gap-2">
+            <Button
+              as={Link}
+              to={`/compliance?assetType=VEHICLE&assetId=${encodeURIComponent(vehicle.assetId)}`}
+              variant="secondary"
+            >
+              Compliance
+            </Button>
             <Can resource="VEHICLE" action="UPDATE">
               <Button as={Link} to={`/vehicles/${vehicle.id}/edit`} variant="secondary">
                 Edit
@@ -177,6 +185,10 @@ export default function VehicleDetailPage() {
       </Card>
 
       <AssetDocumentsCard assetType="VEHICLE" assetId={vehicle.assetId} />
+
+      <Can resource="MAINTENANCE" action="READ">
+        <MaintenanceHistoryCard assetType="VEHICLE" asset={vehicle} onAssetChanged={load} />
+      </Can>
 
       <Can resource="ASSET_ISSUE" action="READ">
         <InventoryHistoryCard assetType="VEHICLE" assetId={vehicle.assetId} />

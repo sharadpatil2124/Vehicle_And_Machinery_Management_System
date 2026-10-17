@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { fuelCollectionsApi, fuelStationsApi, vehiclesApi } from '../../api/client';
+import { fuelCollectionsApi, fuelStationsApi, vehiclesApi, listAll } from '../../api/client';
 import { Alert, Button, Card, Field, Input, Select, Spinner } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
 import useSiteNames from '../../hooks/useSiteNames';
@@ -62,8 +62,8 @@ export default function FuelCollectionFormPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    vehiclesApi.list({ limit: 100 }).then((r) => setVehicles(r.data)).catch(() => setVehicles([]));
-    fuelStationsApi.list({ limit: 100 }).then((r) => setStations(r.data)).catch(() => setStations([]));
+    listAll(vehiclesApi.list).then((r) => setVehicles(r.data)).catch(() => setVehicles([]));
+    listAll(fuelStationsApi.list).then((r) => setStations(r.data)).catch(() => setStations([]));
   }, []);
 
   useEffect(() => {
@@ -195,7 +195,7 @@ export default function FuelCollectionFormPage() {
                 <Select id={fieldId} invalid={invalid} describedBy={describedBy} value={form.siteId} onChange={update('siteId')} disabled={!isAdmin || isEdit}>
                   {isAdmin && !isEdit && <option value="">Select a site</option>}
                   {Object.entries(siteNames).map(([siteId, name]) => (
-                    <option key={siteId} value={siteId}>
+                    <option key={siteId} value={siteId} data-added={siteId}>
                       {name}
                     </option>
                   ))}
@@ -213,7 +213,7 @@ export default function FuelCollectionFormPage() {
                 <Select id={fieldId} invalid={invalid} describedBy={describedBy} value={form.carrierAssetId} onChange={update('carrierAssetId')} disabled={!form.siteId || locked}>
                   <option value="">Select the vehicle</option>
                   {carriers.map((v) => (
-                    <option key={v.assetId} value={v.assetId}>
+                    <option key={v.assetId} value={v.assetId} data-added={v.id}>
                       {v.registrationNumber} ({v.assetId})
                     </option>
                   ))}
@@ -226,7 +226,7 @@ export default function FuelCollectionFormPage() {
                 <Select id={fieldId} invalid={invalid} describedBy={describedBy} value={form.fuelStationId} onChange={update('fuelStationId')} disabled={locked}>
                   <option value="">Select the pump</option>
                   {stations.map((s) => (
-                    <option key={s.id} value={s.id}>
+                    <option key={s.id} value={s.id} data-added={s.id}>
                       {s.stationName}
                       {s.location ? ` — ${s.location}` : ''}
                     </option>

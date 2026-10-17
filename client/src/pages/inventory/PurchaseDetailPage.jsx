@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { purchasesApi, suppliersApi, itemsApi, storageLocationsApi, unitsOfMeasureApi, sitesApi } from '../../api/client';
+import { purchasesApi, suppliersApi, itemsApi, storageLocationsApi, unitsOfMeasureApi, sitesApi, listAll } from '../../api/client';
 import { Alert, Badge, Button, Card, Modal, Spinner, Table } from '../../components/ui';
 import Can from '../../components/Can';
 
@@ -43,11 +43,11 @@ export default function PurchaseDetailPage() {
 
   useEffect(() => {
     Promise.all([
-      suppliersApi.list({ limit: 100 }),
-      itemsApi.list({ limit: 100 }),
-      storageLocationsApi.list({ limit: 100 }),
-      unitsOfMeasureApi.list({ limit: 100 }),
-      sitesApi.list({ limit: 100 }),
+      listAll(suppliersApi.list),
+      listAll(itemsApi.list),
+      listAll(storageLocationsApi.list),
+      listAll(unitsOfMeasureApi.list),
+      listAll(sitesApi.list),
     ])
       .then(([suppliers, items, locations, units, sites]) => {
         setLookups({ suppliers: suppliers.data, items: items.data, locations: locations.data, units: units.data, sites: sites.data });

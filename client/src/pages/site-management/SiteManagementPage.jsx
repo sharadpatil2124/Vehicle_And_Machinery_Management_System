@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { sitesApi } from '../../api/client';
+import { sitesApi, listAll } from '../../api/client';
 import { Alert, Badge, Button, Card, Input, Modal, Select, Spinner } from '../../components/ui';
 import SiteAssetDetailPage from './SiteAssetDetailPage';
 import Can from '../../components/Can';
+import { machineryLabel } from '../../config/fuel';
 
 const TYPE_FILTERS = [
   { value: '', label: 'All types' },
@@ -109,11 +110,11 @@ function SitePickerModal({ open, onClose, onSelect }) {
 }
 
 function assetLabel(asset) {
-  return asset.assetType === 'VEHICLE' ? asset.registrationNumber : (asset.name ?? asset.assetId);
+  return asset.assetType === 'VEHICLE' ? asset.registrationNumber : machineryLabel(asset);
 }
 
 function assetSearchText(asset) {
-  return [asset.assetId, asset.type, asset.registrationNumber, asset.name, asset.modelNumber]
+  return [asset.assetId, asset.type, asset.registrationNumber, asset.rcpl, asset.name, asset.modelNumber]
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
@@ -156,8 +157,7 @@ export default function SiteManagementPage() {
   const [pickerOpen, setPickerOpen] = useState(false);
 
   useEffect(() => {
-    sitesApi
-      .list({ limit: 100 })
+    listAll(sitesApi.list)
       .then((response) => {
         setSites(response.data);
         if (response.data.length > 0) setSiteId(String(response.data[0].id));

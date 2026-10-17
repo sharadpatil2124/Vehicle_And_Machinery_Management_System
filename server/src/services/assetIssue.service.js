@@ -10,6 +10,7 @@ const {
   StorageLocation,
 } = require('../models');
 const AppError = require('../utils/AppError');
+const { machineAssetIdsMatchingRcpl } = require('./assetIdentifier.service');
 const { requireText, optionalText, requireNumber, optionalNumber } = require('../utils/validation');
 const { parseListQuery, parseEnumFilter } = require('../utils/queryOptions');
 const { buildListResponse } = require('../utils/listResponse');
@@ -80,7 +81,6 @@ function readAssetIssueInput(payload) {
     assetMeterReading: optionalNumber(payload.assetMeterReading, 'Meter reading', { min: 0 }),
     issuedToPerson: optionalText(payload.issuedToPerson, 'Issued to', { max: 150 }),
     purpose: optionalText(payload.purpose, 'Purpose', { max: 255 }),
-    remarks: optionalText(payload.remarks, 'Remarks', { max: 2000 }),
   };
 }
 
@@ -131,7 +131,11 @@ async function listAssetIssues({ tenantId, auth, query }) {
   if (query.assetId) where.assetId = query.assetId;
 
   const search = typeof query.search === 'string' ? query.search.trim() : '';
-  if (search) where.issueNumber = { [Op.like]: `%${search}%` };
+  if (search) {
+    const machineIds = await machineAssetIdsMatchingRcpl(tenantId, search);
+    where[Op.or] = [{ issueNumber: { [Op.like]: `%${search}%` } }];
+    if (machineIds.length) where[Op.or].push({ assetType: 'MACHINERY', assetId: machineIds });
+  }
 
   if (query.include !== 'items') {
     const { rows, count } = await repo.findAndCountAll(tenantId, { where, order, limit, offset });
@@ -218,7 +222,6 @@ async function createAssetIssue({ tenantId, auth, actingUserId, payload }) {
             issuedToPerson: input.issuedToPerson,
             issuedByUserId: actingUserId,
             purpose: input.purpose,
-            remarks: input.remarks,
             status: 'issued',
           },
           { transaction }

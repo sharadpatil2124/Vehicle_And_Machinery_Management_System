@@ -10,9 +10,6 @@ class StorageLocation extends Model {
       siteId: this.siteId,
       locationCode: this.locationCode,
       locationName: this.locationName,
-      locationType: this.locationType,
-      capacity: this.capacity == null ? null : Number(this.capacity),
-      capacityUom: this.capacityUom,
       status: this.status,
       archivedAt: this.archivedAt,
       createdBy: this.createdBy,
@@ -47,18 +44,6 @@ StorageLocation.init(
     locationName: {
       type: DataTypes.STRING(150),
       allowNull: false,
-    },
-    locationType: {
-      type: DataTypes.STRING(50),
-      allowNull: true,
-    },
-    capacity: {
-      type: DataTypes.DECIMAL(14, 3),
-      allowNull: true,
-    },
-    capacityUom: {
-      type: DataTypes.STRING(32),
-      allowNull: true,
     },
     status: {
       type: DataTypes.ENUM(...STORAGE_LOCATION_STATUSES),

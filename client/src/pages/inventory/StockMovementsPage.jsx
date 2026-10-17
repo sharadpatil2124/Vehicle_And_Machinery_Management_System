@@ -192,7 +192,7 @@ export default function StockMovementsPage() {
 
       <div className="mb-4 grid gap-3 sm:grid-cols-3 sm:max-w-2xl">
         <Input
-          placeholder="Search by reference #..."
+          placeholder="Search by reference # or machine RCPL..."
           value={filters.search}
           onChange={(e) => updateFilter('search', e.target.value)}
         />

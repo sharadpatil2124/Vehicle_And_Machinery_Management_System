@@ -24,6 +24,7 @@ const fuelCollectionRoutes = require('./fuelCollection.routes');
 const siteFuelStockRoutes = require('./siteFuelStock.routes');
 const fuelReportRoutes = require('./fuelReport.routes');
 const tyreRoutes = require('./tyre.routes');
+const maintenanceRoutes = require('./maintenance.routes');
 const dashboardRoutes = require('./dashboard.routes');
 const inventoryReportRoutes = require('./inventoryReport.routes');
 const { sequelize } = require('../config/database');
@@ -70,6 +71,8 @@ router.use('/site-fuel-stock', siteFuelStockRoutes);
 router.use('/fuel-reports', fuelReportRoutes);
 
 router.use('/tyres', tyreRoutes);
+
+router.use('/maintenance', maintenanceRoutes);
 
 router.use('/dashboard', dashboardRoutes);
 

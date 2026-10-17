@@ -72,6 +72,7 @@ module.exports = {
   roundQuantity,
   roundMoney,
   roundUnitCost,
+  toDateOnly,
   todayDateOnly,
   requireBusinessDate,
   optionalDateFilter,

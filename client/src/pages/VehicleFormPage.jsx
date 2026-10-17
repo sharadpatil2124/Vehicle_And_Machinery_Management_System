@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { vehiclesApi, sitesApi, complianceApi } from '../api/client';
+import { vehiclesApi, sitesApi, complianceApi, listAll } from '../api/client';
 import { Alert, Button, Card, Field, Input, Select, Spinner } from '../components/ui';
 import ComplianceFields, { EMPTY_COMPLIANCE, getComplianceDateErrors } from '../components/ComplianceFields';
 import AssetDocumentFields from '../components/AssetDocumentFields';
@@ -75,8 +75,7 @@ export default function VehicleFormPage() {
   }, [id, isEdit]);
 
   useEffect(() => {
-    sitesApi
-      .list({ limit: 100 })
+    listAll(sitesApi.list)
       .then((response) => setSiteOptions(response.data))
       .catch(() => {});
   }, []);
@@ -277,7 +276,7 @@ export default function VehicleFormPage() {
                 >
                   <option value="">Unassigned</option>
                   {siteOptions.map((site) => (
-                    <option key={site.id} value={site.id}>
+                    <option key={site.id} value={site.id} data-added={site.id}>
                       {site.name}
                       {site.location ? ` — ${site.location}` : ''}
                     </option>

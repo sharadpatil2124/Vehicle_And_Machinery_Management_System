@@ -16,7 +16,7 @@ function SiteFilter({ isAdmin, siteNames, value, onChange }) {
     <Select value={value} onChange={(e) => onChange(e.target.value)}>
       <option value="">All sites</option>
       {Object.entries(siteNames).map(([siteId, name]) => (
-        <option key={siteId} value={siteId}>
+        <option key={siteId} value={siteId} data-added={siteId}>
           {name}
         </option>
       ))}

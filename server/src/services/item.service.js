@@ -40,12 +40,6 @@ function readItemInput(payload, { partial = false } = {}) {
   if (!partial || payload.itemType !== undefined) {
     input.itemType = optionalText(payload.itemType, 'Item type', { max: 50 });
   }
-  if (!partial || payload.isHazardous !== undefined) {
-    input.isHazardous = Boolean(payload.isHazardous);
-  }
-  if (!partial || payload.batchTrackingRequired !== undefined) {
-    input.batchTrackingRequired = Boolean(payload.batchTrackingRequired);
-  }
   if (!partial || payload.minimumStockLevel !== undefined) {
     input.minimumStockLevel = optionalNumber(payload.minimumStockLevel, 'Minimum stock level', { min: 0 });
   }

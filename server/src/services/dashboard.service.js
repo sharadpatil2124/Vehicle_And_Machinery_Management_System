@@ -1,8 +1,8 @@
 const { QueryTypes } = require('sequelize');
 
 const { sequelize, Vehicle } = require('../models');
-const { hasPermission } = require('../config/permissions');
 const { supervisorSiteId } = require('./siteAccess');
+const { requireNumber } = require('../utils/validation');
 const { todayDateOnly, roundMoney, roundQuantity } = require('./fuelCommon');
 
 const TREND_MONTHS = 6;
@@ -62,76 +62,6 @@ async function fleetSummary(tenantId, siteClause, replacements) {
       machinery: num(machinery.serviceDue),
       total: num(vehicles.serviceDue) + num(machinery.serviceDue),
     },
-  };
-}
-
-async function fuelSummary(tenantId, siteClause, replacements) {
-  const [used] = await query(
-    `SELECT COALESCE(SUM(quantity), 0) AS litres, COALESCE(SUM(amount), 0) AS cost, COUNT(*) AS fills
-       FROM fuel_transactions
-      WHERE tenant_id = :tenantId AND status = 'active'${siteClause('site_id')}`,
-    replacements
-  );
-
-  const [collected] = await query(
-    `SELECT COALESCE(SUM(quantity), 0) AS litres, COALESCE(SUM(amount), 0) AS cost
-       FROM fuel_collections
-      WHERE tenant_id = :tenantId AND status <> 'cancelled'${siteClause('site_id')}`,
-    replacements
-  );
-  const [direct] = await query(
-    `SELECT COALESCE(SUM(quantity), 0) AS litres, COALESCE(SUM(amount), 0) AS cost
-       FROM fuel_transactions
-      WHERE tenant_id = :tenantId AND status = 'active' AND source = 'DIRECT_PUMP'${siteClause('site_id')}`,
-    replacements
-  );
-
-  const stock = await query(
-    `SELECT fuel_type AS fuelType, COALESCE(SUM(quantity_on_hand), 0) AS litres, COALESCE(SUM(stock_value), 0) AS value
-       FROM site_fuel_stocks
-      WHERE tenant_id = :tenantId${siteClause('site_id')}
-      GROUP BY fuel_type
-      ORDER BY fuel_type`,
-    replacements
-  );
-
-  return {
-    used: { litres: roundQuantity(num(used.litres)), cost: roundMoney(num(used.cost)), fills: num(used.fills) },
-    bought: {
-      litres: roundQuantity(num(collected.litres) + num(direct.litres)),
-      cost: roundMoney(num(collected.cost) + num(direct.cost)),
-    },
-    siteStock: stock.map((s) => ({ fuelType: s.fuelType, litres: roundQuantity(num(s.litres)), value: roundMoney(num(s.value)) })),
-  };
-}
-
-async function inventorySummary(tenantId, siteClause, replacements) {
-  const [totals] = await query(
-    `SELECT COALESCE(SUM(CASE WHEN transaction_type = 'ISSUE' THEN total_cost
-                              WHEN transaction_type = 'ISSUE_REVERSAL' THEN -total_cost ELSE 0 END), 0) AS partsUsed,
-            COALESCE(SUM(CASE WHEN transaction_type = 'PURCHASE_RECEIPT' THEN total_cost ELSE 0 END), 0) AS purchased
-       FROM inventory_transactions
-      WHERE tenant_id = :tenantId AND status = 'posted'${siteClause('site_id')}`,
-    replacements
-  );
-
-  const [issues] = await query(
-    `SELECT COUNT(*) AS total FROM asset_issues WHERE tenant_id = :tenantId${siteClause('site_id')}`,
-    replacements
-  );
-
-  const [value] = await query(
-    `SELECT COALESCE(SUM(remaining_quantity * unit_cost), 0) AS value
-       FROM stock_batches
-      WHERE tenant_id = :tenantId AND remaining_quantity > 0${siteClause('site_id')}`,
-    replacements
-  );
-
-  return {
-    partsUsedCost: roundMoney(num(totals.partsUsed)),
-    purchasesReceived: roundMoney(num(totals.purchased)),
-    issues: num(issues.total),
-    stockValue: roundMoney(num(value.value)),
   };
 }
 
@@ -212,37 +142,34 @@ async function getSummary({ tenantId, auth }) {
   const siteId = supervisorSiteId(auth);
   const replacements = { tenantId, siteId };
   const siteClause = (column) => (siteId ? ` AND ${column} = :siteId` : '');
-  const showCosts = hasPermission(auth.role, 'DASHBOARD', 'VIEW_COST_METRICS');
 
   const now = new Date();
   const today = todayDateOnly();
 
-  const [fleet, fuel, inventory, trend] = await Promise.all([
+  const [fleet, monthly] = await Promise.all([
     fleetSummary(tenantId, siteClause, replacements),
-    fuelSummary(tenantId, siteClause, replacements),
-    inventorySummary(tenantId, siteClause, replacements),
-    showCosts ? monthlyTrend(tenantId, siteClause, replacements, now) : null,
+    monthlyTrend(tenantId, siteClause, replacements, now),
   ]);
-
-  if (!showCosts) {
-    delete fuel.used.cost;
-    delete fuel.bought.cost;
-    fuel.siteStock = fuel.siteStock.map(({ value, ...rest }) => rest);
-    delete inventory.partsUsedCost;
-    delete inventory.purchasesReceived;
-    delete inventory.stockValue;
-  }
 
   return {
     generatedAt: now.toISOString(),
     period: { today },
     scope: { siteId },
-    showCosts,
     fleet,
-    fuel,
-    inventory,
-    monthly: showCosts ? trend : null,
+    monthly,
   };
 }
 
-module.exports = { getSummary };
+async function getMonthlyCost({ tenantId, auth, query }) {
+  const ownSiteId = supervisorSiteId(auth);
+  const siteId = ownSiteId ?? (query.siteId ? requireNumber(query.siteId, 'Site', { min: 1 }) : null);
+  const replacements = { tenantId, siteId };
+  const siteClause = (column) => (siteId ? ` AND ${column} = :siteId` : '');
+
+  return {
+    scope: { siteId },
+    monthly: await monthlyTrend(tenantId, siteClause, replacements, new Date()),
+  };
+}
+
+module.exports = { getSummary, getMonthlyCost };

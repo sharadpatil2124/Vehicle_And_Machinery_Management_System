@@ -9,17 +9,29 @@ const {
   STORABLE_FUEL_TYPES,
   roundQuantity,
   roundMoney,
-  todayDateOnly,
   optionalDateFilter,
   siteNamesById,
 } = require('./fuelCommon');
 
 function readRange(query) {
-  const today = todayDateOnly();
-  const dateFrom = optionalDateFilter(query.dateFrom, 'From date') ?? `${today.slice(0, 8)}01`;
-  const dateTo = optionalDateFilter(query.dateTo, 'To date') ?? today;
-  if (dateFrom > dateTo) throw AppError.badRequest('From date must be on or before To date');
+  const dateFrom = optionalDateFilter(query.dateFrom, 'From date') ?? null;
+  const dateTo = optionalDateFilter(query.dateTo, 'To date') ?? null;
+  if (dateFrom && dateTo && dateFrom > dateTo) throw AppError.badRequest('From date must be on or before To date');
   return { dateFrom, dateTo };
+}
+
+function sqlDateRange(column, { dateFrom, dateTo }) {
+  let clause = '';
+  if (dateFrom) clause += ` AND ${column} >= :dateFrom`;
+  if (dateTo) clause += ` AND ${column} <= :dateTo`;
+  return clause;
+}
+
+function whereDateRange({ dateFrom, dateTo }) {
+  if (dateFrom && dateTo) return { [Op.between]: [dateFrom, dateTo] };
+  if (dateFrom) return { [Op.gte]: dateFrom };
+  if (dateTo) return { [Op.lte]: dateTo };
+  return undefined;
 }
 
 const emptyAmount = () => ({ quantity: 0, value: 0 });
@@ -30,7 +42,8 @@ function addTo(target, quantity, value) {
 }
 
 async function siteRegister({ tenantId, auth, query }) {
-  const { dateFrom, dateTo } = readRange(query);
+  const range = readRange(query);
+  const { dateFrom, dateTo } = range;
   const scope = siteScope(auth, query);
   const fuelType = parseEnumFilter(query.fuelType, STORABLE_FUEL_TYPES, 'Fuel type');
 
@@ -40,21 +53,23 @@ async function siteRegister({ tenantId, auth, query }) {
   const replacements = { tenantId, siteId: scope.siteId, fuelType, dateFrom, dateTo };
   const base = filters.join(' AND ');
 
-  const [opening, movements, collections, inTransit, losses] = await Promise.all([
-    sequelize.query(
-      `SELECT site_id AS siteId, fuel_type AS fuelType,
-              SUM(CASE WHEN direction = 'IN' THEN quantity ELSE -quantity END) AS quantity,
-              SUM(CASE WHEN direction = 'IN' THEN total_cost ELSE -total_cost END) AS value
-         FROM fuel_stock_ledger
-        WHERE ${base} AND entry_date < :dateFrom
-        GROUP BY site_id, fuel_type`,
-      { replacements, type: QueryTypes.SELECT }
-    ),
+  const [opening, movements, collections, inTransit, losses, directPump] = await Promise.all([
+    dateFrom
+      ? sequelize.query(
+          `SELECT site_id AS siteId, fuel_type AS fuelType,
+                  SUM(CASE WHEN direction = 'IN' THEN quantity ELSE -quantity END) AS quantity,
+                  SUM(CASE WHEN direction = 'IN' THEN total_cost ELSE -total_cost END) AS value
+             FROM fuel_stock_ledger
+            WHERE ${base} AND entry_date < :dateFrom
+            GROUP BY site_id, fuel_type`,
+          { replacements, type: QueryTypes.SELECT }
+        )
+      : [],
     sequelize.query(
       `SELECT site_id AS siteId, fuel_type AS fuelType, entry_type AS entryType, direction,
               SUM(quantity) AS quantity, SUM(total_cost) AS value
          FROM fuel_stock_ledger
-        WHERE ${base} AND entry_date BETWEEN :dateFrom AND :dateTo
+        WHERE ${base}${sqlDateRange('entry_date', range)}
         GROUP BY site_id, fuel_type, entry_type, direction`,
       { replacements, type: QueryTypes.SELECT }
     ),
@@ -62,7 +77,7 @@ async function siteRegister({ tenantId, auth, query }) {
       `SELECT site_id AS siteId, fuel_type AS fuelType, COUNT(*) AS trips,
               SUM(quantity) AS quantity, SUM(amount) AS amount
          FROM fuel_collections
-        WHERE ${base} AND status <> 'cancelled' AND collection_date BETWEEN :dateFrom AND :dateTo
+        WHERE ${base} AND status <> 'cancelled'${sqlDateRange('collection_date', range)}
         GROUP BY site_id, fuel_type`,
       { replacements, type: QueryTypes.SELECT }
     ),
@@ -77,7 +92,15 @@ async function siteRegister({ tenantId, auth, query }) {
       `SELECT site_id AS siteId, fuel_type AS fuelType,
               SUM(shortage_quantity) AS quantity, SUM(shortage_value) AS value
          FROM fuel_collections
-        WHERE ${base} AND status = 'received' AND received_date BETWEEN :dateFrom AND :dateTo
+        WHERE ${base} AND status = 'received'${sqlDateRange('received_date', range)}
+        GROUP BY site_id, fuel_type`,
+      { replacements, type: QueryTypes.SELECT }
+    ),
+    sequelize.query(
+      `SELECT site_id AS siteId, fuel_type AS fuelType, COUNT(*) AS fills,
+              SUM(quantity) AS quantity, SUM(amount) AS value
+         FROM fuel_transactions
+        WHERE ${base} AND status = 'active' AND source = 'DIRECT_PUMP'${sqlDateRange('txn_date', range)}
         GROUP BY site_id, fuel_type`,
       { replacements, type: QueryTypes.SELECT }
     ),
@@ -97,6 +120,7 @@ async function siteRegister({ tenantId, auth, query }) {
         collected: { trips: 0, quantity: 0, amount: 0 },
         transitLoss: emptyAmount(),
         inTransitNow: 0,
+        directPump: { fills: 0, quantity: 0, value: 0 },
       });
     }
     return rows.get(key);
@@ -119,6 +143,13 @@ async function siteRegister({ tenantId, auth, query }) {
   }
   for (const r of losses) addTo(rowFor(r.siteId, r.fuelType).transitLoss, r.quantity ?? 0, r.value ?? 0);
   for (const r of inTransit) rowFor(r.siteId, r.fuelType).inTransitNow = roundQuantity(Number(r.quantity));
+  for (const r of directPump) {
+    rowFor(r.siteId, r.fuelType).directPump = {
+      fills: Number(r.fills),
+      quantity: roundQuantity(Number(r.quantity)),
+      value: roundMoney(Number(r.value)),
+    };
+  }
 
   for (const row of rows.values()) {
     row.closing = {
@@ -136,15 +167,18 @@ async function siteRegister({ tenantId, auth, query }) {
 }
 
 async function assetConsumption({ tenantId, auth, query }) {
-  const { dateFrom, dateTo } = readRange(query);
+  const range = readRange(query);
+  const { dateFrom, dateTo } = range;
   const scope = siteScope(auth, query);
 
-  const where = { tenantId, status: 'active', txnDate: { [Op.between]: [dateFrom, dateTo] } };
+  const where = { tenantId, status: 'active' };
+  const txnDate = whereDateRange(range);
+  if (txnDate) where.txnDate = txnDate;
   if (scope.siteId) where.siteId = scope.siteId;
   const assetType = parseEnumFilter(query.assetType, FuelTransaction.ASSET_TYPES, 'Asset type');
   if (assetType) where.assetType = assetType;
 
-  const entries = await FuelTransaction.findAll({ where, order: [['txnDate', 'ASC'], ['id', 'ASC']] });
+  const entries = await FuelTransaction.findAll({ where, order: [['txnDate', 'ASC'], ['txnTime', 'ASC'], ['id', 'ASC']] });
 
   const groups = new Map();
   for (const entry of entries) {
@@ -157,11 +191,11 @@ async function assetConsumption({ tenantId, auth, query }) {
   const machineIds = [...new Set(entries.filter((e) => e.assetType === 'MACHINERY').map((e) => e.assetId))];
   const [vehicles, machines] = await Promise.all([
     vehicleIds.length ? Vehicle.findAll({ where: { tenantId, assetId: vehicleIds }, attributes: ['assetId', 'registrationNumber', 'currentSiteId'] }) : [],
-    machineIds.length ? Machinery.findAll({ where: { tenantId, assetId: machineIds }, attributes: ['assetId', 'name', 'registrationNumber', 'serialNumber', 'currentSiteId'] }) : [],
+    machineIds.length ? Machinery.findAll({ where: { tenantId, assetId: machineIds }, attributes: ['assetId', 'name', 'rcpl', 'currentSiteId'] }) : [],
   ]);
   const labels = new Map();
   for (const v of vehicles) labels.set(`VEHICLE:${v.assetId}`, v.registrationNumber);
-  for (const m of machines) labels.set(`MACHINERY:${m.assetId}`, m.name || m.registrationNumber || m.serialNumber || m.assetId);
+  for (const m of machines) labels.set(`MACHINERY:${m.assetId}`, Machinery.label(m));
 
   const rows = [...groups.values()].map((group) => {
     const first = group[0];
@@ -224,10 +258,13 @@ function summariseCollections(collections, keyOf, labelOf) {
 }
 
 async function collectionsSummary({ tenantId, auth, query }) {
-  const { dateFrom, dateTo } = readRange(query);
+  const range = readRange(query);
+  const { dateFrom, dateTo } = range;
   const scope = siteScope(auth, query);
 
-  const where = { tenantId, status: { [Op.ne]: 'cancelled' }, collectionDate: { [Op.between]: [dateFrom, dateTo] } };
+  const where = { tenantId, status: { [Op.ne]: 'cancelled' } };
+  const collectionDate = whereDateRange(range);
+  if (collectionDate) where.collectionDate = collectionDate;
   if (scope.siteId) where.siteId = scope.siteId;
   const fuelType = parseEnumFilter(query.fuelType, STORABLE_FUEL_TYPES, 'Fuel type');
   if (fuelType) where.fuelType = fuelType;

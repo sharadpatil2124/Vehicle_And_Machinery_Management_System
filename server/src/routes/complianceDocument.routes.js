@@ -6,6 +6,10 @@ const router = express.Router();
 
 router.use(authenticated);
 
+router.get('/', requirePermission('COMPLIANCE', 'READ'), complianceController.listAll);
+
+router.get('/alerts', requirePermission('COMPLIANCE', 'READ'), complianceController.alerts);
+
 router.get('/:assetType/:assetId', requirePermission('COMPLIANCE', 'READ'), complianceController.list);
 
 router.put(

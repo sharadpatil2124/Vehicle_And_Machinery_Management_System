@@ -63,4 +63,9 @@ async function history(req, res) {
   res.status(200).json({ data, message: 'Machine history retrieved' });
 }
 
-module.exports = { list, get, create, update, remove, restore, history };
+async function rcplAvailability(req, res) {
+  const data = await machineryService.checkRcplAvailability({ tenantId: req.auth.tenantId, query: req.query });
+  res.status(200).json({ data, message: data.available ? 'RCPL is available' : 'RCPL is already in use' });
+}
+
+module.exports = { list, get, create, update, remove, restore, history, rcplAvailability };

@@ -10,6 +10,10 @@ router.get('/stock-register', requirePermission('REPORTS', 'VIEW'), inventoryRep
 
 router.get('/purchases', requirePermission('REPORTS', 'VIEW'), inventoryReportController.purchases);
 
+router.get('/purchases/by-supplier', requirePermission('REPORTS', 'VIEW'), inventoryReportController.purchasesBySupplier);
+
+router.get('/purchases/by-item', requirePermission('REPORTS', 'VIEW'), inventoryReportController.purchasesByItem);
+
 router.get('/parts-by-asset', requirePermission('REPORTS', 'VIEW'), inventoryReportController.partsByAsset);
 
 module.exports = router;

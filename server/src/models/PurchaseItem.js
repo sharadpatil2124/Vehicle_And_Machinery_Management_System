@@ -22,8 +22,6 @@ class PurchaseItem extends Model {
       taxPercentage: Number(this.taxPercentage),
       taxAmount: Number(this.taxAmount),
       lineTotalAmount: Number(this.lineTotalAmount),
-      batchNumber: this.batchNumber,
-      expiryDate: this.expiryDate,
       lineStatus: this.lineStatus,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
@@ -89,14 +87,6 @@ PurchaseItem.init(
     lineTotalAmount: {
       type: DataTypes.DECIMAL(14, 2),
       allowNull: false,
-    },
-    batchNumber: {
-      type: DataTypes.STRING(64),
-      allowNull: true,
-    },
-    expiryDate: {
-      type: DataTypes.DATEONLY,
-      allowNull: true,
     },
     lineStatus: {
       type: DataTypes.ENUM(...PURCHASE_ITEM_LINE_STATUSES),

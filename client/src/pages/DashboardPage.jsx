@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { dashboardApi } from '../api/client';
-import { Alert, Spinner } from '../components/ui';
+import { Alert, Select, Spinner } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import useSiteNames from '../hooks/useSiteNames';
 
@@ -25,7 +25,7 @@ function SectionTitle({ children, aside }) {
   return (
     <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
       <h2 className="text-xs font-semibold tracking-wider text-steel-500 uppercase">{children}</h2>
-      {aside && <span className="text-xs text-steel-500">{aside}</span>}
+      {aside && (typeof aside === 'string' ? <span className="text-xs text-steel-500">{aside}</span> : aside)}
     </div>
   );
 }
@@ -165,9 +165,14 @@ export default function DashboardPage() {
   const siteNames = useSiteNames();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [costSiteId, setCostSiteId] = useState('');
+  const [siteCost, setSiteCost] = useState(null);
+  const [costError, setCostError] = useState(null);
 
   const load = useCallback(async () => {
     setError(null);
+    setRefreshKey((key) => key + 1);
     try {
       const response = await dashboardApi.summary();
       setData(response.data);
@@ -180,8 +185,34 @@ export default function DashboardPage() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    setCostError(null);
+    if (!costSiteId) {
+      setSiteCost(null);
+      return undefined;
+    }
+    let cancelled = false;
+    setSiteCost((current) => (current?.siteId === costSiteId ? current : null));
+    dashboardApi
+      .monthlyCost({ siteId: costSiteId })
+      .then((response) => {
+        if (!cancelled) setSiteCost({ siteId: costSiteId, monthly: response.data.monthly });
+      })
+      .catch((err) => {
+        if (!cancelled) setCostError(err.message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [costSiteId, refreshKey]);
+
   const isAdmin = role === 'admin';
   const siteName = user?.siteId ? siteNames[user.siteId] : null;
+  const siteOptions = useMemo(
+    () => Object.entries(siteNames).sort(([, a], [, b]) => a.localeCompare(b)),
+    [siteNames]
+  );
+  const monthly = costSiteId ? siteCost?.monthly : data?.monthly;
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -230,64 +261,35 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          {isAdmin && data.monthly && (
+          {data.monthly && (
             <section>
-              <SectionTitle>Monthly running cost</SectionTitle>
-              <MonthlyCard trend={data.monthly} />
+              <SectionTitle
+                aside={
+                  isAdmin && (
+                    <div className="w-full sm:w-64">
+                      <Select searchable aria-label="Site for monthly running cost" value={costSiteId} onChange={(e) => setCostSiteId(e.target.value)}>
+                        <option value="">All sites</option>
+                        {siteOptions.map(([id, name]) => (
+                          <option key={id} value={id}>
+                            {name}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                  )
+                }
+              >
+                {isAdmin ? (costSiteId ? `Monthly running cost · ${siteNames[costSiteId] ?? 'Site'}` : 'Monthly running cost') : 'Monthly running cost at your site'}
+              </SectionTitle>
+              {costError ? (
+                <Alert tone="error">{costError}</Alert>
+              ) : monthly ? (
+                <MonthlyCard trend={monthly} />
+              ) : (
+                <Spinner label="Loading site costs" />
+              )}
             </section>
           )}
-
-          <section>
-            <SectionTitle aside="All records to date">Overall totals</SectionTitle>
-            {isAdmin && data.showCosts ? (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                <StatTile
-                  label="Fuel used"
-                  value={formatLitres(data.fuel.used.litres)}
-                  detail={`${data.fuel.used.fills} fills · ${rupees.format(data.fuel.used.cost)}`}
-                  to="/fuel/issues"
-                />
-                <StatTile
-                  label="Parts used"
-                  value={rupees.format(data.inventory.partsUsedCost)}
-                  detail={`${data.inventory.issues} issues to assets`}
-                  to="/inventory/movements"
-                />
-                <StatTile
-                  label="Purchases received"
-                  value={rupees.format(data.inventory.purchasesReceived)}
-                  detail="Inventory, incl. tax"
-                  to="/inventory/movements"
-                />
-                <StatTile
-                  label="Fuel bought"
-                  value={rupees.format(data.fuel.bought.cost)}
-                  detail={formatLitres(data.fuel.bought.litres)}
-                  to="/fuel/collections"
-                />
-                <StatTile
-                  label="Stock on hand (inventory stock + diesel)"
-                  value={rupees.format(data.inventory.stockValue + data.fuel.siteStock.reduce((sum, s) => sum + s.value, 0))}
-                  detail={[
-                    `Parts ${rupees.format(data.inventory.stockValue)}`,
-                    ...data.fuel.siteStock.map((s) => `${s.fuelType} ${rupees.format(s.value)}`),
-                  ].join(' · ')}
-                  to="/inventory/stock"
-                />
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <StatTile label="Fuel used" value={formatLitres(data.fuel.used.litres)} detail={`${data.fuel.used.fills} fills`} to="/fuel/issues" />
-                <StatTile label="Parts used" value={numberFormat.format(data.inventory.issues)} detail="Issues to assets" to="/inventory/movements" />
-                <StatTile
-                  label="Fuel at site"
-                  value={data.fuel.siteStock.length ? data.fuel.siteStock.map((s) => formatLitres(s.litres)).join(' · ') : '0 L'}
-                  detail={data.fuel.siteStock.length ? data.fuel.siteStock.map((s) => s.fuelType).join(' · ') : 'No fuel in stock'}
-                  to="/fuel/stock"
-                />
-              </div>
-            )}
-          </section>
         </div>
       )}
     </div>

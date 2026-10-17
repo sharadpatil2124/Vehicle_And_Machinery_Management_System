@@ -6,28 +6,38 @@ const router = express.Router();
 
 router.use(authenticated);
 
-router.get('/', requirePermission('TYRE', 'READ'), tyreController.list);
+router.get('/types', requirePermission('TYRE', 'READ'), tyreController.listTypes);
 
-router.post('/', requirePermission('TYRE', 'CREATE'), tyreController.create);
+router.post('/types', requirePermission('TYRE', 'CREATE'), tyreController.createType);
 
-router.get('/history', requirePermission('TYRE', 'READ'), tyreController.fitments);
+router.put('/types/:id', requirePermission('TYRE', 'UPDATE'), tyreController.updateType);
 
-router.get('/vehicles/:vehicleId/positions', requirePermission('TYRE', 'READ'), tyreController.vehiclePositions);
+router.get('/purchases', requirePermission('TYRE', 'READ'), tyreController.listPurchases);
 
-router.get('/:id', requirePermission('TYRE', 'READ'), tyreController.get);
+router.post('/purchases', requirePermission('TYRE', 'CREATE'), tyreController.createPurchase);
 
-router.put('/:id', requirePermission('TYRE', 'UPDATE'), tyreController.update);
+router.get('/purchases/:id', requirePermission('TYRE', 'READ'), tyreController.getPurchase);
 
-router.delete('/:id', requirePermission('TYRE', 'DELETE'), tyreController.remove);
+router.delete('/purchases/:id', requirePermission('TYRE', 'DELETE'), tyreController.cancelPurchase);
 
-router.post('/:id/restore', requirePermission('TYRE', 'RESTORE'), tyreController.restore);
+router.get('/stock', requirePermission('TYRE', 'READ'), tyreController.stock);
 
-router.post('/:id/install', requirePermission('TYRE', 'UPDATE'), tyreController.install);
+router.get('/fitments', requirePermission('TYRE', 'READ'), tyreController.listFitments);
 
-router.post('/:id/remove', requirePermission('TYRE', 'UPDATE'), tyreController.removeFromVehicle);
+router.post('/fitments', requirePermission('TYRE', 'CREATE'), tyreController.fit);
 
-router.post('/:id/rotate', requirePermission('TYRE', 'UPDATE'), tyreController.rotate);
+router.post('/fitments/:id/remove', requirePermission('TYRE', 'UPDATE'), tyreController.removeFromAsset);
 
-router.post('/:id/scrap', requirePermission('TYRE', 'UPDATE'), tyreController.scrap);
+router.delete('/fitments/:id', requirePermission('TYRE', 'DELETE'), tyreController.undoFitting);
+
+router.get('/reports/assets', requirePermission('REPORTS', 'VIEW'), tyreController.assetReport);
+
+router.get('/reports/assets/tyres', requirePermission('REPORTS', 'VIEW'), tyreController.assetTyres);
+
+router.get('/reports/costs', requirePermission('REPORTS', 'VIEW'), tyreController.costReport);
+
+router.get('/reports/costs/by-type', requirePermission('REPORTS', 'VIEW'), tyreController.costsByType);
+
+router.get('/reports/costs/by-supplier', requirePermission('REPORTS', 'VIEW'), tyreController.costsBySupplier);
 
 module.exports = router;

@@ -72,10 +72,8 @@ function readPurchaseItemInput(raw, index) {
   const purchasedQuantity = requireNumber(raw?.purchasedQuantity, `${label}: purchased quantity`, { min: 0.001 });
   const unitPrice = requireNumber(raw?.unitPrice, `${label}: unit price`, { min: 0 });
   const taxPercentage = optionalNumber(raw?.taxPercentage, `${label}: tax percentage`, { min: 0 }) ?? 0;
-  const batchNumber = optionalText(raw?.batchNumber, `${label}: batch number`, { max: 64 });
-  const expiryDate = raw?.expiryDate ? requireDateOnly(raw.expiryDate, `${label}: expiry date`) : null;
 
-  return { itemId, storageLocationId, purchasedQuantity, unitPrice, taxPercentage, batchNumber, expiryDate };
+  return { itemId, storageLocationId, purchasedQuantity, unitPrice, taxPercentage };
 }
 
 function readPurchaseItemsInput(rawItems) {
@@ -131,8 +129,6 @@ async function buildValidatedLines(tenantId, siteId, itemsInput) {
       taxPercentage: line.taxPercentage,
       taxAmount,
       lineTotalAmount,
-      batchNumber: line.batchNumber,
-      expiryDate: line.expiryDate,
     });
   }
   return lines;

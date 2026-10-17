@@ -112,7 +112,7 @@ export default function FuelCollectionsPage() {
       <Alert tone="error">{error}</Alert>
 
       <div className={`mb-4 grid gap-3 sm:grid-cols-2 ${isAdmin ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
-        <Input placeholder="Search FC number or bill no..." value={filters.search} onChange={(e) => updateFilter('search', e.target.value)} />
+        <Input placeholder="Search FC no, bill no or carrier reg..." title="Search by collection number, bill number or carrier vehicle registration number"value={filters.search} onChange={(e) => updateFilter('search', e.target.value)} />
         <Select value={filters.status} onChange={(e) => updateFilter('status', e.target.value)}>
           <option value="">All statuses</option>
           {Object.entries(COLLECTION_STATUS).map(([value, { label }]) => (
@@ -125,7 +125,7 @@ export default function FuelCollectionsPage() {
           <Select value={filters.siteId} onChange={(e) => updateFilter('siteId', e.target.value)}>
             <option value="">All sites</option>
             {Object.entries(siteNames).map(([siteId, name]) => (
-              <option key={siteId} value={siteId}>
+              <option key={siteId} value={siteId} data-added={siteId}>
                 {name}
               </option>
             ))}

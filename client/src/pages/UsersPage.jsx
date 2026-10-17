@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { usersApi, sitesApi } from '../api/client';
+import { usersApi, sitesApi, listAll } from '../api/client';
 import { Alert, Badge, Button, Card, Field, Input, Modal, RoleBadge, Select, Spinner } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 
@@ -143,7 +143,7 @@ function SupervisorForm({ mode, initial, sites, onCancel, onSaved }) {
           >
             <option value="">Select a site...</option>
             {sites.map((site) => (
-              <option key={site.id} value={site.id}>
+              <option key={site.id} value={site.id} data-added={site.id}>
                 {site.location ? `${site.name} — ${site.location}` : site.name}
               </option>
             ))}
@@ -229,7 +229,7 @@ export default function UsersPage() {
     try {
       const [usersResponse, sitesResponse] = await Promise.all([
         usersApi.list(),
-        sitesApi.list({ limit: 100 }),
+        listAll(sitesApi.list),
       ]);
       setAccounts(usersResponse.data);
       setSites(sitesResponse.data);

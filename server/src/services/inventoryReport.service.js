@@ -3,17 +3,28 @@ const { QueryTypes } = require('sequelize');
 const { sequelize, Vehicle, Machinery } = require('../models');
 const AppError = require('../utils/AppError');
 const { supervisorSiteId } = require('./siteAccess');
-const { roundQuantity, roundMoney, todayDateOnly, optionalDateFilter } = require('./fuelCommon');
+const { roundQuantity, roundMoney, optionalDateFilter } = require('./fuelCommon');
 
 function readRange(query) {
-  const today = todayDateOnly();
-  const dateFrom = optionalDateFilter(query.dateFrom, 'From date') ?? `${today.slice(0, 8)}01`;
-  const dateTo = optionalDateFilter(query.dateTo, 'To date') ?? today;
-  if (dateFrom > dateTo) throw AppError.badRequest('From date must be on or before To date');
+  const dateFrom = optionalDateFilter(query.dateFrom, 'From date') ?? null;
+  const dateTo = optionalDateFilter(query.dateTo, 'To date') ?? null;
+  if (dateFrom && dateTo && dateFrom > dateTo) throw AppError.badRequest('From date must be on or before To date');
 
-  const [fy, fm, fd] = dateFrom.split('-').map(Number);
-  const [ty, tm, td] = dateTo.split('-').map(Number);
-  return { dateFrom, dateTo, fromAt: new Date(fy, fm - 1, fd), toAt: new Date(ty, tm - 1, td + 1) };
+  let fromAt = null;
+  let toAt = null;
+  if (dateFrom) {
+    const [fy, fm, fd] = dateFrom.split('-').map(Number);
+    fromAt = new Date(fy, fm - 1, fd);
+  }
+  if (dateTo) {
+    const [ty, tm, td] = dateTo.split('-').map(Number);
+    toAt = new Date(ty, tm - 1, td + 1);
+  }
+  return { dateFrom, dateTo, fromAt, toAt };
+}
+
+function rangeClause({ fromAt, toAt }) {
+  return `${fromAt ? ' AND t.transaction_at >= :fromAt' : ''}${toAt ? ' AND t.transaction_at < :toAt' : ''}`;
 }
 
 function siteFilter(auth, query) {
@@ -40,11 +51,12 @@ async function stockRegister({ tenantId, auth, query }) {
   const { dateFrom, dateTo, fromAt, toAt } = readRange(query);
   const siteId = siteFilter(auth, query);
 
-  const inRange = 't.transaction_at >= :fromAt';
+  const inRange = fromAt ? 't.transaction_at >= :fromAt' : 'TRUE';
+  const beforeRange = fromAt ? 't.transaction_at < :fromAt' : 'FALSE';
   const rows = await select(
     `SELECT t.item_id AS itemId, i.item_code AS itemCode, i.item_name AS itemName, u.uom_name AS uom,
-            SUM(CASE WHEN t.transaction_at < :fromAt THEN ${SIGNED} * t.quantity ELSE 0 END) AS openingQty,
-            SUM(CASE WHEN t.transaction_at < :fromAt THEN ${SIGNED} * t.total_cost ELSE 0 END) AS openingValue,
+            SUM(CASE WHEN ${beforeRange} THEN ${SIGNED} * t.quantity ELSE 0 END) AS openingQty,
+            SUM(CASE WHEN ${beforeRange} THEN ${SIGNED} * t.total_cost ELSE 0 END) AS openingValue,
             SUM(CASE WHEN ${inRange} AND t.transaction_type = 'PURCHASE_RECEIPT' THEN t.quantity ELSE 0 END) AS purchasedQty,
             SUM(CASE WHEN ${inRange} AND t.transaction_type = 'PURCHASE_RECEIPT' THEN t.total_cost ELSE 0 END) AS purchasedValue,
             SUM(CASE WHEN ${inRange} AND t.transaction_type = 'ISSUE' THEN t.quantity
@@ -59,7 +71,7 @@ async function stockRegister({ tenantId, auth, query }) {
        JOIN items i ON i.id = t.item_id
        LEFT JOIN units_of_measure u ON u.id = i.base_uom_id
        LEFT JOIN stock_adjustment_items sai ON t.transaction_type = 'ADJUSTMENT' AND t.reference_type = 'STOCK_ADJUSTMENT_ITEM' AND sai.id = t.reference_id
-      WHERE t.tenant_id = :tenantId AND t.status = 'posted' AND t.transaction_at < :toAt${siteId ? ' AND t.site_id = :siteId' : ''}
+      WHERE t.tenant_id = :tenantId AND t.status = 'posted'${toAt ? ' AND t.transaction_at < :toAt' : ''}${siteId ? ' AND t.site_id = :siteId' : ''}
       GROUP BY t.item_id, i.item_code, i.item_name, u.uom_code`,
     { tenantId, siteId, fromAt, toAt }
   );
@@ -137,7 +149,7 @@ async function purchases({ tenantId, auth, query }) {
        LEFT JOIN units_of_measure u ON u.id = i.base_uom_id
       WHERE t.tenant_id = :tenantId AND t.status = 'posted'
         AND t.transaction_type = 'PURCHASE_RECEIPT' AND t.reference_type = 'PURCHASE_ITEM'
-        AND t.transaction_at >= :fromAt AND t.transaction_at < :toAt${siteId ? ' AND t.site_id = :siteId' : ''}`,
+        ${rangeClause({ fromAt, toAt })}${siteId ? ' AND t.site_id = :siteId' : ''}`,
     { tenantId, siteId, fromAt, toAt }
   );
 
@@ -195,7 +207,7 @@ async function partsByAsset({ tenantId, auth, query }) {
        LEFT JOIN asset_issue_items original ON original.id = iri.asset_issue_item_id
        JOIN asset_issues ai ON ai.id = COALESCE(aii.asset_issue_id, original.asset_issue_id)
       WHERE t.tenant_id = :tenantId AND t.status = 'posted' AND t.transaction_type IN ('ISSUE', 'ISSUE_REVERSAL')
-        AND t.transaction_at >= :fromAt AND t.transaction_at < :toAt${siteId ? ' AND t.site_id = :siteId' : ''}`,
+        ${rangeClause({ fromAt, toAt })}${siteId ? ' AND t.site_id = :siteId' : ''}`,
     { tenantId, siteId, fromAt, toAt }
   );
 
@@ -219,13 +231,13 @@ async function partsByAsset({ tenantId, auth, query }) {
   const [vehicles, machines] = await Promise.all([
     vehicleIds.length ? Vehicle.findAll({ where: { tenantId, assetId: vehicleIds }, attributes: ['id', 'assetId', 'registrationNumber'] }) : [],
     machineIds.length
-      ? Machinery.findAll({ where: { tenantId, assetId: machineIds }, attributes: ['id', 'assetId', 'name', 'registrationNumber', 'serialNumber'] })
+      ? Machinery.findAll({ where: { tenantId, assetId: machineIds }, attributes: ['id', 'assetId', 'name', 'rcpl'] })
       : [],
   ]);
   const labels = new Map();
   for (const v of vehicles) labels.set(`VEHICLE:${v.assetId}`, { label: v.registrationNumber, recordId: v.id });
   for (const m of machines) {
-    labels.set(`MACHINERY:${m.assetId}`, { label: m.name || m.registrationNumber || m.serialNumber || m.assetId, recordId: m.id });
+    labels.set(`MACHINERY:${m.assetId}`, { label: Machinery.label(m), recordId: m.id });
   }
 
   const rows = [...groups.values()]

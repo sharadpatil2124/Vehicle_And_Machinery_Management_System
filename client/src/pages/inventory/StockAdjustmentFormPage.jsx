@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { stockAdjustmentsApi, itemsApi, storageLocationsApi, sitesApi, stockApi } from '../../api/client';
+import { stockAdjustmentsApi, itemsApi, storageLocationsApi, sitesApi, stockApi, listAll } from '../../api/client';
 import { Alert, Button, Card, Field, Input, Select } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
 import useItemIdsInStock from '../../hooks/useItemIdsInStock';
+import { todayDateOnly } from '../../config/fuel';
 
 const EMPTY_LINE = { itemId: '', storageLocationId: '', countedQuantity: '' };
 
@@ -43,7 +44,7 @@ function AdjustmentLine({ line, index, items, locations, onChange, onRemove, can
               {items
                 .filter((it) => it.status === 'active')
                 .map((it) => (
-                  <option key={it.id} value={it.id}>
+                  <option key={it.id} value={it.id} data-added={it.id}>
                     {it.itemName}
                   </option>
                 ))}
@@ -56,7 +57,7 @@ function AdjustmentLine({ line, index, items, locations, onChange, onRemove, can
             <Select id={fieldId} invalid={invalid} describedBy={describedBy} value={line.storageLocationId} onChange={update('storageLocationId')} required>
               <option value="">Select a location</option>
               {locations.map((loc) => (
-                <option key={loc.id} value={loc.id}>
+                <option key={loc.id} value={loc.id} data-added={loc.id}>
                   {loc.locationName}
                 </option>
               ))}
@@ -99,7 +100,7 @@ export default function StockAdjustmentFormPage() {
   const { user, role } = useAuth();
   const isAdmin = role === 'admin';
 
-  const [form, setForm] = useState({ siteId: '', adjustmentDate: '', reason: '' });
+  const [form, setForm] = useState({ siteId: '', adjustmentDate: todayDateOnly(), reason: '' });
   const [lines, setLines] = useState([{ ...EMPTY_LINE }]);
   const [items, setItems] = useState([]);
   const [storageLocations, setStorageLocations] = useState([]);
@@ -110,9 +111,9 @@ export default function StockAdjustmentFormPage() {
   const itemsInStock = useMemo(() => items.filter((it) => itemIdsInStock.has(it.id)), [items, itemIdsInStock]);
 
   useEffect(() => {
-    itemsApi.list({ limit: 100 }).then((r) => setItems(r.data)).catch(() => setItems([]));
-    storageLocationsApi.list({ limit: 100 }).then((r) => setStorageLocations(r.data)).catch(() => setStorageLocations([]));
-    if (isAdmin) sitesApi.list({ limit: 100 }).then((r) => setSites(r.data)).catch(() => setSites([]));
+    listAll(itemsApi.list).then((r) => setItems(r.data)).catch(() => setItems([]));
+    listAll(storageLocationsApi.list).then((r) => setStorageLocations(r.data)).catch(() => setStorageLocations([]));
+    if (isAdmin) listAll(sitesApi.list).then((r) => setSites(r.data)).catch(() => setSites([]));
   }, [isAdmin]);
 
   const locationsAtSite = useMemo(
@@ -190,7 +191,7 @@ export default function StockAdjustmentFormPage() {
                   <Select id={fieldId} invalid={invalid} describedBy={describedBy} value={form.siteId} onChange={updateForm('siteId')} required>
                     <option value="">Select a site</option>
                     {sites.map((site) => (
-                      <option key={site.id} value={site.id}>
+                      <option key={site.id} value={site.id} data-added={site.id}>
                         {site.name}
                       </option>
                     ))}

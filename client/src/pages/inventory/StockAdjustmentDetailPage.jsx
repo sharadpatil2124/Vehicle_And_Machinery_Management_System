@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { stockAdjustmentsApi, itemsApi, storageLocationsApi, sitesApi } from '../../api/client';
+import { stockAdjustmentsApi, itemsApi, storageLocationsApi, sitesApi, listAll } from '../../api/client';
 import { Alert, Badge, Card, Spinner, Table } from '../../components/ui';
 
 function Detail({ label, children }) {
@@ -27,7 +27,7 @@ export default function StockAdjustmentDetailPage() {
   }, [id]);
 
   useEffect(() => {
-    Promise.all([itemsApi.list({ limit: 100 }), storageLocationsApi.list({ limit: 100 }), sitesApi.list({ limit: 100 })])
+    Promise.all([listAll(itemsApi.list), listAll(storageLocationsApi.list), listAll(sitesApi.list)])
       .then(([items, locations, sites]) => setLookups({ items: items.data, locations: locations.data, sites: sites.data }))
       .catch(() => {});
   }, []);

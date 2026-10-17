@@ -1,12 +1,14 @@
+import { useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Field, Input, Select } from './ui';
 import { ROAD_TAX_TYPE_OPTIONS } from '../config/compliance';
 
 export const EMPTY_COMPLIANCE = {
-  roadTax: { roadTaxType: '', expiryDate: '' },
-  nationalPermit: { expiryDate: '' },
-  insurance: { startDate: '', expiryDate: '' },
-  statePermit: { startDate: '', expiryDate: '' },
-  puc: { startDate: '', expiryDate: '' },
+  roadTax: { roadTaxType: '', expiryDate: '', documentNumber: '' },
+  nationalPermit: { expiryDate: '', documentNumber: '' },
+  insurance: { startDate: '', expiryDate: '', documentNumber: '' },
+  statePermit: { startDate: '', expiryDate: '', documentNumber: '' },
+  fitness: { startDate: '', expiryDate: '', documentNumber: '' },
 };
 
 function dateRangeError(startDate, expiryDate) {
@@ -20,7 +22,7 @@ export function getComplianceDateErrors(value) {
   return {
     insurance: dateRangeError(value.insurance.startDate, value.insurance.expiryDate),
     statePermit: dateRangeError(value.statePermit.startDate, value.statePermit.expiryDate),
-    puc: dateRangeError(value.puc.startDate, value.puc.expiryDate),
+    fitness: dateRangeError(value.fitness.startDate, value.fitness.expiryDate),
   };
 }
 
@@ -28,20 +30,43 @@ function Row({ title, children }) {
   return (
     <div className="border-b border-steel-100 py-4 last:border-b-0">
       <p className="mb-2 text-sm font-medium text-steel-700">{title}</p>
-      <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">{children}</div>
+      <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">{children}</div>
     </div>
   );
 }
 
 export default function ComplianceFields({ value, onChange }) {
   const dateErrors = getComplianceDateErrors(value);
+  const sectionRef = useRef(null);
+  const { hash } = useLocation();
+
+  useEffect(() => {
+    if (hash === '#compliance') sectionRef.current?.scrollIntoView({ block: 'start' });
+  }, [hash]);
 
   function updateField(key, field) {
     return (event) => onChange({ ...value, [key]: { ...value[key], [field]: event.target.value } });
   }
 
+  function numberField(key, label) {
+    return (
+      <Field label={label}>
+        {({ id, invalid, describedBy }) => (
+          <Input
+            id={id}
+            invalid={invalid}
+            describedBy={describedBy}
+            maxLength={64}
+            value={value[key].documentNumber}
+            onChange={updateField(key, 'documentNumber')}
+          />
+        )}
+      </Field>
+    );
+  }
+
   return (
-    <div className="mt-6 border-t border-steel-200 pt-5">
+    <div id="compliance" ref={sectionRef} className="mt-6 scroll-mt-4 border-t border-steel-200 pt-5">
       <h2 className="mb-3 text-sm font-semibold text-steel-900">Compliance</h2>
 
       <Row title="Road Tax">
@@ -77,6 +102,7 @@ export default function ComplianceFields({ value, onChange }) {
             )}
           </Field>
         )}
+        {numberField('roadTax', 'Road tax receipt number')}
       </Row>
 
       <Row title="National Permit">
@@ -92,6 +118,7 @@ export default function ComplianceFields({ value, onChange }) {
             />
           )}
         </Field>
+        {numberField('nationalPermit', 'National permit number')}
       </Row>
 
       <Row title="Insurance">
@@ -119,6 +146,7 @@ export default function ComplianceFields({ value, onChange }) {
             />
           )}
         </Field>
+        {numberField('insurance', 'Insurance policy number')}
       </Row>
 
       <Row title="Permit (State)">
@@ -146,33 +174,35 @@ export default function ComplianceFields({ value, onChange }) {
             />
           )}
         </Field>
+        {numberField('statePermit', 'State permit number')}
       </Row>
 
-      <Row title="PUC">
-        <Field label="PUC start date">
+      <Row title="Fitness">
+        <Field label="Fitness start date">
           {({ id, invalid, describedBy }) => (
             <Input
               id={id}
               invalid={invalid}
               describedBy={describedBy}
               type="date"
-              value={value.puc.startDate}
-              onChange={updateField('puc', 'startDate')}
+              value={value.fitness.startDate}
+              onChange={updateField('fitness', 'startDate')}
             />
           )}
         </Field>
-        <Field label="PUC end date" error={dateErrors.puc}>
+        <Field label="Fitness end date" error={dateErrors.fitness}>
           {({ id, invalid, describedBy }) => (
             <Input
               id={id}
               invalid={invalid}
               describedBy={describedBy}
               type="date"
-              value={value.puc.expiryDate}
-              onChange={updateField('puc', 'expiryDate')}
+              value={value.fitness.expiryDate}
+              onChange={updateField('fitness', 'expiryDate')}
             />
           )}
         </Field>
+        {numberField('fitness', 'Fitness certificate number')}
       </Row>
     </div>
   );

@@ -66,13 +66,8 @@ export default function MachineryListPage() {
 
   const columns = [
     { key: 'assetId', label: 'Asset ID', sortable: true },
+    { key: 'rcpl', label: 'RCPL', sortable: true },
     { key: 'name', label: 'Name', sortable: true, render: (m) => m.name ?? '—' },
-    {
-      key: 'registrationNumber',
-      label: 'Registration',
-      sortable: true,
-      render: (m) => m.registrationNumber ?? '—',
-    },
     { key: 'serialNumber', label: 'Chassis number', render: (m) => m.serialNumber ?? '—' },
     { key: 'type', label: 'Type' },
     {
@@ -130,7 +125,7 @@ export default function MachineryListPage() {
 
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
         <Input
-          placeholder="Search asset ID, name, registration, model, chassis..."
+          placeholder="Search RCPL, asset ID, name, model, chassis..."
           value={filters.search}
           onChange={(e) => updateFilter('search', e.target.value)}
         />

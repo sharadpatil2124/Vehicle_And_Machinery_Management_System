@@ -22,7 +22,7 @@ async function readBody(response) {
   }
 }
 
-async function request(method, path, body) {
+async function request(method, path, body, { signal } = {}) {
   const headers = { Accept: 'application/json' };
   const token = readToken();
 
@@ -35,8 +35,10 @@ async function request(method, path, body) {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal,
     });
-  } catch {
+  } catch (error) {
+    if (error.name === 'AbortError') throw error;
     throw new ApiError(0, 'Cannot reach the server. Check that the API is running.');
   }
 
@@ -53,12 +55,36 @@ async function request(method, path, body) {
 }
 
 export const api = {
-  get: (path) => request('GET', path),
+  get: (path, options) => request('GET', path, undefined, options),
   post: (path, body) => request('POST', path, body),
   put: (path, body) => request('PUT', path, body),
   patch: (path, body) => request('PATCH', path, body),
   delete: (path, body) => request('DELETE', path, body),
 };
+
+const LOOKUP_PAGE_SIZE = 100;
+const LOOKUP_PARALLEL_PAGES = 4;
+
+export async function listAll(fetchPage, params = {}) {
+  const first = await fetchPage({ ...params, page: 1, limit: LOOKUP_PAGE_SIZE });
+  const rows = [...(first?.data ?? [])];
+  const pages = first?.pagination?.pages ?? 1;
+  for (let start = 2; start <= pages; start += LOOKUP_PARALLEL_PAGES) {
+    const batch = [];
+    for (let page = start; page < start + LOOKUP_PARALLEL_PAGES && page <= pages; page += 1) {
+      batch.push(fetchPage({ ...params, page, limit: LOOKUP_PAGE_SIZE }));
+    }
+    for (const response of await Promise.all(batch)) rows.push(...(response?.data ?? []));
+  }
+  const seen = new Set();
+  const data = rows.filter((row) => {
+    if (row?.id == null) return true;
+    if (seen.has(row.id)) return false;
+    seen.add(row.id);
+    return true;
+  });
+  return { ...first, data, pagination: { page: 1, limit: data.length, total: data.length, pages: 1 } };
+}
 
 export const authApi = {
   signUp: (payload) => api.post('/auth/signup', payload),
@@ -191,6 +217,7 @@ export const machineryApi = {
   remove: (id, confirmation) => api.delete(`/machinery/${id}`, { confirmation }),
   restore: (id) => api.post(`/machinery/${id}/restore`),
   history: (id) => api.get(`/machinery/${id}/history`),
+  rcplAvailability: (params) => api.get(`/machinery/rcpl-availability${toQueryString(params)}`),
 };
 
 export const sitesApi = {
@@ -208,6 +235,8 @@ export const siteAssignmentsApi = {
 };
 
 export const complianceApi = {
+  listAll: (params) => api.get(`/compliance${toQueryString(params)}`),
+  alerts: (params) => api.get(`/compliance/alerts${toQueryString(params)}`),
   list: (assetType, assetId) => api.get(`/compliance/${assetType}/${assetId}`),
   save: (assetType, assetId, docType, payload) =>
     api.put(`/compliance/${assetType}/${assetId}/${docType}`, payload),
@@ -329,18 +358,68 @@ export const fuelTransactionsApi = {
     api.get(`/fuel-transactions/efficiency/${encodeURIComponent(assetType)}/${encodeURIComponent(assetId)}`),
 };
 
+export const maintenanceApi = {
+  list: (params) => api.get(`/maintenance${toQueryString(params)}`),
+  get: (id) => api.get(`/maintenance/${id}`),
+  preventiveSchedule: () => api.get('/maintenance/preventive-schedule'),
+  preventiveScheduleAssets: (params) => api.get(`/maintenance/preventive-schedule/assets${toQueryString(params)}`),
+  create: (payload) => api.post('/maintenance', payload),
+  update: (id, payload) => api.put(`/maintenance/${id}`, payload),
+  changeStage: (id, payload) => api.post(`/maintenance/${id}/stage`, payload),
+  remove: (id, confirmation) => api.delete(`/maintenance/${id}`, { confirmation }),
+};
+
 export const fuelReportsApi = {
-  siteRegister: (params) => api.get(`/fuel-reports/site-register${toQueryString(params)}`),
-  assetConsumption: (params) => api.get(`/fuel-reports/asset-consumption${toQueryString(params)}`),
-  collections: (params) => api.get(`/fuel-reports/collections${toQueryString(params)}`),
+  siteRegister: (params, options) => api.get(`/fuel-reports/site-register${toQueryString(params)}`, options),
+  assetConsumption: (params, options) => api.get(`/fuel-reports/asset-consumption${toQueryString(params)}`, options),
+  collections: (params, options) => api.get(`/fuel-reports/collections${toQueryString(params)}`, options),
+  collectionsByStation: (params, options) => api.get(`/fuel-reports/collections/by-station${toQueryString(params)}`, options),
+  collectionsByCarrier: (params, options) => api.get(`/fuel-reports/collections/by-carrier${toQueryString(params)}`, options),
 };
 
 export const inventoryReportsApi = {
-  stockRegister: (params) => api.get(`/inventory-reports/stock-register${toQueryString(params)}`),
-  purchases: (params) => api.get(`/inventory-reports/purchases${toQueryString(params)}`),
-  partsByAsset: (params) => api.get(`/inventory-reports/parts-by-asset${toQueryString(params)}`),
+  stockRegister: (params, options) => api.get(`/inventory-reports/stock-register${toQueryString(params)}`, options),
+  purchases: (params, options) => api.get(`/inventory-reports/purchases${toQueryString(params)}`, options),
+  purchasesBySupplier: (params, options) => api.get(`/inventory-reports/purchases/by-supplier${toQueryString(params)}`, options),
+  purchasesByItem: (params, options) => api.get(`/inventory-reports/purchases/by-item${toQueryString(params)}`, options),
+  partsByAsset: (params, options) => api.get(`/inventory-reports/parts-by-asset${toQueryString(params)}`, options),
 };
+
+export const tyreApi = {
+  list: (params) => api.get(`/tyres${toQueryString(params)}`),
+  get: (id) => api.get(`/tyres/${id}`),
+  create: (payload) => api.post('/tyres', payload),
+  update: (id, payload) => api.put(`/tyres/${id}`, payload),
+  remove: (id, confirmation) => api.delete(`/tyres/${id}`, { confirmation }),
+  restore: (id) => api.post(`/tyres/${id}/restore`),
+  install: (id, payload) => api.post(`/tyres/${id}/install`, payload),
+  removeFromVehicle: (id, payload) => api.post(`/tyres/${id}/remove`, payload),
+  scrap: (id, payload) => api.post(`/tyres/${id}/scrap`, payload),
+  fitments: (params) => api.get(`/tyres/history${toQueryString(params)}`),
+  vehiclePositions: (vehicleId) => api.get(`/tyres/vehicles/${vehicleId}/positions`),
+}
 
 export const dashboardApi = {
   summary: () => api.get('/dashboard/summary'),
+  monthlyCost: (params) => api.get(`/dashboard/monthly-cost${toQueryString(params)}`),
+};
+
+export const tyresApi = {
+  types: (params) => api.get(`/tyres/types${toQueryString(params)}`),
+  createType: (payload) => api.post('/tyres/types', payload),
+  updateType: (id, payload) => api.put(`/tyres/types/${id}`, payload),
+  purchases: (params) => api.get(`/tyres/purchases${toQueryString(params)}`),
+  purchase: (id) => api.get(`/tyres/purchases/${id}`),
+  createPurchase: (payload) => api.post('/tyres/purchases', payload),
+  cancelPurchase: (id, confirmation) => api.delete(`/tyres/purchases/${id}`, { confirmation }),
+  stock: (params) => api.get(`/tyres/stock${toQueryString(params)}`),
+  fitments: (params) => api.get(`/tyres/fitments${toQueryString(params)}`),
+  fit: (payload) => api.post('/tyres/fitments', payload),
+  removeFitment: (id, payload) => api.post(`/tyres/fitments/${id}/remove`, payload),
+  undoFitting: (id, confirmation) => api.delete(`/tyres/fitments/${id}`, { confirmation }),
+  assetReport: (params, options) => api.get(`/tyres/reports/assets${toQueryString(params)}`, options),
+  assetTyres: (params, options) => api.get(`/tyres/reports/assets/tyres${toQueryString(params)}`, options),
+  costReport: (params, options) => api.get(`/tyres/reports/costs${toQueryString(params)}`, options),
+  costsByType: (params, options) => api.get(`/tyres/reports/costs/by-type${toQueryString(params)}`, options),
+  costsBySupplier: (params, options) => api.get(`/tyres/reports/costs/by-supplier${toQueryString(params)}`, options),
 };

@@ -2,7 +2,7 @@ const { Op } = require('sequelize');
 
 const { sequelize, StorageLocation } = require('../models');
 const AppError = require('../utils/AppError');
-const { requireText, optionalText, requireNumber, optionalNumber } = require('../utils/validation');
+const { requireText, requireNumber } = require('../utils/validation');
 const { parseListQuery, parseEnumFilter } = require('../utils/queryOptions');
 const { buildListResponse } = require('../utils/listResponse');
 const { createTenantScopedRepository } = require('./tenantScopedRepository');
@@ -32,15 +32,6 @@ function readStorageLocationInput(payload, { partial = false } = {}) {
   }
   if (!partial || payload.locationName !== undefined) {
     input.locationName = requireText(payload.locationName, 'Location name', { max: 150 });
-  }
-  if (!partial || payload.locationType !== undefined) {
-    input.locationType = optionalText(payload.locationType, 'Location type', { max: 50 });
-  }
-  if (!partial || payload.capacity !== undefined) {
-    input.capacity = optionalNumber(payload.capacity, 'Capacity', { min: 0 });
-  }
-  if (!partial || payload.capacityUom !== undefined) {
-    input.capacityUom = optionalText(payload.capacityUom, 'Capacity unit', { max: 32 });
   }
 
   return input;

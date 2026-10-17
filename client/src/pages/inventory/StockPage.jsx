@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { stockApi, itemsApi, storageLocationsApi, sitesApi } from '../../api/client';
-import { Alert, Badge, Button, Modal, Select, Spinner, Table } from '../../components/ui';
+import { stockApi, itemsApi, storageLocationsApi, sitesApi, listAll } from '../../api/client';
+import { Alert, Badge, Button, Modal, Pagination, Select, Spinner, Table } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
 import useSiteNames from '../../hooks/useSiteNames';
 
@@ -36,6 +36,8 @@ function StockStatusBadge({ balance }) {
 const currencyFormatter = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 });
 const money = (value) => currencyFormatter.format(Number(value));
 const qty = (value) => Number(value).toLocaleString('en-IN', { maximumFractionDigits: 3 });
+
+const PAGE_SIZE = 20;
 
 const BIG_PRICE_JUMP = 0.1;
 const INLINE_BATCH_LIMIT = 3;
@@ -160,12 +162,27 @@ function TabButton({ active, onClick, children }) {
   );
 }
 
+function ListPagination({ pagination, onPageChange }) {
+  if (!pagination || pagination.total === 0) return null;
+  return (
+    <Pagination
+      page={pagination.page}
+      pages={pagination.pages}
+      total={pagination.total}
+      pageSize={pagination.limit}
+      onPageChange={onPageChange}
+      showPageNumbers
+    />
+  );
+}
+
 export default function StockPage() {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
 
   const [tab, setTab] = useState('balances');
   const [filters, setFilters] = useState({ siteId: '', itemId: '', storageLocationId: '', transactionType: '' });
+  const [pages, setPages] = useState({ balances: 1, transactions: 1 });
   const [sites, setSites] = useState([]);
   const [items, setItems] = useState([]);
   const [storageLocations, setStorageLocations] = useState([]);
@@ -176,9 +193,9 @@ export default function StockPage() {
   const siteNames = useSiteNames();
 
   useEffect(() => {
-    itemsApi.list({ limit: 100 }).then((r) => setItems(r.data)).catch(() => setItems([]));
-    storageLocationsApi.list({ limit: 100 }).then((r) => setStorageLocations(r.data)).catch(() => setStorageLocations([]));
-    if (isAdmin) sitesApi.list({ limit: 100 }).then((r) => setSites(r.data)).catch(() => setSites([]));
+    listAll(itemsApi.list).then((r) => setItems(r.data)).catch(() => setItems([]));
+    listAll(storageLocationsApi.list).then((r) => setStorageLocations(r.data)).catch(() => setStorageLocations([]));
+    if (isAdmin) listAll(sitesApi.list).then((r) => setSites(r.data)).catch(() => setSites([]));
   }, [isAdmin]);
 
   useEffect(() => {
@@ -188,33 +205,49 @@ export default function StockPage() {
       siteId: isAdmin ? filters.siteId || undefined : undefined,
       itemId: filters.itemId || undefined,
       storageLocationId: filters.storageLocationId || undefined,
-      limit: 100,
+      page: pages[tab],
+      limit: PAGE_SIZE,
     };
     if (tab === 'balances') {
       setBalances(null);
       stockApi
         .balances(params)
-        .then((r) => !cancelled && setBalances(r.data))
+        .then((r) => !cancelled && setBalances(r))
         .catch((err) => !cancelled && setError(err.message));
     } else {
       setTransactions(null);
       stockApi
         .transactions({ ...params, transactionType: filters.transactionType || undefined })
-        .then((r) => !cancelled && setTransactions(r.data))
+        .then((r) => !cancelled && setTransactions(r))
         .catch((err) => !cancelled && setError(err.message));
     }
     return () => {
       cancelled = true;
     };
-  }, [tab, filters, isAdmin]);
+  }, [tab, filters, pages, isAdmin]);
+
+  const result = tab === 'balances' ? balances : transactions;
+  useEffect(() => {
+    const last = result?.pagination?.pages;
+    if (last > 0 && pages[tab] > last) setPages((p) => ({ ...p, [tab]: last }));
+  }, [result, tab, pages]);
 
   const locationOptions = useMemo(
     () => (isAdmin && filters.siteId ? storageLocations.filter((l) => String(l.siteId) === filters.siteId) : storageLocations),
     [storageLocations, isAdmin, filters.siteId]
   );
 
+  function changeFilters(update) {
+    setFilters(update);
+    setPages({ balances: 1, transactions: 1 });
+  }
+
   function updateFilter(key, value) {
-    setFilters((f) => ({ ...f, [key]: value }));
+    changeFilters((f) => ({ ...f, [key]: value }));
+  }
+
+  function changePage(page) {
+    setPages((p) => ({ ...p, [tab]: page }));
   }
 
   const balanceColumns = [
@@ -279,10 +312,10 @@ export default function StockPage() {
 
       <div className={`mb-4 grid gap-3 ${isAdmin ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
         {isAdmin && (
-          <Select value={filters.siteId} onChange={(e) => setFilters((f) => ({ ...f, siteId: e.target.value, storageLocationId: '' }))}>
+          <Select value={filters.siteId} onChange={(e) => changeFilters((f) => ({ ...f, siteId: e.target.value, storageLocationId: '' }))}>
             <option value="">All sites</option>
             {sites.map((site) => (
-              <option key={site.id} value={site.id}>
+              <option key={site.id} value={site.id} data-added={site.id}>
                 {site.name}
               </option>
             ))}
@@ -291,7 +324,7 @@ export default function StockPage() {
         <Select value={filters.itemId} onChange={(e) => updateFilter('itemId', e.target.value)}>
           <option value="">All items</option>
           {items.map((item) => (
-            <option key={item.id} value={item.id}>
+            <option key={item.id} value={item.id} data-added={item.id}>
               {item.itemName}
             </option>
           ))}
@@ -299,7 +332,7 @@ export default function StockPage() {
         <Select value={filters.storageLocationId} onChange={(e) => updateFilter('storageLocationId', e.target.value)}>
           <option value="">All storage locations</option>
           {locationOptions.map((loc) => (
-            <option key={loc.id} value={loc.id}>
+            <option key={loc.id} value={loc.id} data-added={loc.id}>
               {loc.locationName}
             </option>
           ))}
@@ -320,12 +353,18 @@ export default function StockPage() {
           !balances ? (
             <Spinner label="Loading stock balances" />
           ) : (
-            <Table columns={balanceColumns} rows={balances} getRowKey={(b) => b.id} emptyMessage="No stock on hand matches these filters." />
+            <>
+              <Table columns={balanceColumns} rows={balances.data} getRowKey={(b) => b.id} emptyMessage="No stock on hand matches these filters." />
+              <ListPagination pagination={balances.pagination} onPageChange={changePage} />
+            </>
           )
         ) : !transactions ? (
           <Spinner label="Loading transaction history" />
         ) : (
-          <Table columns={transactionColumns} rows={transactions} getRowKey={(t) => t.id} emptyMessage="No transactions match these filters." />
+          <>
+            <Table columns={transactionColumns} rows={transactions.data} getRowKey={(t) => t.id} emptyMessage="No transactions match these filters." />
+            <ListPagination pagination={transactions.pagination} onPageChange={changePage} />
+          </>
         )}
       </div>
 

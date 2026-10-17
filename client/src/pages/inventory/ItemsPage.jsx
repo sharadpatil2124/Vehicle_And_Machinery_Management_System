@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { itemsApi, itemCategoriesApi, unitsOfMeasureApi } from '../../api/client';
+import { itemsApi, itemCategoriesApi, unitsOfMeasureApi, listAll } from '../../api/client';
 import { Alert, Badge, Button, Field, Input, Modal, Pagination, Select, Spinner, Table } from '../../components/ui';
 import Can from '../../components/Can';
 import DeleteWordModal from '../../components/DeleteWordModal';
@@ -20,8 +20,6 @@ function ItemForm({ mode, initial, categories, units, onCancel, onSaved }) {
     baseUomId: initial?.baseUomId ?? '',
     description: initial?.description ?? '',
     itemType: initial?.itemType ?? '',
-    isHazardous: initial?.isHazardous ?? false,
-    batchTrackingRequired: initial?.batchTrackingRequired ?? false,
     minimumStockLevel: initial?.minimumStockLevel ?? '',
     reorderLevel: initial?.reorderLevel ?? '',
     maximumStockLevel: initial?.maximumStockLevel ?? '',
@@ -30,7 +28,6 @@ function ItemForm({ mode, initial, categories, units, onCancel, onSaved }) {
   const [submitting, setSubmitting] = useState(false);
 
   const update = (field) => (event) => setForm((f) => ({ ...f, [field]: event.target.value }));
-  const updateCheckbox = (field) => (event) => setForm((f) => ({ ...f, [field]: event.target.checked }));
 
   function toOptionalNumber(value) {
     return value === '' ? null : Number(value);
@@ -47,8 +44,6 @@ function ItemForm({ mode, initial, categories, units, onCancel, onSaved }) {
         baseUomId: Number(form.baseUomId),
         description: form.description || null,
         itemType: form.itemType || null,
-        isHazardous: form.isHazardous,
-        batchTrackingRequired: form.batchTrackingRequired,
         minimumStockLevel: toOptionalNumber(form.minimumStockLevel),
         reorderLevel: toOptionalNumber(form.reorderLevel),
         maximumStockLevel: toOptionalNumber(form.maximumStockLevel),
@@ -97,7 +92,7 @@ function ItemForm({ mode, initial, categories, units, onCancel, onSaved }) {
             >
               <option value="">Select a category</option>
               {activeCategories.map((category) => (
-                <option key={category.id} value={category.id}>
+                <option key={category.id} value={category.id} data-added={category.id}>
                   {category.categoryName}
                 </option>
               ))}
@@ -117,7 +112,7 @@ function ItemForm({ mode, initial, categories, units, onCancel, onSaved }) {
             >
               <option value="">Select a unit</option>
               {activeUnits.map((unit) => (
-                <option key={unit.id} value={unit.id}>
+                <option key={unit.id} value={unit.id} data-added={unit.id}>
                   {unit.uomName}
                 </option>
               ))}
@@ -197,21 +192,6 @@ function ItemForm({ mode, initial, categories, units, onCancel, onSaved }) {
         </Field>
       </div>
 
-      <div className="mt-1 mb-4 flex flex-col gap-2">
-        <label className="flex items-center gap-2 text-sm text-steel-700">
-          <input type="checkbox" checked={form.isHazardous} onChange={updateCheckbox('isHazardous')} />
-          Hazardous material
-        </label>
-        <label className="flex items-center gap-2 text-sm text-steel-700">
-          <input
-            type="checkbox"
-            checked={form.batchTrackingRequired}
-            onChange={updateCheckbox('batchTrackingRequired')}
-          />
-          Requires batch/expiry tracking
-        </label>
-      </div>
-
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="secondary" onClick={onCancel}>
           Cancel
@@ -256,12 +236,10 @@ export default function ItemsPage() {
   }, [filters, load]);
 
   useEffect(() => {
-    itemCategoriesApi
-      .list({ limit: 100 })
+    listAll(itemCategoriesApi.list)
       .then((response) => setCategories(response.data))
       .catch(() => setCategories([]));
-    unitsOfMeasureApi
-      .list({ limit: 100 })
+    listAll(unitsOfMeasureApi.list)
       .then((response) => setUnits(response.data))
       .catch(() => setUnits([]));
   }, []);
@@ -304,16 +282,6 @@ export default function ItemsPage() {
     { key: 'itemName', label: 'Name' },
     { key: 'categoryId', label: 'Category', render: categoryName },
     { key: 'baseUomId', label: 'Base unit', render: uomName },
-    {
-      key: 'flags',
-      label: '',
-      render: (item) => (
-        <div className="flex gap-1.5">
-          {item.isHazardous && <Badge tone="danger">Hazardous</Badge>}
-          {item.batchTrackingRequired && <Badge tone="brand">Batch tracked</Badge>}
-        </div>
-      ),
-    },
     { key: 'status', label: 'Status', render: (item) => <StatusBadge status={item.status} /> },
     {
       key: 'actions',

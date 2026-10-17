@@ -20,7 +20,6 @@ class AssetIssue extends Model {
       issuedByUserId: this.issuedByUserId,
       purpose: this.purpose,
       status: this.status,
-      remarks: this.remarks,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
     };
@@ -85,10 +84,6 @@ AssetIssue.init(
       type: DataTypes.ENUM(...ASSET_ISSUE_STATUSES),
       allowNull: false,
       defaultValue: 'issued',
-    },
-    remarks: {
-      type: DataTypes.TEXT,
-      allowNull: true,
     },
   },
   {

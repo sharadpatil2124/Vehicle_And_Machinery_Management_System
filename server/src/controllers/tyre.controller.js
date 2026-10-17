@@ -1,89 +1,112 @@
-const tyreService = require('../services/tyre.service');
+const tyreTypeService = require('../services/tyreType.service');
+const tyrePurchaseService = require('../services/tyrePurchase.service');
+const tyreStockService = require('../services/tyreStock.service');
+const tyreFitmentService = require('../services/tyreFitment.service');
+const tyreReportService = require('../services/tyreReport.service');
 
-function context(req) {
-  return { tenantId: req.auth.tenantId, auth: req.auth, actingUserId: req.auth.userId };
+const ctx = (req) => ({ tenantId: req.auth.tenantId, auth: req.auth, actingUserId: req.auth.userId });
+
+async function listTypes(req, res) {
+  const response = await tyreTypeService.listTyreTypes({ ...ctx(req), query: req.query });
+  res.status(200).json({ ...response, message: 'Tyre types retrieved' });
 }
 
-async function list(req, res) {
-  const response = await tyreService.listTyres({ ...context(req), query: req.query });
-  res.status(200).json({ ...response, message: 'Tyres retrieved' });
+async function createType(req, res) {
+  const data = await tyreTypeService.createTyreType({ ...ctx(req), payload: req.body ?? {} });
+  res.status(201).json({ data, message: 'Tyre type added' });
 }
 
-async function get(req, res) {
-  const data = await tyreService.getTyre({ ...context(req), id: req.params.id });
-  res.status(200).json({ data, message: 'Tyre retrieved' });
+async function updateType(req, res) {
+  const data = await tyreTypeService.updateTyreType({ ...ctx(req), id: req.params.id, payload: req.body ?? {} });
+  res.status(200).json({ data, message: 'Tyre type updated' });
 }
 
-async function create(req, res) {
-  const data = await tyreService.createTyre({ ...context(req), payload: req.body ?? {} });
-  res.status(201).json({ data, message: 'Tyre added' });
+async function listPurchases(req, res) {
+  const response = await tyrePurchaseService.listTyrePurchases({ ...ctx(req), query: req.query });
+  res.status(200).json({ ...response, message: 'Tyre purchases retrieved' });
 }
 
-async function update(req, res) {
-  const data = await tyreService.updateTyre({ ...context(req), id: req.params.id, payload: req.body ?? {} });
-  res.status(200).json({ data, message: 'Tyre updated' });
+async function getPurchase(req, res) {
+  const data = await tyrePurchaseService.getTyrePurchase({ ...ctx(req), id: req.params.id });
+  res.status(200).json({ data, message: 'Tyre purchase retrieved' });
 }
 
-async function remove(req, res) {
-  const data = await tyreService.deleteTyre({
-    tenantId: req.auth.tenantId,
-    actingUserId: req.auth.userId,
-    id: req.params.id,
-    confirmation: req.body?.confirmation,
-  });
-  res.status(200).json({ data, message: 'Tyre archived successfully' });
+async function createPurchase(req, res) {
+  const data = await tyrePurchaseService.createTyrePurchase({ ...ctx(req), payload: req.body ?? {} });
+  res.status(201).json({ data, message: 'Tyre purchase saved' });
 }
 
-async function restore(req, res) {
-  const data = await tyreService.restoreTyre({
-    tenantId: req.auth.tenantId,
-    actingUserId: req.auth.userId,
-    id: req.params.id,
-  });
-  res.status(200).json({ data, message: 'Tyre restored successfully' });
+async function cancelPurchase(req, res) {
+  const data = await tyrePurchaseService.cancelTyrePurchase({ ...ctx(req), id: req.params.id, confirmation: req.body?.confirmation });
+  res.status(200).json({ data, message: 'Tyre purchase cancelled' });
 }
 
-async function install(req, res) {
-  const data = await tyreService.installTyre({ ...context(req), id: req.params.id, payload: req.body ?? {} });
-  res.status(200).json({ data, message: 'Tyre fitted' });
+async function stock(req, res) {
+  const data = await tyreStockService.listTyreStock({ ...ctx(req), query: req.query });
+  res.status(200).json({ data, message: 'Tyre stock retrieved' });
 }
 
-async function removeFromVehicle(req, res) {
-  const data = await tyreService.removeTyre({ ...context(req), id: req.params.id, payload: req.body ?? {} });
+async function listFitments(req, res) {
+  const response = await tyreFitmentService.listFitments({ ...ctx(req), query: req.query });
+  res.status(200).json({ ...response, message: 'Tyre fittings retrieved' });
+}
+
+async function fit(req, res) {
+  const data = await tyreFitmentService.fitTyres({ ...ctx(req), payload: req.body ?? {} });
+  res.status(201).json({ data, message: `${data.length} ${data.length === 1 ? 'tyre' : 'tyres'} fitted` });
+}
+
+async function removeFromAsset(req, res) {
+  const data = await tyreFitmentService.removeTyre({ ...ctx(req), id: req.params.id, payload: req.body ?? {} });
   res.status(200).json({ data, message: 'Tyre removed' });
 }
 
-async function rotate(req, res) {
-  const data = await tyreService.rotateTyre({ ...context(req), id: req.params.id, payload: req.body ?? {} });
-  res.status(200).json({ data, message: 'Tyre moved' });
+async function undoFitting(req, res) {
+  const data = await tyreFitmentService.undoFitting({ ...ctx(req), id: req.params.id, confirmation: req.body?.confirmation });
+  res.status(200).json({ data, message: 'Fitting undone — the tyre is back in stock' });
 }
 
-async function scrap(req, res) {
-  const data = await tyreService.scrapTyre({ ...context(req), id: req.params.id, payload: req.body ?? {} });
-  res.status(200).json({ data, message: 'Tyre scrapped' });
+async function assetReport(req, res) {
+  const data = await tyreReportService.assetReport({ ...ctx(req), query: req.query });
+  res.status(200).json({ data, message: 'Tyre report by asset retrieved' });
 }
 
-async function vehiclePositions(req, res) {
-  const data = await tyreService.vehicleTyrePositions({ ...context(req), vehicleId: req.params.vehicleId });
-  res.status(200).json({ data, message: 'Tyre positions retrieved' });
+async function assetTyres(req, res) {
+  const data = await tyreReportService.assetTyres({ ...ctx(req), query: req.query });
+  res.status(200).json({ data, message: 'Tyres for asset retrieved' });
 }
 
-async function fitments(req, res) {
-  const response = await tyreService.listFitments({ ...context(req), query: req.query });
-  res.status(200).json({ ...response, message: 'Tyre history retrieved' });
+async function costReport(req, res) {
+  const data = await tyreReportService.costReport({ ...ctx(req), query: req.query });
+  res.status(200).json({ data, message: 'Tyre cost report retrieved' });
+}
+
+async function costsByType(req, res) {
+  const data = await tyreReportService.costsByType({ ...ctx(req), query: req.query });
+  res.status(200).json({ data, message: 'Tyre costs by type retrieved' });
+}
+
+async function costsBySupplier(req, res) {
+  const data = await tyreReportService.costsBySupplier({ ...ctx(req), query: req.query });
+  res.status(200).json({ data, message: 'Tyre costs by supplier retrieved' });
 }
 
 module.exports = {
-  list,
-  get,
-  create,
-  update,
-  remove,
-  restore,
-  install,
-  removeFromVehicle,
-  rotate,
-  scrap,
-  vehiclePositions,
-  fitments,
+  listTypes,
+  createType,
+  updateType,
+  listPurchases,
+  getPurchase,
+  createPurchase,
+  cancelPurchase,
+  stock,
+  listFitments,
+  fit,
+  removeFromAsset,
+  undoFitting,
+  assetReport,
+  assetTyres,
+  costReport,
+  costsByType,
+  costsBySupplier,
 };

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { purchasesApi, suppliersApi, itemsApi, storageLocationsApi, sitesApi } from '../../api/client';
+import { purchasesApi, suppliersApi, itemsApi, storageLocationsApi, sitesApi, listAll } from '../../api/client';
 import { Alert, Button, Card, Field, Input, Select, Spinner } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
+import { todayDateOnly } from '../../config/fuel';
 
 const EMPTY_LINE = {
   itemId: '',
@@ -10,8 +11,6 @@ const EMPTY_LINE = {
   purchasedQuantity: '',
   unitPrice: '',
   taxPercentage: '0',
-  batchNumber: '',
-  expiryDate: '',
 };
 
 function toFormValues(purchase) {
@@ -30,8 +29,6 @@ function toLineValues(items) {
     purchasedQuantity: line.purchasedQuantity,
     unitPrice: line.unitPrice,
     taxPercentage: line.taxPercentage,
-    batchNumber: line.batchNumber ?? '',
-    expiryDate: line.expiryDate ?? '',
   }));
 }
 
@@ -67,7 +64,7 @@ export default function PurchaseFormPage() {
   const { user, role } = useAuth();
   const isAdmin = role === 'admin';
 
-  const [form, setForm] = useState({ siteId: '', supplierId: '', purchaseDate: '', remarks: '' });
+  const [form, setForm] = useState({ siteId: '', supplierId: '', purchaseDate: todayDateOnly(), remarks: '' });
   const [lines, setLines] = useState([{ ...EMPTY_LINE }]);
   const [suppliers, setSuppliers] = useState([]);
   const [items, setItems] = useState([]);
@@ -98,21 +95,17 @@ export default function PurchaseFormPage() {
   }, [id, isEdit]);
 
   useEffect(() => {
-    suppliersApi
-      .list({ limit: 100 })
+    listAll(suppliersApi.list)
       .then((response) => setSuppliers(response.data))
       .catch(() => setSuppliers([]));
-    itemsApi
-      .list({ limit: 100 })
+    listAll(itemsApi.list)
       .then((response) => setItems(response.data))
       .catch(() => setItems([]));
-    storageLocationsApi
-      .list({ limit: 100 })
+    listAll(storageLocationsApi.list)
       .then((response) => setStorageLocations(response.data))
       .catch(() => setStorageLocations([]));
     if (isAdmin) {
-      sitesApi
-        .list({ limit: 100 })
+      listAll(sitesApi.list)
         .then((response) => setSites(response.data))
         .catch(() => setSites([]));
     }
@@ -160,8 +153,6 @@ export default function PurchaseFormPage() {
       purchasedQuantity: Number(line.purchasedQuantity),
       unitPrice: Number(line.unitPrice),
       taxPercentage: line.taxPercentage === '' ? 0 : Number(line.taxPercentage),
-      batchNumber: line.batchNumber || undefined,
-      expiryDate: line.expiryDate || undefined,
     }));
 
     const payload = isEdit
@@ -231,7 +222,7 @@ export default function PurchaseFormPage() {
                   <Select id={fieldId} invalid={invalid} describedBy={describedBy} value={form.siteId} onChange={updateForm('siteId')} required>
                     <option value="">Select a site</option>
                     {sites.map((site) => (
-                      <option key={site.id} value={site.id}>
+                      <option key={site.id} value={site.id} data-added={site.id}>
                         {site.name}
                       </option>
                     ))}
@@ -251,7 +242,7 @@ export default function PurchaseFormPage() {
                   {suppliers
                     .filter((s) => s.status === 'active')
                     .map((s) => (
-                      <option key={s.id} value={s.id}>
+                      <option key={s.id} value={s.id} data-added={s.id}>
                         {s.supplierName}
                       </option>
                     ))}
@@ -295,7 +286,7 @@ export default function PurchaseFormPage() {
                           {items
                             .filter((it) => it.status === 'active')
                             .map((it) => (
-                              <option key={it.id} value={it.id}>
+                              <option key={it.id} value={it.id} data-added={it.id}>
                                 {it.itemName}
                               </option>
                             ))}
@@ -315,7 +306,7 @@ export default function PurchaseFormPage() {
                         >
                           <option value="">Select a location</option>
                           {locationsAtEffectiveSite.map((loc) => (
-                            <option key={loc.id} value={loc.id}>
+                            <option key={loc.id} value={loc.id} data-added={loc.id}>
                               {loc.locationName}
                             </option>
                           ))}
@@ -367,18 +358,6 @@ export default function PurchaseFormPage() {
                           value={line.taxPercentage}
                           onChange={updateLine(index, 'taxPercentage')}
                         />
-                      )}
-                    </Field>
-
-                    <Field label="Batch number">
-                      {({ id: fieldId, invalid, describedBy }) => (
-                        <Input id={fieldId} invalid={invalid} describedBy={describedBy} value={line.batchNumber} onChange={updateLine(index, 'batchNumber')} maxLength={64} />
-                      )}
-                    </Field>
-
-                    <Field label="Expiry date">
-                      {({ id: fieldId, invalid, describedBy }) => (
-                        <Input id={fieldId} invalid={invalid} describedBy={describedBy} type="date" value={line.expiryDate} onChange={updateLine(index, 'expiryDate')} />
                       )}
                     </Field>
                   </div>

@@ -19,7 +19,10 @@ const { assertSiteAssignable } = require('./site.service');
 const { recordSiteAssignment } = require('./siteAssignment.service');
 const {
   assertChassisNumberAvailable,
-  assertRegistrationNumberAvailable,
+  assertRcplAvailable,
+  isRcplAvailable,
+  isRcplCollision,
+  RCPL_TAKEN_MESSAGE,
 } = require('./assetIdentifier.service');
 const { saveComplianceDocuments } = require('./complianceDocument.service');
 const { createDocumentsForNewAsset } = require('./assetDocument.service');
@@ -27,7 +30,7 @@ const storage = require('./storage.service');
 
 const repo = createTenantScopedRepository(Machinery);
 
-const SORTABLE_FIELDS = ['createdAt', 'currentHours', 'assetId', 'name', 'registrationNumber'];
+const SORTABLE_FIELDS = ['createdAt', 'currentHours', 'assetId', 'name', 'rcpl'];
 const DEFAULT_SORT = 'createdAt:desc';
 
 const ASSET_ID_GENERATION_ATTEMPTS = 5;
@@ -70,10 +73,8 @@ function readMachineryInput(payload, { partial = false } = {}) {
   if (!partial || payload.name !== undefined) {
     input.name = optionalText(payload.name, 'Machinery name', { max: 150 });
   }
-  if (!partial || payload.registrationNumber !== undefined) {
-    input.registrationNumber = optionalText(payload.registrationNumber, 'Registration number', {
-      max: 32,
-    });
+  if (!partial || payload.rcpl !== undefined) {
+    input.rcpl = Machinery.normalizeRcpl(requireText(payload.rcpl, 'RCPL', { max: 32 }));
   }
   if (!partial || payload.type !== undefined) {
     input.type = requireText(payload.type, 'Type', { max: 100 });
@@ -134,9 +135,9 @@ async function listMachinery({ tenantId, auth, query }) {
   const search = typeof query.search === 'string' ? query.search.trim() : '';
   if (search) {
     where[Op.or] = [
+      { rcpl: { [Op.like]: `%${search}%` } },
       { assetId: { [Op.like]: `%${search}%` } },
       { name: { [Op.like]: `%${search}%` } },
-      { registrationNumber: { [Op.like]: `%${search}%` } },
       { modelNumber: { [Op.like]: `%${search}%` } },
       { serialNumber: { [Op.like]: `%${search}%` } },
     ];
@@ -159,7 +160,7 @@ async function createMachine({ tenantId, auth, actingUserId, payload, files }) {
   const siteInput = readCurrentSiteIdInput(payload);
   const ownSiteId = supervisorSiteId(auth);
   if (ownSiteId !== null) siteInput.currentSiteId = ownSiteId;
-  await assertRegistrationNumberAvailable({ value: input.registrationNumber });
+  await assertRcplAvailable({ tenantId, value: input.rcpl });
   await assertChassisNumberAvailable({ value: input.serialNumber });
   if (siteInput.currentSiteId != null) {
     await assertSiteAssignable(tenantId, siteInput.currentSiteId);
@@ -235,8 +236,16 @@ async function createMachine({ tenantId, auth, actingUserId, payload, files }) {
     return toPublic(machine);
   } catch (error) {
     await Promise.all(savedKeys.map((key) => storage.deleteFile(key).catch(() => {})));
+    if (isRcplCollision(error)) throw AppError.conflict(RCPL_TAKEN_MESSAGE);
     throw error;
   }
+}
+
+async function checkRcplAvailability({ tenantId, query }) {
+  const value = typeof query.rcpl === 'string' ? query.rcpl.trim() : '';
+  if (!value) throw AppError.badRequest('RCPL is required');
+  const excludeMachineId = query.excludeId ? requireNumber(query.excludeId, 'Machine', { min: 1 }) : undefined;
+  return { rcpl: Machinery.normalizeRcpl(value), available: await isRcplAvailable({ tenantId, value, excludeMachineId }) };
 }
 
 async function updateMachine({ tenantId, auth, actingUserId, id, payload }) {
@@ -245,8 +254,8 @@ async function updateMachine({ tenantId, auth, actingUserId, id, payload }) {
   assertSiteAllowed(auth, machine.currentSiteId, 'Machinery not found');
 
   const input = readMachineryInput(payload, { partial: true });
-  if (input.registrationNumber && input.registrationNumber !== machine.registrationNumber) {
-    await assertRegistrationNumberAvailable({ value: input.registrationNumber, excludeMachineId: id });
+  if (input.rcpl && input.rcpl !== machine.rcpl) {
+    await assertRcplAvailable({ tenantId, value: input.rcpl, excludeMachineId: machine.id });
   }
   if (input.serialNumber && input.serialNumber !== machine.serialNumber) {
     await assertChassisNumberAvailable({ value: input.serialNumber, excludeMachineId: id });
@@ -314,6 +323,8 @@ async function updateMachine({ tenantId, auth, actingUserId, id, payload }) {
     });
 
     return machine;
+  }).catch((error) => {
+    throw isRcplCollision(error) ? AppError.conflict(RCPL_TAKEN_MESSAGE) : error;
   });
 
   return toPublic(updated);
@@ -372,4 +383,5 @@ module.exports = {
   deleteMachine,
   restoreMachine,
   getMachineHistory,
+  checkRcplAvailability,
 };

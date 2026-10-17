@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { vehiclesApi, machineryApi, siteAssignmentsApi } from '../../api/client';
 import { Alert, Badge, Button, Card, Field, Modal, Select, Spinner } from '../../components/ui';
 import Can from '../../components/Can';
+import { machineryLabel } from '../../config/fuel';
 
 function Detail({ label, children }) {
   return (
@@ -89,7 +90,7 @@ function TransferModal({ open, asset, siteOptions, onClose, onConfirm }) {
       open={open}
       onClose={onClose}
       title="Transfer to another site"
-      description={`Move ${asset ? (asset.assetType === 'VEHICLE' ? asset.registrationNumber : (asset.name ?? asset.assetId)) : ''} to a different site. This closes its current site assignment and starts a new one.`}
+      description={`Move ${asset ? (asset.assetType === 'VEHICLE' ? asset.registrationNumber : machineryLabel(asset)) : ''} to a different site. This closes its current site assignment and starts a new one.`}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
@@ -107,7 +108,7 @@ function TransferModal({ open, asset, siteOptions, onClose, onConfirm }) {
           <Select id={id} invalid={invalid} describedBy={describedBy} value={siteId} onChange={(e) => setSiteId(e.target.value)}>
             <option value="">Select a site</option>
             {siteOptions.map((site) => (
-              <option key={site.id} value={site.id}>
+              <option key={site.id} value={site.id} data-added={site.id}>
                 {site.name}
                 {site.location ? ` — ${site.location}` : ''}
               </option>
@@ -148,7 +149,7 @@ export default function SiteAssetDetailPage({ asset, sites, currentSiteId, onTra
   return (
     <div className="flex flex-col gap-4">
       <Card
-        title={isVehicle ? asset.registrationNumber : (asset.name ?? asset.assetId)}
+        title={isVehicle ? asset.registrationNumber : machineryLabel(asset)}
         subtitle={asset.assetId}
         actions={
           <Can resource="SITE" action="ASSIGN">
@@ -172,7 +173,7 @@ export default function SiteAssetDetailPage({ asset, sites, currentSiteId, onTra
             </>
           ) : (
             <>
-              <Detail label="Registration number">{asset.registrationNumber}</Detail>
+              <Detail label="RCPL">{asset.rcpl}</Detail>
               <Detail label="Current hours">{Number(asset.currentHours).toLocaleString()}</Detail>
             </>
           )}

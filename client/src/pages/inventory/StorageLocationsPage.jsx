@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { storageLocationsApi, sitesApi } from '../../api/client';
+import { storageLocationsApi, sitesApi, listAll } from '../../api/client';
 import { Alert, Badge, Button, Field, Input, Modal, Pagination, Select, Spinner, Table } from '../../components/ui';
 import Can from '../../components/Can';
 import DeleteWordModal from '../../components/DeleteWordModal';
@@ -19,9 +19,6 @@ function StorageLocationForm({ mode, initial, sites, onCancel, onSaved }) {
   const [form, setForm] = useState({
     siteId: initial?.siteId ?? '',
     locationName: initial?.locationName ?? '',
-    locationType: initial?.locationType ?? '',
-    capacity: initial?.capacity ?? '',
-    capacityUom: initial?.capacityUom ?? '',
   });
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -36,9 +33,6 @@ function StorageLocationForm({ mode, initial, sites, onCancel, onSaved }) {
       const payload = {
         siteId: Number(form.siteId),
         locationName: form.locationName,
-        locationType: form.locationType || null,
-        capacity: form.capacity === '' ? null : Number(form.capacity),
-        capacityUom: form.capacityUom || null,
       };
       const response =
         mode === 'create'
@@ -61,7 +55,7 @@ function StorageLocationForm({ mode, initial, sites, onCancel, onSaved }) {
           <Select id={id} invalid={invalid} describedBy={describedBy} value={form.siteId} onChange={update('siteId')} required>
             <option value="">Select a site</option>
             {sites.map((site) => (
-              <option key={site.id} value={site.id}>
+              <option key={site.id} value={site.id} data-added={site.id}>
                 {site.name}
               </option>
             ))}
@@ -82,49 +76,6 @@ function StorageLocationForm({ mode, initial, sites, onCancel, onSaved }) {
           />
         )}
       </Field>
-
-      <Field label="Location type" hint="Optional — e.g. Warehouse">
-        {({ id, invalid, describedBy }) => (
-          <Input
-            id={id}
-            invalid={invalid}
-            describedBy={describedBy}
-            value={form.locationType}
-            onChange={update('locationType')}
-            maxLength={50}
-          />
-        )}
-      </Field>
-
-      <div className="grid gap-x-4 sm:grid-cols-2">
-        <Field label="Capacity">
-          {({ id, invalid, describedBy }) => (
-            <Input
-              id={id}
-              invalid={invalid}
-              describedBy={describedBy}
-              type="number"
-              min={0}
-              step="any"
-              value={form.capacity}
-              onChange={update('capacity')}
-            />
-          )}
-        </Field>
-
-        <Field label="Capacity unit" hint="Free text, e.g. Pieces.">
-          {({ id, invalid, describedBy }) => (
-            <Input
-              id={id}
-              invalid={invalid}
-              describedBy={describedBy}
-              value={form.capacityUom}
-              onChange={update('capacityUom')}
-              maxLength={32}
-            />
-          )}
-        </Field>
-      </div>
 
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="secondary" onClick={onCancel}>
@@ -174,8 +125,7 @@ export default function StorageLocationsPage() {
 
   useEffect(() => {
     if (!isAdmin) return;
-    sitesApi
-      .list({ limit: 100 })
+    listAll(sitesApi.list)
       .then((response) => setSites(response.data))
       .catch(() => setSites([]));
   }, [isAdmin]);
@@ -209,13 +159,7 @@ export default function StorageLocationsPage() {
 
   const columns = [
     { key: 'locationName', label: 'Name' },
-    { key: 'locationType', label: 'Type', render: (l) => l.locationType ?? '—' },
     { key: 'siteId', label: 'Site', render: (l) => siteNames[l.siteId] ?? '—' },
-    {
-      key: 'capacity',
-      label: 'Capacity',
-      render: (l) => (l.capacity == null ? '—' : `${l.capacity.toLocaleString()} ${l.capacityUom ?? ''}`.trim()),
-    },
     { key: 'status', label: 'Status', render: (l) => <StatusBadge status={l.status} /> },
     {
       key: 'actions',
@@ -300,7 +244,7 @@ export default function StorageLocationsPage() {
           >
             <option value="">All sites</option>
             {sites.map((site) => (
-              <option key={site.id} value={site.id}>
+              <option key={site.id} value={site.id} data-added={site.id}>
                 {site.name}
               </option>
             ))}

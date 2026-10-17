@@ -1,3 +1,11 @@
+function withStableOrder(order) {
+  if (!Array.isArray(order) || order.length === 0) return order;
+  if (order.some((entry) => Array.isArray(entry) && entry.length === 2 && entry[0] === 'id')) return order;
+  const last = order[order.length - 1];
+  const direction = Array.isArray(last) && /^(ASC|DESC)$/i.test(String(last[last.length - 1])) ? String(last[last.length - 1]).toUpperCase() : 'ASC';
+  return [...order, ['id', direction]];
+}
+
 function createTenantScopedRepository(model) {
   function requireTenantId(tenantId) {
     if (!tenantId) {
@@ -15,7 +23,7 @@ function createTenantScopedRepository(model) {
       model.findAll({ ...options, where: scopedWhere(tenantId, options.where) }),
 
     findAndCountAll: (tenantId, options = {}) =>
-      model.findAndCountAll({ ...options, where: scopedWhere(tenantId, options.where) }),
+      model.findAndCountAll({ ...options, where: scopedWhere(tenantId, options.where), ...(options.order ? { order: withStableOrder(options.order) } : {}) }),
 
     findOne: (tenantId, options = {}) =>
       model.findOne({ ...options, where: scopedWhere(tenantId, options.where) }),
