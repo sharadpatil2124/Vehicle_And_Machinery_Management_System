@@ -1,0 +1,1504 @@
+====================================================================================================
+ VMMS — ISSUE DETAILS AND FIX WORKFLOW
+====================================================================================================
+ Companion file : ISSUE_TRACKER.md  (status, phases, priorities, decisions, results)
+ This file      : explanations — workflow, instructions, phases, and every issue in detail
+ Source         : full-project test run of 2026-10-24 (203 tests: 144 pass, 59 fail)
+ Issue IDs      : identical in both files and never renumbered; new issues get the next free number
+====================================================================================================
+
+CONTENTS
+  PART 1   How to use the two files
+  PART 2   The workflow, step by step
+  PART 3   How to give me instructions (exact phrases)
+  PART 4   The five phases explained
+  PART 5   Every issue in detail (ISSUE-01 ... ISSUE-29)
+  PART 6   Decisions that are not bugs (D-01 ... D-03)
+  PART 7   Testing: how every fix is checked without breaking existing features
+  PART 8   Deployment checklist
+  PART 9   Glossary
+  PART 10  Common questions
+
+
+====================================================================================================
+ PART 1 — HOW TO USE THE TWO FILES
+====================================================================================================
+
+  ISSUE_TRACKER.md  = the control panel.
+    - One table with every issue: severity, phase, order, status, result.
+    - The decisions table where your answers are recorded.
+    - The results log: one row per finished issue with its test numbers.
+    - Updated by me after every issue. Short on purpose.
+
+  ISSUE_DETAILS_AND_WORKFLOW.txt (this file) = the explanations.
+    - Read an issue's section in PART 5 before assigning it.
+    - Changes only when an issue's plan changes (noted in the tracker history).
+
+  Typical use:
+    1. Look at the tracker to see what is next.
+    2. Read that issue here (PART 5).
+    3. Give me the instruction (PART 3).
+    4. Read my report; check the tracker was updated.
+
+
+====================================================================================================
+ PART 2 — THE WORKFLOW, STEP BY STEP
+====================================================================================================
+
+  Overview (one issue goes through steps 4 to 9; then the next issue starts):
+
+    [0 Prepare] -> [1 Identify] -> [2 Prioritise] -> [3 Decide]
+         -> [4 Assign] -> [5 Plan (optional)] -> [6 Implement] -> [7 Test]
+         -> [8 Report + update tracker] -> [9 Your review + accept] -> next issue
+
+----------------------------------------------------------------------------------------------------
+ STEP 0 — PREPARE (once, before the first fix)
+----------------------------------------------------------------------------------------------------
+  0.1 Save your current work in git.
+      Your working copy has 76 modified and 12 new files that are not committed (on branch
+      "main"). If fixes are added on top of that, nobody can see or undo one fix by itself.
+      Commit this work first (or ask me: "Commit current work"). Optionally create a branch for
+      the fixes. I never commit unless you ask.
+
+  0.2 Keep the tests in the project (task T-1).
+      The 203 tests were written in a temporary session folder that can disappear. T-1 copies
+      them into server/tests/ and adds an "npm test" command. No new packages are installed
+      (Node's built-in test runner is used). Benefit: every fix is checked the same way, by me
+      or by your partner, and later work can be checked too.
+      Without T-1 I can still work, but I would have to re-create tests, which is slower.
+
+  0.3 Test database (already ready).
+      Tests run on a separate database, "vmms_unittest", built only from the repo migrations.
+      Your development database "vmms" is never touched by tests.
+      If a fix needs a migration, I apply it to vmms_unittest only and ask you before it is
+      applied to "vmms" (vmms has known drift: 3 extra old migrations and orphan tables).
+
+  0.4 Decisions.
+      Some issues need a business choice first (tracker section 6). Answer them only when that
+      issue comes up — not all at once.
+
+----------------------------------------------------------------------------------------------------
+ STEP 1 — IDENTIFY ISSUES
+----------------------------------------------------------------------------------------------------
+  How the current list was produced:
+    - 11 automated test suites: pure functions, auth & users, tenant isolation & roles,
+      sites & assets, inventory, fuel, tyres, maintenance/dashboard/branding, input fuzzing,
+      concurrency (parallel requests), client contract & build.
+    - A static check that every route calls a function that really exists.
+    - Reading each service file and checking the client screens.
+    - Every failing test was checked by hand: all 59 are real defects, not test mistakes.
+
+  New issues found later:
+    - If I discover a new problem while fixing an issue, I do NOT fix it. I add it to the
+      tracker as the next ID (ISSUE-30, ...) with status "Open" and tell you in my report.
+    - You can report one yourself: "Add issue: <what you saw>". I investigate, write it up in
+      both files, and wait.
+
+----------------------------------------------------------------------------------------------------
+ STEP 2 — PRIORITISE
+----------------------------------------------------------------------------------------------------
+  Four things decide the order:
+    1. Severity — how much damage it does (Critical > High > Medium > Low).
+    2. Reachable from the UI — can a normal user trigger it, or only an API call?
+    3. Dependencies — some fixes must come before others (example: 01 and 05 before 02).
+    4. Effort — small safe fixes first build confidence in the process.
+  Result: five phases (PART 4). You may change the order at any time:
+    "Move ISSUE-xx to phase N" or "Do ISSUE-xx next".
+
+----------------------------------------------------------------------------------------------------
+ STEP 3 — DECIDE (only for issues marked "Needs decision")
+----------------------------------------------------------------------------------------------------
+  - PART 5 lists the options with advantages and disadvantages, and my recommendation.
+  - You answer, for example: "Decision 02: option A".
+  - I record your answer in tracker section 6 and change the status to "Open".
+
+----------------------------------------------------------------------------------------------------
+ STEP 4 — ASSIGN ONE ISSUE
+----------------------------------------------------------------------------------------------------
+  - One issue per message, using a phrase from PART 3.
+  - If you assign an issue that still needs a decision, I stop and ask the question first.
+
+----------------------------------------------------------------------------------------------------
+ STEP 5 — PLAN (optional; recommended for effort M and L)
+----------------------------------------------------------------------------------------------------
+  "Plan ISSUE-xx" -> I reply with:
+    - the exact files I will change,
+    - the behaviour before and after,
+    - risks and side effects,
+    - the tests I will run or add.
+  No code changes. You answer "Go" (or adjust the plan).
+  For small (S) issues you can skip this and say "Fix ISSUE-xx" directly.
+
+----------------------------------------------------------------------------------------------------
+ STEP 6 — IMPLEMENT
+----------------------------------------------------------------------------------------------------
+  Rules I follow:
+    - Only the files needed for that issue. No unrelated clean-up, renaming or reformatting.
+    - Same style as the surrounding code.
+    - A new migration only if the issue's plan says so, after checking the next free number.
+    - Client (frontend) changes only if the issue's plan lists them.
+    - If the fix turns out bigger or riskier than described, I stop and tell you before going
+      further.
+
+----------------------------------------------------------------------------------------------------
+ STEP 7 — TEST (details in PART 7)
+----------------------------------------------------------------------------------------------------
+  T1 the issue's own tests pass (the baseline failures mapped to it in tracker section 8,
+     plus any new test written for it)
+  T2 full regression on a freshly rebuilt test database: every test that passed before still
+     passes, and the failure count drops by exactly this issue's tests
+  T3 client build (if client code changed) and the wiring check
+  T4 migration up / down / up (if a migration was added)
+  T5 a short manual click-through for you (if the issue is reachable from the UI)
+  If anything that passed before now fails, the fix is not finished. I correct it or undo it
+  before reporting. A half-finished fix is never left in place.
+
+----------------------------------------------------------------------------------------------------
+ STEP 8 — REPORT AND UPDATE THE TRACKER
+----------------------------------------------------------------------------------------------------
+  My report always contains:
+    - what changed (files) and the behaviour before -> after,
+    - test numbers, e.g. "pass 147 / fail 56 — the 3 tests for this issue now pass,
+      no regressions",
+    - manual steps for you to try (if any),
+    - anything new I noticed (added to the tracker as a new issue, not fixed).
+  In the tracker I update: the status (-> "Fixed – verified"), the Result column, section 1
+  (current status), and a new row in the results log (section 9).
+
+----------------------------------------------------------------------------------------------------
+ STEP 9 — YOUR REVIEW AND ACCEPTANCE
+----------------------------------------------------------------------------------------------------
+  - Check the change: look at the diff in VS Code's Source Control panel, and/or try the
+    manual steps.
+  - Then one of:
+      "Accept ISSUE-xx"            -> status becomes "Closed"
+      "Change ISSUE-xx: <what>"    -> I adjust and re-test
+      "Revert ISSUE-xx"            -> I undo exactly that issue's changes and re-test
+  - Optional: "Commit ISSUE-xx" -> one git commit containing only that issue's files.
+  Then assign the next issue.
+
+
+====================================================================================================
+ PART 3 — HOW TO GIVE ME INSTRUCTIONS (EXACT PHRASES)
+====================================================================================================
+
+  Phrase                                  What I do                                   What I don't do
+  --------------------------------------  ------------------------------------------  ----------------
+  Commit current work                     One git commit of the work already in the   No code changes
+                                          working copy (before fixes start)
+  Do T-1                                  Copy the test suites into server/tests/,    No app code
+                                          add "npm test", run them once, report
+  Explain ISSUE-xx                        Explain the issue in more depth / answer    No changes
+                                          your questions
+  Decision xx: <option>                   Record your choice in the tracker           No changes
+  Plan ISSUE-xx                           Exact plan: files, behaviour, risks, tests  No changes
+  Fix ISSUE-xx                            Implement the recommended solution, test    Nothing outside
+                                          (T1–T5), update tracker, report             that issue
+  Fix ISSUE-xx with option <X>            Same, using the alternative you chose
+  Fix ISSUE-09a  (sub-item)               Only that sub-item
+  Accept ISSUE-xx                         Status -> Closed
+  Change ISSUE-xx: <what>                 Adjust the fix, re-test, report
+  Revert ISSUE-xx                         Undo that issue's changes, re-test
+  Commit ISSUE-xx                         Git commit with only that issue's files
+  Defer ISSUE-xx / Won't fix ISSUE-xx     Record status and your reason
+  Add issue: <description>                Investigate, add to both files              No fix
+  Status                                  Summary of the tracker: done / next / open  No changes
+
+  Tips that keep the workload low:
+    - One issue per message. If two issues must go together, I will say so in the plan.
+    - For S issues, "Fix" directly. For M/L issues, "Plan" first.
+    - Use the ID exactly as in the tracker (e.g. ISSUE-09b, D-01).
+    - If my report looks fine, "Accept ISSUE-xx" is enough. You don't need to repeat details.
+
+  Example of one complete cycle:
+    You : Fix ISSUE-03
+    Me  : (changes 3 service files, runs tests) "ISSUE-03 fixed. The 7 report routes now
+          return 200. Tests: pass 147 / fail 56, the 3 tests for ISSUE-03 pass, no regressions.
+          Tracker updated. Manual check: none needed (not used by the UI)."
+    You : Accept ISSUE-03
+    Me  : "ISSUE-03 closed. Next in Phase 1: ISSUE-29."
+
+
+====================================================================================================
+ PART 4 — THE FIVE PHASES EXPLAINED
+====================================================================================================
+
+----------------------------------------------------------------------------------------------------
+ PHASE 1 — Quick, isolated fixes
+----------------------------------------------------------------------------------------------------
+  Issues (order): 03, 29, 25, 14, 23, 09a, 09b, 09c, 09d, 09e
+  Goal          : remove server crashes (500 errors) and dead code without changing any business
+                  rule.
+  Why first     : small, low-risk changes. They clear 21 of the 59 failing tests, and test the
+                  workflow itself on easy cases.
+  Advantages    : quick visible progress; automation tests stop reporting crashes; no
+                  migrations, so no database risk.
+  Disadvantages : does not touch the most serious problems (Phase 2), so stock data stays at
+                  risk a little longer.
+  Risk          : low. 09b and 09c change shared validation code, so the full regression run
+                  matters there.
+  Done when     : all Phase 1 issues are Closed; the fuzz suite shows 0 crashes.
+
+----------------------------------------------------------------------------------------------------
+ PHASE 2 — Stock integrity
+----------------------------------------------------------------------------------------------------
+  Issues (order): 01, 05, 02 (+22), 04
+  Goal          : stock quantities and values can never be posted twice or corrupted, and
+                  several users can work at the same time.
+  Why this order: today the numbering failures in ISSUE-02 accidentally stop some duplicate
+                  postings (the second request crashes before posting). If 02 were fixed first,
+                  the duplicate-posting holes in 01 and 05 would become easier to hit. So the
+                  holes are closed first (01, 05), then numbering is fixed (02), then transfers
+                  (04).
+  Advantages    : removes the only Critical issues; stock reports become trustworthy.
+  Disadvantages : 02 is the largest change (17 numbering spots plus a migration); it needs your
+                  decision on number gaps.
+  Risk          : medium. Mitigated by concurrency tests and a migration up/down test.
+  Done when     : the concurrency suite passes completely.
+
+----------------------------------------------------------------------------------------------------
+ PHASE 3 — Data-integrity guards
+----------------------------------------------------------------------------------------------------
+  Issues (order): 08, 07, 16, 10, 15b, 18, 19, 20, 21, 28
+  Goal          : stop actions that leave data in a contradictory state (archiving things still
+                  in use, changing units under stock, double-fitted tyres, ...).
+  Why here      : each is a small guard (a check that refuses a bad action). 07 needs your
+                  decision on what blocks site archiving.
+  Advantages    : prevents new bad data; each fix is easy to test in isolation.
+  Disadvantages : users get new "you can't do that because ..." messages where they used to
+                  succeed. That's intended, but worth telling users.
+  Risk          : low to medium. Existing bad data is not changed. SQL checks are provided to
+                  find it.
+  Done when     : all Phase 3 issues are Closed.
+
+----------------------------------------------------------------------------------------------------
+ PHASE 4 — Session and client
+----------------------------------------------------------------------------------------------------
+  Issues (order): 13, 11, 24
+  Goal          : the browser always knows the user's current site; logout and password resets
+                  really end old sessions; uploads are checked by their real content.
+  Advantages    : security hardening; fewer confusing errors for reassigned supervisors.
+  Disadvantages : 11 needs a migration and changes logout behaviour (all devices).
+  Risk          : medium for 11 (login flow); low for 13 and 24.
+
+----------------------------------------------------------------------------------------------------
+ PHASE 5 — Business-rule decisions
+----------------------------------------------------------------------------------------------------
+  Issues        : 06, 15a, 17, 26, 27, 12, D-01, D-02, D-03
+  Goal          : rules where the "right" behaviour is a business choice.
+  How           : answer the decision (tracker section 6), then assign the issue. Some may end
+                  as "Won't fix" if the current behaviour is what you want. Their tests are then
+                  updated to match your decision.
+
+
+====================================================================================================
+ PART 5 — EVERY ISSUE IN DETAIL
+====================================================================================================
+ Every issue uses the same layout:
+   Header facts  : severity, phase, modules, reachable from the UI, dependencies, baseline tests,
+                   files likely to change
+   WHAT HAPPENS  : the observed problem
+   CAUSE         : why it happens (file:line)
+   IMPACT        : what is wrong in the app today because of it
+   RECOMMENDED SOLUTION
+   ALTERNATIVES  : other options, each with advantages / disadvantages
+   ADVANTAGES / DISADVANTAGES of the recommended fix
+   SIDE EFFECTS  : what changes for users or developers after the fix
+   DECISION      : what you must choose (if anything)
+   DATA CHECK    : SQL to find bad data that already exists (where relevant)
+   TESTING       : how the fix is verified
+ File paths are relative to the project folder.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-01 — Receiving a purchase or stock transfer twice adds the stock twice
+----------------------------------------------------------------------------------------------------
+  Severity: Critical   Phase: 2 (1st)   Effort: M
+  Modules: Inventory - Purchases, Stock transfers, Stock balances, Inventory reports,
+           Dashboard (purchase totals)
+  Reachable from the UI: yes, via two users, two browser tabs, or a network retry.
+    (A single double-click is already blocked: the Receive button disables itself.)
+  Depends on: nothing. Must be done before ISSUE-02.
+  Baseline tests: 1 failing (transfer received 4 times). +1 test to add: purchase received
+    3 times when the item already has stock (today that case looks safe by accident).
+  Files likely to change: server/src/services/purchase.service.js,
+                          server/src/services/stockTransfer.service.js
+
+  WHAT HAPPENS
+    - 3 simultaneous "receive" requests on a 10-unit purchase added 30 units.
+    - 4 simultaneous receives of a 5-unit transfer moved 20 units out of the source site.
+
+  CAUSE
+    The "is it still draft / in transit?" check runs before the database transaction starts,
+    and the purchase/transfer row is not locked. Every request passes the check, then every
+    request posts stock.
+      purchase.service.js:277      status check (the transaction starts at line 293)
+      stockTransfer.service.js:240 same pattern
+    (When the item has no stock row yet, the duplicates crash with a deadlock instead. That
+    explains why some runs looked safe.)
+
+  IMPACT
+    Stock on hand, stock value and average cost too high. The stock register, purchase report
+    and dashboard purchase totals are wrong from then on. Transfers drain the source site.
+
+  RECOMMENDED SOLUTION — lock and re-check inside the transaction
+    1. Inside the transaction, read the purchase again with a row lock (SELECT ... FOR UPDATE).
+       If it is no longer "draft", return the existing 409 "already received" message.
+       (Fuel collections already work this way: fuelCollection.service.js:266.)
+    2. Read the purchase lines after the lock, inside the same transaction.
+    3. Add the same lock and re-check to purchase editing, so edit and receive can't overlap.
+    4. Same for stock transfer receive (lock, check "in_transit", then load the lines).
+
+  ALTERNATIVES
+    B. Atomic status switch: UPDATE ... SET status='received' WHERE id=? AND status='draft',
+       and continue only if 1 row changed.
+       + no waiting on a lock
+       - stock is posted after the status is already flipped, so the logic needs care;
+         slightly less obvious to read
+    C. Client-side only (disable the button harder).
+       + trivial
+       - does not stop two users, two tabs, retries or API calls. Not a real fix.
+
+  ADVANTAGES
+    Closes the hole completely; small change; reuses a pattern already in the code.
+  DISADVANTAGES
+    A second simultaneous receive waits about a second for the first to finish (it then gets a
+    clean 409).
+  SIDE EFFECTS
+    None visible in normal use. No API, UI or data-format change.
+  DECISION
+    None.
+  DATA CHECK (rows returned = posted more than once)
+    SELECT tenant_id, reference_id, COUNT(*) FROM inventory_transactions
+     WHERE transaction_type='PURCHASE_RECEIPT' AND reference_type='PURCHASE_ITEM'
+     GROUP BY tenant_id, reference_id HAVING COUNT(*) > 1;
+    SELECT tenant_id, reference_id, COUNT(*) FROM inventory_transactions
+     WHERE transaction_type='TRANSFER_OUT' AND reference_type='STOCK_TRANSFER_ITEM'
+     GROUP BY tenant_id, reference_id HAVING COUNT(*) > 1;
+  TESTING
+    Parallel receive tests (purchase with existing stock: exactly +10; transfer: exactly 5
+    moved, one 200 and the rest 409); full inventory suite; full regression.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-02 — Records created at the same time fail with deadlocks (auto-numbering)
+----------------------------------------------------------------------------------------------------
+  Severity: Critical   Phase: 2 (3rd)   Effort: L   Status: needs decision
+  Modules: every numbered record —
+    vehicles (VEH-), machinery (MCH-), item categories (CAT-), units (UOM-), items (ITM-),
+    suppliers (SUP-), storage locations (LOC-), purchases (PO-), asset issues (ISS-),
+    reversals (REV-), stock adjustments (ADJ-), transfers (TRF-), every stock movement (TXN-),
+    fuel stations (FST-), fuel collections (FC-), tyre types (TT-), tyre purchases (TP-)
+  Reachable from the UI: yes, any two users saving the same kind of record at the same time.
+  Depends on: ISSUE-01 and ISSUE-05 first. Also fixes ISSUE-22.
+  Baseline tests: 4 failing (parallel vehicles, items, issues of different items, last units)
+  Files likely to change: a new migration (next free number was 0067 — re-checked before
+    creating), server/src/services/codeGenerator.js, and the number generator in each of the 17
+    services listed above.
+
+  WHAT HAPPENS
+    - 8 simultaneous vehicle creates: 1 succeeded, 6 "Deadlock found" (500), 1 "already in use".
+    - Even 2 simultaneous vehicle creates always fail one.
+    - 6 simultaneous parts issues for DIFFERENT items: only 1 succeeded.
+
+  CAUSE
+    Each new number is "highest existing number + 1", read inside the business transaction
+    (codeGenerator.js:3, vehicle.service.js:41, inventoryTransaction.service.js:24, ...).
+    - MySQL keeps showing a transaction the same snapshot, so the retry loop reads the same
+      stale "highest number" 5 times.
+    - Meanwhile the competing inserts take locks that deadlock each other.
+    - Every stock movement takes a tenant-wide TXN- number, so even different sites collide.
+
+  IMPACT
+    Random "Internal server error" or "That value is already in use" when two people work at
+    once. The whole save is lost and must be retried.
+
+  RECOMMENDED SOLUTION — option A: a counter table, numbers allocated outside the transaction
+    1. Migration: table tenant_sequences (tenant_id, name, value), with one row per organization
+       per prefix.
+    2. Seed the rows from today's highest NUMERIC value of each code. Numeric, not alphabetical:
+       this also fixes ISSUE-22.
+    3. One shared helper takes the next number in its own tiny statement that commits
+       immediately (INSERT ... ON DUPLICATE KEY UPDATE value = LAST_INSERT_ID(value + 1)).
+    4. Keep the formats exactly: PREFIX + 6 digits, which naturally grows to 7 after 999,999.
+    5. Remove the 5-attempt retry loops; they are no longer needed.
+
+  ALTERNATIVES
+    B. Counter row locked inside the business transaction (gap-free numbers).
+       + numbers never skip (PO-000041 always exists if PO-000042 does)
+       - all creates of that type in an organization queue behind each other
+       - every stock operation must lock the TXN counter first, or new deadlocks appear
+       - more complex and slower under load
+    C. Keep the generators, retry the whole transaction on deadlock or duplicate.
+       + smallest code change
+       - still fails under real load (retries collide again); slow
+       - does not fix the 999,999 problem; hides the cause
+
+  ADVANTAGES (option A)
+    No locks held, no deadlocks, constant speed. Fixes ISSUE-22. One helper replaces 17 copies.
+  DISADVANTAGES (option A)
+    Numbers can skip when a save fails (like database auto-increment). Largest change in the
+    list: a migration plus 17 places, so a careful test of each record type is needed.
+  SIDE EFFECTS
+    Possible gaps in numbering. Formats unchanged. No UI change.
+    Duplicate postings in 01/05 become easier to hit — which is why 01 and 05 go first.
+  DECISION
+    Are gaps in reference numbers acceptable? (Recommended: yes -> option A.)
+    If gap-free numbers are a legal or audit requirement -> option B.
+  TESTING
+    8 parallel creates of vehicles, items, purchases and asset issues (all succeed, all numbers
+    unique); seeding test on a database that already has records (the next number continues);
+    migration up/down/up; full regression.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-03 — Seven report endpoints always return 500
+----------------------------------------------------------------------------------------------------
+  Severity: High   Phase: 1 (1st)   Effort: S
+  Modules: Fuel reports, Inventory reports, Tyre reports
+  Reachable from the UI: no. The report pages use the summary endpoints. API consumers (for
+    example automation tests) get errors.
+  Baseline tests: 3 failing
+  Files likely to change: server/src/services/fuelReport.service.js,
+    server/src/services/inventoryReport.service.js, server/src/services/tyreReport.service.js
+
+  WHAT HAPPENS
+    These routes crash every time with "... is not a function":
+      GET /fuel-reports/collections/by-station   (fuelReport.controller.js:20)
+      GET /fuel-reports/collections/by-carrier   (fuelReport.controller.js:25)
+      GET /inventory-reports/purchases/by-supplier (inventoryReport.controller.js:15)
+      GET /inventory-reports/purchases/by-item   (inventoryReport.controller.js:20)
+      GET /tyres/reports/assets/tyres            (tyre.controller.js:74)
+      GET /tyres/reports/costs/by-type           (tyre.controller.js:84)
+      GET /tyres/reports/costs/by-supplier       (tyre.controller.js:89)
+
+  CAUSE
+    The controllers call service functions that were never written (git history has no
+    version of them). The summary services already calculate the same data.
+
+  IMPACT
+    No UI impact today. Automation tests and any API user get 500 errors.
+
+  RECOMMENDED SOLUTION — thin service functions that return slices of the existing summaries
+    collectionsByStation -> collectionsSummary().byStation   (same for byCarrier)
+    purchasesBySupplier  -> purchases().bySupplier            (same for byItem)
+    costsByType          -> costReport().byType               (same for bySupplier)
+    assetTyres           -> the fitments of one asset (assetType + assetId required), using
+                            the existing fitment listing
+
+  ALTERNATIVES
+    B. Delete the 7 routes, their handlers, and the unused client API functions.
+       + less code
+       - removes API endpoints that the client code already declares; if a page needs them
+         later, they must be rebuilt
+
+  ADVANTAGES
+    Tiny change; reuses tested calculations; same filters and site scoping as the summaries.
+  DISADVANTAGES
+    Slight duplication of endpoints (summary + slices).
+  SIDE EFFECTS
+    None for existing pages.
+  DECISION
+    None (option A recommended; say "with option B" to delete instead).
+  TESTING
+    Each route returns 200 with figures equal to the summary endpoint; supervisors still scoped
+    to their site; the wiring check reports 0 problems; full regression.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-04 — Stock transfers can exceed stock, get stuck in transit, and can't be cancelled
+----------------------------------------------------------------------------------------------------
+  Severity: High   Phase: 2 (4th)   Effort: M
+  Modules: Inventory - Stock transfers, Stock balances; client transfer form and detail page
+  Reachable from the UI: yes (the transfer form doesn't check available stock)
+  Baseline tests: 2 failing
+  Files likely to change: server/src/services/stockTransfer.service.js, stockTransfer.controller.js,
+    stockTransfer.routes.js, models/StockTransfer.js, a new migration (status "cancelled"),
+    client/src/api/client.js, client/src/pages/inventory/StockTransferDetailPage.jsx
+
+  WHAT HAPPENS
+    - A transfer of 50 units was accepted with only 1 on hand.
+    - Stock isn't reserved during transit, so it can still be issued at the source.
+    - At receive time: "not enough stock", and there is no cancel. The transfer stays
+      "in transit" forever.
+
+  CAUSE
+    stockTransfer.service.js:156 (create) only estimates the cost (line 176); it never checks
+    quantity. There is no cancel route, and the status list has no "cancelled".
+
+  IMPACT
+    Stuck transfers in the lists; users re-create transfers to work around them; the stock
+    picture is confusing.
+
+  RECOMMENDED SOLUTION
+    1. At dispatch, per item and source location (summing lines of the same item): require
+       on hand - quantity already in other in-transit transfers from that location
+       >= requested. Otherwise 400 with "available X, requested Y".
+    2. At receive: keep the check, with a clearer message ("stock was used after dispatch —
+       cancel this transfer or adjust stock").
+    3. New: cancel an in-transit transfer (admin only, type DELETE to confirm). Status becomes
+       "cancelled" (migration), with an audit entry. Nothing is posted to stock, because
+       nothing was posted at dispatch.
+    4. Client: a Cancel button on the transfer detail page; "cancelled" badge and filter.
+
+  ALTERNATIVES
+    B. Real reservation, using the existing unused reservedQuantity column.
+       + reserved stock can't be issued by anyone
+       - parts issues, stock counts and adjustments must all respect reservations: a
+         wider change touching several modules
+    C. Deduct stock at dispatch (OUT at dispatch, IN at receive).
+       + stock is never "double available"
+       - changes what the stock pages and register show for in-transit goods; reports need
+         rework
+
+  ADVANTAGES
+    Blocks impossible transfers at the start; gives a clean exit for stuck ones; small,
+    contained change.
+  DISADVANTAGES
+    Stock can still be issued at the source while in transit (only B prevents that). Receive
+    then fails clearly and the transfer can be cancelled.
+  SIDE EFFECTS
+    Over-stock transfers are refused at dispatch; a new status "cancelled" appears in lists and
+    the API.
+  DECISION
+    None (B or C only if you want them).
+  DATA CHECK
+    SELECT id, transfer_number, created_at FROM stock_transfers WHERE status='in_transit';
+  TESTING
+    Over-dispatch -> 400; two lines of the same item exceeding stock together -> 400; cancel works
+    and is audited; a cancelled transfer can't be received; the normal path still moves stock at
+    the oldest-first cost; migration up/down; client build.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-05 — Repeated lines over-reverse or double-adjust stock
+----------------------------------------------------------------------------------------------------
+  Severity: High   Phase: 2 (2nd)   Effort: M
+  Modules: Inventory - Issue reversals, Stock adjustments (stock counts), Stock balances
+  Reachable from the UI: stock count = yes (the form allows the same item twice);
+    reversal = API only (the UI reverses one line at a time)
+  Depends on: before ISSUE-02
+  Baseline tests: 2 failing
+  Files likely to change: server/src/services/issueReversal.service.js,
+    server/src/services/stockAdjustment.service.js
+    (optional: client/src/pages/inventory/StockAdjustmentFormPage.jsx)
+
+  WHAT HAPPENS
+    - One reversal listing the same issued line twice put back 4 units when only 2 were issued.
+    - One stock count listing the same item twice with "counted 15" left the stock at 20.
+
+  CAUSE
+    Each line is checked against quantities read BEFORE any line is posted, and those reads
+    happen outside the transaction:
+      issueReversal.service.js:69     each line checked against "remaining" separately
+      stockAdjustment.service.js:142  each line computes "counted - system" from the same start
+    Two simultaneous reversals of one line can also both pass (today the second one is stopped
+    only by the ISSUE-02 numbering crash).
+
+  IMPACT
+    Stock and value too high; the issue shows "fully reversed" while more came back than went
+    out; reports inherit the error.
+
+  RECOMMENDED SOLUTION
+    1. Reversals: refuse the same issued line twice in one request (400); inside the
+       transaction, lock the issue and its lines and re-check the remaining quantity there.
+    2. Stock counts: refuse the same item + location twice in one request (400); read the system
+       quantity inside the transaction from the locked stock row, so "counted" always becomes
+       the final stock.
+    3. Optional client: prevent adding a duplicate row in the stock-count form.
+
+  ALTERNATIVES
+    B. Merge duplicate lines automatically (add them up) instead of refusing.
+       + no error for the user
+       - for counts, two "counted 15" lines would mean 30, which is probably not what the user
+         meant; silent guessing is risky
+
+  ADVANTAGES
+    Stock counts always land exactly on the counted value; reversals can never exceed issues.
+  DISADVANTAGES
+    Users who listed an item twice get an error and must combine the lines.
+  SIDE EFFECTS
+    A count that runs at the same time as another movement now uses the up-to-date stock (this
+    is more correct, but means the "system quantity" shown may differ from the one on screen).
+  DECISION
+    None.
+  DATA CHECK
+    SELECT id, asset_issue_id, issued_quantity, reversed_quantity FROM asset_issue_items
+     WHERE reversed_quantity > issued_quantity;
+  TESTING
+    Duplicate-line reversal -> 400 with stock unchanged; duplicate-line count -> 400; normal count
+    lands on the counted value; 4 parallel full reversals -> exactly one succeeds; full regression.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-06 — Partial and excess purchase receipts
+----------------------------------------------------------------------------------------------------
+  Severity: Medium   Phase: 5   Effort: S (A) or L (B)   Status: needs decision
+  Modules: Inventory - Purchases; client purchase detail page
+  Reachable from the UI: no. The purchase screen always receives every line in full; only the
+    API's optional per-line quantities allow this.
+  Baseline tests: 2 failing
+  Files likely to change: (A) server/src/services/purchase.service.js
+                          (B) + migration, models/Purchase.js, client purchase pages
+
+  WHAT HAPPENS
+    - Receiving 4 of 10 marks the whole purchase "received"; the other 6 can never be received.
+    - Receiving 200 against an order of 2 is accepted.
+  CAUSE
+    purchase.service.js:288 has no upper limit; line 325 always sets the status to "received".
+  IMPACT
+    Through the API only: stock above what was ordered; short deliveries can't be completed.
+
+  OPTION A (recommended unless you need partial deliveries) — make the API match the UI
+    The per-line received quantity must equal the ordered quantity (or per-line quantities are
+    removed). 400 otherwise.
+    + tiny change; no new status; UI unchanged
+    - partial deliveries remain impossible (as they are today in the UI)
+  OPTION B — support partial deliveries as a feature
+    New status "partially_received"; each receipt adds to the line; never above the ordered
+    quantity; the purchase becomes "received" when all lines are complete; optional "close short"
+    action; the receive dialog shows remaining quantities.
+    + matches real supplier behaviour
+    - migration, new status in lists and reports, client work; larger testing effort
+  SIDE EFFECTS
+    A: none for users. B: a new status value appears everywhere purchases are listed.
+  DECISION
+    Do you need partial purchase receipts?
+  TESTING
+    Over-receipt -> 400; full receipt unchanged; (B) two partial receipts complete the purchase.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-07 — Sites, items and storage locations still in use can be archived
+----------------------------------------------------------------------------------------------------
+  Severity: High   Phase: 3 (2nd)   Effort: M   Status: needs decision
+  Modules: Sites, Items, Storage locations, plus what depends on them (assets, supervisors,
+    stock, fuel stock, tyre stock)
+  Reachable from the UI: yes
+  Depends on: ISSUE-08 first (they share one test)
+  Baseline tests: 2 failing (+ the archive half of the shared location test)
+  Files likely to change: server/src/services/site.service.js, item.service.js,
+    storageLocation.service.js
+
+  WHAT HAPPENS
+    - A site with active vehicles, machinery and a supervisor was archived. The supervisor can
+      still log in, but can no longer create vehicles, machinery, purchases or fuel collections
+      ("site is archived").
+    - An item with 3 units on hand was archived. The stock still counts in value and reports, but
+      can't be issued, counted or transferred (every operation refuses archived items).
+    - A storage location holding stock was archived, with the same stranding.
+
+  CAUSE
+    The archive helper supports a "dependency check", but these three never pass one
+    (site.service.js:128, item.service.js:160, storageLocation.service.js:140). Item categories
+    and units already have working checks.
+
+  IMPACT
+    Stranded stock; assets attached to an archived site; supervisors at a site that "doesn't
+    exist".
+
+  RECOMMENDED SOLUTION — refuse to archive while something still depends on it (409, with a list)
+    Site     : active vehicles/machinery at the site, active supervisors assigned, stock > 0,
+               site fuel stock > 0, tyre stock > 0, in-transit transfers or fuel collections,
+               open maintenance
+    Item     : stock > 0 anywhere, in-transit transfers, draft purchase lines
+    Location : stock > 0 at the location, in-transit transfers, draft purchase lines
+    Example message: "This site still has 3 vehicles, 1 supervisor and stock of 2 items —
+                      move or clear them first."
+
+  ALTERNATIVES
+    B. Archive anyway and automatically detach dependents (unassign assets and supervisors).
+       + one click for the admin
+       - silently changes many records; stock still stranded; hard to undo
+    C. Warn but allow.
+       + flexible
+       - the same bad states remain possible
+
+  ADVANTAGES
+    No new stranded data; clear guidance to the admin.
+  DISADVANTAGES
+    Admins must clean up before archiving (more clicks).
+  SIDE EFFECTS
+    Archiving that works today can start returning "move these first". Records already archived
+    in a bad state are not changed (use the data check).
+  DECISION
+    Confirm the list of what blocks a site (recommended: everything above).
+  DATA CHECK
+    -- archived sites still holding active assets or supervisors
+    SELECT s.id, s.name,
+      (SELECT COUNT(*) FROM vehicles v WHERE v.current_site_id=s.id AND v.status='active') vehicles,
+      (SELECT COUNT(*) FROM machinery m WHERE m.current_site_id=s.id AND m.status='active') machines,
+      (SELECT COUNT(*) FROM users u WHERE u.site_id=s.id AND u.status='active') supervisors
+    FROM sites s WHERE s.status='archived';
+    -- stock on archived items or locations
+    SELECT b.* FROM stock_balances b JOIN items i ON i.id=b.item_id
+      JOIN storage_locations l ON l.id=b.storage_location_id
+     WHERE b.quantity_on_hand > 0 AND (i.status='archived' OR l.status='archived');
+  TESTING
+    Each blocked case -> 409 with counts; archiving empty records still works; restore works;
+    full regression.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-08 — An item's unit, or a location's site, can change while it holds stock
+----------------------------------------------------------------------------------------------------
+  Severity: High   Phase: 3 (1st)   Effort: S
+  Modules: Items, Storage locations, Stock balances, inventory reports
+  Reachable from the UI: yes (both edit forms allow the change)
+  Baseline tests: 2 failing
+  Files likely to change: server/src/services/item.service.js, storageLocation.service.js
+    (optional: client ItemsPage.jsx, StorageLocationsPage.jsx)
+
+  WHAT HAPPENS
+    - Changing an item's base unit from "Pcs" to "Litre" silently turned 10 pieces into 10
+      litres, and the whole history is now read in the wrong unit.
+    - Moving a storage location with stock to another site left its stock rows on the OLD site.
+      At the new site it reads as zero and can't be issued, while the old site still counts it.
+  CAUSE
+    item.service.js:142 and storageLocation.service.js:107 only check that the new unit/site is
+    active.
+  IMPACT
+    Wrong quantities, stock that can't be used, reports that disagree with each other.
+
+  RECOMMENDED SOLUTION
+    - Items: refuse a base-unit change (409) once the item has any stock movement. Other fields
+      stay editable.
+    - Locations: refuse a site change (409) once the location has any stock movement or stock
+      row. To use the other site, create a new location there.
+    - Optional client: disable these two fields in the edit forms when locked, with a hint.
+
+  ALTERNATIVES
+    B. Allow the change and convert or move the stock automatically.
+       + no restriction for the admin
+       - unit conversion needs a conversion factor (removed in migration 0037); moving stock
+         between sites must create transfer records; complex and error-prone
+
+  ADVANTAGES
+    Protects all stock history; very small change.
+  DISADVANTAGES
+    A wrongly chosen unit or site can't be corrected after use. A stock count or new
+    item/location is needed instead.
+  SIDE EFFECTS
+    Edits that work today on used items/locations get a 409.
+  DECISION
+    None.
+  DATA CHECK
+    SELECT b.id, b.site_id balance_site, l.site_id location_site
+      FROM stock_balances b JOIN storage_locations l ON l.id=b.storage_location_id
+     WHERE b.site_id <> l.site_id;
+  TESTING
+    Both changes -> 409 once stock exists; the same changes on unused records still work.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-09 — Bad input crashes the server (500) instead of a clear 400  (five sub-items)
+----------------------------------------------------------------------------------------------------
+  Severity: High   Phase: 1 (09a ... 09e)   Effort: M in total, S each
+  Modules: most modules; the shared validation code
+  Reachable from the UI: partly (long file names and very large numbers can be typed;
+    the rest comes from the API or automation tools)
+  Baseline tests: 14 failing in total (see the tracker map)
+  Files likely to change: server/src/middleware/errorHandler.js, server/src/utils/validation.js,
+    server/src/utils/queryOptions.js, server/src/services/fuelCommon.js, and the services listed
+    in each sub-item
+
+  General effect today
+    About 40 inputs crash the server. Outside production, the raw database error text is shown
+    to the user (errorHandler.js:60). Automation tests treat every 500 as a failure.
+
+  Step 0 for all sub-items (recommended, part of 09a):
+    In errorHandler.js, translate the database's "out of range", "data too long" and "incorrect
+    date/value" errors into a 400 with a plain message. This safety net alone removes every 500
+    listed below. The sub-items then add clear, specific messages.
+      + immediate protection everywhere, even in places not yet found
+      - the safety-net message is generic ("A value is too large or invalid") — hence 09a-09e
+
+  09a — Text in id filters (example: /stock/balances?siteId=abc -> "Unknown column 'NaN'")
+    Where : 11 list endpoints — stock balances/transactions, storage locations, items, fuel
+            transactions, site fuel stock + ledger, fuel collections, maintenance, tyre fitments
+    Cause : Number(query.x) is used without checking
+            (stock.service.js:49, item.service.js:82, fuelStock.service.js:20,
+            maintenance.service.js:158, tyreFitment.service.js:222, ...)
+    Fix   : one shared helper "optional id filter": empty -> ignored; otherwise must be a whole
+            number >= 1, else 400 "Site must be a valid id".
+    Side effects: none for valid filters.
+    Tests : 4
+
+  09b — Impossible dates (example: 2026-02-30)
+    Where : 7 write fields (purchase / stock count / transfer / tyre purchase dates, compliance
+            start and end, fuel date) and 5 date filters
+    Cause : JavaScript turns 30 Feb into 2 March, so the check passes; MySQL then rejects it. The
+            same weak check is copied 5 times (fuelCommon.js:29, complianceDocument.service.js:50,
+            purchase.service.js:24, stockAdjustment.service.js:31, stockTransfer.service.js:25).
+    Fix   : one strict shared date check (the year, month and day must stay the same after
+            parsing); replace the 5 copies; keep the existing messages.
+    Side effects: none for real dates. Note: ISSUE-20 builds on this shared check.
+    Tests : 4 (+ 1 shared with 09c)
+
+  09c — Numbers too large for the database column
+    Where : 15 fields — vehicle year, KM, intervals; machinery hours; item stock levels; purchase
+            quantity, price, tax; transfer quantity; fuel litres; fuel collection cans
+    Cause : requireNumber (validation.js:40) has no maximum.
+    Column limits: KM/hours DECIMAL(12,2); stock quantities DECIMAL(14,3); money DECIMAL(14,2);
+            tax DECIMAL(5,2); fuel litres DECIMAL(12,3); litres per can DECIMAL(10,3);
+            year SMALLINT UNSIGNED.
+    Fix   : add a "max" option to the number validators, with business limits — KM/hours <=
+            9,999,999; quantities <= 10,000,000; prices <= 100,000,000; tax <= 100%; year per
+            ISSUE-19.
+    Side effects: absurd values are refused with a clear message (they could never be saved
+            anyway).
+    Decision: you may adjust the limits (tell me if a fleet can exceed them).
+    Tests : 3 (+ 1 shared with 09b)
+
+  09d — Invalid parts-issue date/time
+    Where : POST /asset-issues
+    Cause : assetIssue.service.js:80 uses new Date(...) without checking the result.
+    Fix   : validate like maintenance does (valid timestamp, not in the future beyond a few
+            minutes).
+    Side effects: future-dated issues are refused (today they are accepted).
+    Tests : 1
+
+  09e — Upload file name longer than 255 characters
+    Where : vehicle and machinery document uploads
+    Cause : the database column for the original file name holds 255 characters.
+    Fix   : shorten the stored original name to 255 characters, keeping the extension.
+            (Alternative: refuse with 400 — less friendly.)
+    Side effects: very long names are shortened in lists and downloads.
+    Tests : 1
+
+  ADVANTAGES (whole issue)
+    No more crashes; clear messages; automation tests stop failing on input checks.
+  DISADVANTAGES
+    Touches shared validation, so a full regression run is essential after each sub-item.
+  TESTING
+    The fuzz suite must show 0 crashes; module suites; full regression after each sub-item.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-10 — Tyre position and serial-number conflicts
+----------------------------------------------------------------------------------------------------
+  Severity: Medium   Phase: 3 (4th)   Effort: S
+  Modules: Tyres - fitting, tyre stock, tyre reports; client tyre fitting form
+  Reachable from the UI: yes
+  Baseline tests: 3 failing
+  Files likely to change: server/src/services/tyreFitment.service.js
+    (optional: client/src/pages/tyres/TyreFitFormPage.jsx)
+
+  WHAT HAPPENS
+    - A second tyre can be fitted at a position that already has one.
+    - The same position can appear twice in one fitting.
+    - One serial number can be on two vehicles at once.
+  CAUSE
+    fitTyres (tyreFitment.service.js:124) only checks that the meter reading isn't lower than
+    the position's history (line 56). It never looks for a tyre that is currently fitted there.
+    Known since the tyre redesign (migration 0056).
+  IMPACT
+    Wrong tyre counts per asset, phantom tyres in the asset tyre report, tyre cost per asset
+    counted twice.
+
+  RECOMMENDED SOLUTION (inside the existing transaction, with the asset locked)
+    1. Duplicate positions in one request (case-insensitive, trimmed) -> 400.
+    2. Position already has a tyre fitted -> 409 "Front Left already has a tyre fitted on
+       12 Oct — remove it first".
+    3. A serial number currently fitted anywhere in the organization -> 409.
+    4. Optional: the same checks in the form, for instant feedback.
+
+  ALTERNATIVES
+    B. Automatically remove the old tyre when a new one is fitted at the same position.
+       + one step for the user
+       - removal needs a reason, an outcome (scrapped/returned) and a reading; guessing them
+         gives wrong stock and history
+
+  ADVANTAGES
+    Accurate tyre history and costs.
+  DISADVANTAGES
+    Users must remove the old tyre before fitting the new one.
+  SIDE EFFECTS
+    The "fit new first, remove old later" habit is no longer possible.
+  DECISION
+    None.
+  DATA CHECK
+    SELECT tenant_id, asset_type, asset_id, position, COUNT(*) FROM tyre_fitments
+     WHERE removed_at IS NULL GROUP BY tenant_id, asset_type, asset_id, position
+    HAVING COUNT(*) > 1;
+  TESTING
+    The three conflict cases are refused; fitting after removal still works; stock math is
+    unchanged.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-11 — Login tokens stay valid after logout or a password reset
+----------------------------------------------------------------------------------------------------
+  Severity: Medium (security)   Phase: 4 (2nd)   Effort: M   Status: needs decision
+  Modules: Authentication (every protected page and API)
+  Reachable from the UI: yes
+  Baseline tests: 2 failing
+  Files likely to change: a new migration (users.token_version), models/User.js,
+    server/src/services/auth.service.js, middleware/authenticate.js, passwordReset.service.js,
+    user.service.js
+
+  WHAT HAPPENS
+    After "Log out", and even after a password reset, the old login token keeps working for up
+    to 24 hours. A copied token, or a session open on another device, keeps access.
+  CAUSE
+    authenticate.js only checks the signature, the expiry, and that the user and organization
+    are active. Nothing links a token to the password or the session. (Deactivating a user
+    already blocks access, and stays as is.)
+  IMPACT
+    Security: resetting a password does not throw out an attacker who already has a token.
+
+  RECOMMENDED SOLUTION — option A: token version
+    1. Migration: users.token_version (number, default 0).
+    2. Put the version in each new token (auth.service.js:22); reject tokens with an old
+       version.
+    3. Increase the version on password reset, supervisor email change, and logout.
+    4. Old tokens without a version count as version 0, so nobody is logged out at deploy time.
+
+  ALTERNATIVES
+    B. Revocation list of individual tokens (logout ends only this device).
+       + other devices stay logged in
+       - a new table that grows; a lookup on every request; clean-up needed
+    C. Much shorter tokens (e.g. 30 min) plus a refresh token.
+       + industry standard
+       - a large change to login and the client; more moving parts
+
+  ADVANTAGES (A)
+    Simple and reliable; no extra query (the user row is already loaded on each request).
+  DISADVANTAGES (A)
+    Logout signs the user out on all devices.
+  SIDE EFFECTS
+    Other open sessions see "session expired" after a logout or password reset. The client
+    already handles this by returning to the login page.
+  DECISION
+    Is "logout = all devices" acceptable? (Recommended: yes -> A.)
+  TESTING
+    The old token -> 401 after logout and after a reset; a fresh login works; a deactivated user
+    is still blocked; migration up/down.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-12 — Supervisors added at signup have no site
+----------------------------------------------------------------------------------------------------
+  Severity: Low (works as designed)   Phase: 5   Effort: S   Status: needs decision
+  Modules: Signup, Users; client SignupPage
+  Baseline tests: 1 failing (it expects "not locked out"; whichever option you choose, the test
+    is updated to match it)
+  Files likely to change: (a) client/src/pages/SignupPage.jsx, and optionally auth.service.js
+
+  WHAT HAPPENS
+    Supervisors entered on the signup form are created without a site, so every page shows
+    "No site has been assigned" (403) until the admin edits them. The signup page warns about
+    this (SignupPage.jsx:215), but the supervisor sees error banners rather than a friendly
+    screen.
+  CAUSE
+    No sites exist yet at signup (auth.service.js:100).
+
+  OPTIONS
+    a. Remove the supervisor section from signup; add supervisors later from Users (recommended)
+       + no locked-out accounts; signup is simpler
+       - the admin can't invite supervisors in the first step
+    b. Keep as is (Won't fix)
+       + no work
+       - confusing first experience for those supervisors
+    c. Keep it, and show a friendly "waiting for your site" page instead of error banners
+       + keeps the feature
+       - client work for a rare situation
+  SIDE EFFECTS
+    (a) none for existing users; site-less supervisors are assigned by the admin as today.
+  TESTING
+    Depends on the option; signup still works with and without supervisors.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-13 — The client keeps a supervisor's old site after reassignment
+----------------------------------------------------------------------------------------------------
+  Severity: Medium   Phase: 4 (1st)   Effort: S
+  Modules: Auth (/auth/me); client AuthContext and the 7 forms that read user.siteId
+    (vehicle, machinery, asset issue, purchase, stock count, fuel collection, tyre fitting),
+    plus the dashboard site name
+  Reachable from the UI: yes
+  Baseline tests: 1 failing
+  Files likely to change: server/src/controllers/auth.controller.js,
+    client/src/context/AuthContext.jsx (maybe client/src/api/session.js)
+
+  WHAT HAPPENS
+    When an admin moves a supervisor to another site, the server switches immediately, but the
+    browser keeps the old site until the supervisor logs out and in. Meanwhile the forms list
+    the old site's storage locations. The server rejects the save ("location does not belong to
+    this site"), or the record goes to the new site while the screen showed the old one.
+  CAUSE
+    /auth/me (auth.controller.js:23) doesn't return the site, and the client never calls it to
+    refresh.
+
+  RECOMMENDED SOLUTION
+    1. /auth/me returns the full public user (including siteId and status) and the organization.
+    2. The client calls /auth/me when the app opens and when the browser tab becomes active
+       again, and updates the stored session if the site changed.
+
+  ALTERNATIVES
+    B. Make every form ask the server for the site instead of the session.
+       + always current
+       - changes 7 forms
+    C. Just tell supervisors to log in again after a move.
+       + no work
+       - easy to forget; errors in the meantime
+
+  ADVANTAGES
+    Small change; fixes all 7 forms at once.
+  DISADVANTAGES
+    One small extra request on load and when the tab regains focus.
+  SIDE EFFECTS
+    None on server rules.
+  TESTING
+    /auth/me includes siteId; after reassignment and switching back to the tab, the forms show
+    the new site; client build.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-14 — Non-English file names are garbled on upload
+----------------------------------------------------------------------------------------------------
+  Severity: Medium   Phase: 1 (4th)   Effort: S
+  Modules: Vehicle and machinery documents (list and download)
+  Reachable from the UI: yes
+  Baseline tests: 1 failing
+  Files likely to change: server/src/middleware/upload.js
+
+  WHAT HAPPENS
+    "बीमा पॉलिसी.pdf" was stored as "à¤¬à¥à¤®à¤¾ ...". Accented names are garbled too, and
+    downloads use the garbled name.
+  CAUSE
+    Browsers send file names as UTF-8; the upload library (multer 2.3.0) reads them as Latin-1
+    by default (setting "defParamCharset", upload.js:17 and :23).
+
+  RECOMMENDED SOLUTION
+    Set defParamCharset: 'utf8' on the three upload configurations in upload.js.
+    Optional, separate: a reviewed one-off script to repair names already stored garbled.
+
+  ADVANTAGES
+    One-line fix per upload type; correct names from now on.
+  DISADVANTAGES
+    Files uploaded before the fix keep garbled names unless the repair script is run.
+  SIDE EFFECTS
+    None for plain English names.
+  TESTING
+    Upload a Hindi name and an accented name: both stored and downloaded correctly; English
+    names unchanged.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-15 — Fuel meter checks  (two parts)
+----------------------------------------------------------------------------------------------------
+  Severity: Medium   Phase: 15a = 5 (needs decision), 15b = 3 (5th)   Effort: S each
+  Modules: Fuel issues, fuel efficiency, fuel reports, asset meters
+  Reachable from the UI: yes
+  Baseline tests: 15a = 1, 15b = 1
+  Files likely to change: server/src/services/fuelTransaction.service.js
+
+  15a — Odometer ignored
+    WHAT HAPPENS : a fill dated today at 10 km was accepted for a vehicle already at 50,000 km.
+    CAUSE        : the reading is only compared with other fuel entries, never with the
+                   vehicle's own meter (fuelTransaction.service.js:117).
+    IMPACT       : km per litre and cost per km are wrong for that vehicle.
+    RECOMMENDED  : for entries dated TODAY, refuse a reading below the asset's current meter.
+                   Backdated entries keep only the existing order check (the odometer may
+                   already have moved past them legitimately).
+      + catches typing mistakes in daily entry
+      - a backdated typo is still possible
+    ALTERNATIVES : refuse for all dates (blocks legitimate backdated fills) / never (today).
+    DECISION     : confirm the "today only" rule.
+
+  15b — Moving an entry's date is wrongly rejected
+    WHAT HAPPENS : editing the only fill of a vehicle from 6 days ago to yesterday (with a
+                   lower reading) failed with "cannot be lower than 800 KM, recorded on <its own
+                   old date>".
+    CAUSE        : the "earlier entry" and "later entry" lookups don't exclude the entry being
+                   edited (only the same-day lookup does) — fuelTransaction.service.js:125.
+    FIX          : add the existing "not this entry" condition to both lookups.
+      + legitimate edits work
+      - none
+    SIDE EFFECTS : none.
+
+  TESTING
+    15a: today's fill below the odometer -> 400, a backdated fill still allowed.
+    15b: the date-move edit succeeds; the order rules still hold.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-16 — Archived assets can be edited and can receive parts
+----------------------------------------------------------------------------------------------------
+  Severity: Medium   Phase: 3 (3rd)   Effort: S
+  Modules: Vehicles, Machinery, Asset issues
+  Reachable from the UI: edit = only by typing the edit URL (the page hides Edit for archived);
+    issue = API only (the issue form lists active assets)
+  Baseline tests: 2 failing
+  Files likely to change: server/src/services/vehicle.service.js, machinery.service.js,
+    assetIssue.service.js
+
+  WHAT HAPPENS
+    An archived vehicle was edited. Parts were issued to an archived vehicle, so their cost
+    lands on a retired asset. (Fuel, maintenance and tyre fitting already refuse archived
+    assets.)
+  CAUSE
+    No status check in vehicle update (vehicle.service.js:351), machinery update
+    (machinery.service.js:252), or asset issue (assetIssue.service.js:186).
+
+  RECOMMENDED SOLUTION
+    - Editing an archived vehicle or machine -> 409 "Restore it first".
+    - Issuing parts to an archived asset -> 400 (same wording style as fuel).
+    - Reversals stay allowed, so parts can still be returned from an issue made before
+      archiving.
+
+  ALTERNATIVES
+    B. Allow edits of archived assets (for corrections) but keep blocking parts issues.
+       + admins can fix details without restoring
+       - inconsistent with the UI, which hides Edit for archived assets
+
+  ADVANTAGES
+    Server matches what the UI already intends; consistent with fuel/maintenance/tyres.
+  DISADVANTAGES
+    Correcting an archived record requires Restore -> Edit -> Archive.
+  SIDE EFFECTS
+    None for active assets.
+  TESTING
+    Archived edit -> 409; archived issue -> 400; a reversal of an older issue still works;
+    restore then edit works.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-17 — Registration numbers are not normalised
+----------------------------------------------------------------------------------------------------
+  Severity: Medium   Phase: 5   Effort: M (data migration)   Status: needs decision
+  Modules: Vehicles (create, edit, search), the uniqueness triggers, and every search by
+    registration (fuel, maintenance, compliance, tyres)
+  Reachable from the UI: yes
+  Baseline tests: 1 failing
+  Files likely to change: a new migration, server/src/services/vehicle.service.js,
+    assetIdentifier.service.js, plus search helpers
+
+  WHAT HAPPENS
+    "MH 12 AB 1234" was accepted next to "MH12AB1234", so the same vehicle can exist twice.
+    Upper/lower case is already handled; spaces, dashes and dots are not.
+  CAUSE
+    vehicle.service.js:75 only trims; the database triggers compare raw text.
+
+  RECOMMENDED SOLUTION — store one canonical form
+    Upper case, without spaces/dashes/dots ("MH12AB1234"); searches normalised the same way.
+    The migration first lists values that would clash and stops if there are any; otherwise it
+    rewrites the existing values. The triggers then work unchanged.
+
+  ALTERNATIVES
+    B. Keep the stored value as typed, but compare using a normalised extra column.
+       + keeps the user's formatting on screen
+       - the triggers and indexes must change; more complex
+    C. Leave as is.
+       - duplicates stay possible
+
+  ADVANTAGES
+    Duplicates become impossible; search is consistent.
+  DISADVANTAGES
+    Registration numbers are displayed without spaces.
+  SIDE EFFECTS
+    Existing values change their display format; a search for "MH 12" still finds them.
+  DECISION
+    Canonical stored form (A) or extra comparison key (B)? Apply to chassis numbers too?
+  DATA CHECK
+    SELECT UPPER(REPLACE(REPLACE(REPLACE(registration_number,' ',''),'-',''),'.','')) k,
+           COUNT(*), GROUP_CONCAT(CONCAT(tenant_id,':',asset_id))
+      FROM vehicles GROUP BY k HAVING COUNT(*) > 1;
+  TESTING
+    Spaced duplicate -> 409; search with and without spaces; migration on data with and
+    without clashes; up/down.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-18 — An item edit can set maximum stock below minimum
+----------------------------------------------------------------------------------------------------
+  Severity: Low   Phase: 3 (6th)   Effort: S
+  Modules: Items, low-stock indicators     Baseline tests: 1
+  Files likely to change: server/src/services/item.service.js
+  WHAT HAPPENS : saving only "maximum = 2" on an item with minimum 10 is accepted.
+  CAUSE        : item.service.js:54 compares min and max only when both are in the same request.
+  SOLUTION     : on edit, compare against the merged values (new value, otherwise the existing
+                 one). Optional: also require min <= reorder level <= max.
+  ADV / DISADV : + consistent stock levels  - none
+  SIDE EFFECTS : none for valid edits.
+  TESTING      : partial edit below the existing minimum -> 400; valid edits pass.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-19 — Model year accepts fractions and far-future years
+----------------------------------------------------------------------------------------------------
+  Severity: Low   Phase: 3 (7th)   Effort: S
+  Modules: Vehicles, Machinery     Baseline tests: 1
+  Files likely to change: server/src/services/vehicle.service.js, machinery.service.js
+  WHAT HAPPENS : year 2020.5 is accepted (the database stores 2020, the response says 2020.5);
+                 year 2999 is accepted.
+  CAUSE        : vehicle.service.js:103 and machinery.service.js:99 only require a number
+                 >= 1900.
+  SOLUTION     : a whole number between 1900 and next year.
+  ADV / DISADV : + clean data  - none
+  SIDE EFFECTS : existing records untouched; the rule applies only when a year is sent.
+  TESTING      : 2020.5 -> 400; next year + 1 -> 400; current year passes.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-20 — Purchase, stock count and transfer dates accept the future
+----------------------------------------------------------------------------------------------------
+  Severity: Low   Phase: 3 (8th)   Effort: S   Depends on: 09b (shared date check)
+  Modules: Purchases, Stock adjustments, Stock transfers     Baseline tests: 1
+  Files likely to change: purchase.service.js, stockAdjustment.service.js,
+    stockTransfer.service.js
+  WHAT HAPPENS : purchase date 2099-01-01 was accepted (fuel and tyre dates already refuse the
+                 future).
+  CAUSE        : these three use their own local date check without a future-date rule.
+  SOLUTION     : use the shared business-date check (valid date, at most tomorrow — one day of
+                 margin for time zones).
+  ADV / DISADV : + consistent dates in reports
+                 - an expected (future) purchase date can no longer be entered
+  DECISION     : none expected; tell me if future purchase dates are needed.
+  TESTING      : future -> 400; today and backdated dates pass.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-21 — Numeric validator accepts blank strings and arrays
+----------------------------------------------------------------------------------------------------
+  Severity: Low   Phase: 3 (9th)   Effort: S (shared code: full regression essential)
+  Modules: shared validation, used by every module     Baseline tests: 2
+  Files likely to change: server/src/utils/validation.js
+  WHAT HAPPENS : "   " is accepted as 0, [7] as 7, [] as 0.
+  CAUSE        : validation.js:40 passes any value to Number() without checking its type.
+  SOLUTION     : accept only real numbers, or non-blank strings; reject everything else with the
+                 existing "must be a number" message.
+  ADV / DISADV : + stricter input everywhere  - touches the most widely used helper
+  SIDE EFFECTS : none for the UI (forms send numbers or numeric strings).
+  TESTING      : unit tests for the validator; full regression.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-22 — Reference numbers break after 999,999 per organization
+----------------------------------------------------------------------------------------------------
+  Severity: Low (long-term)   Phase: 2 (with 02)   Effort: none extra   Baseline tests: 1
+  WHAT HAPPENS : the generators pick the highest code alphabetically, so "X-999999" stays the
+                 highest even after "X-1000000" exists. Every later create then fails forever.
+                 TXN numbers grow fastest (one per stock movement).
+  CAUSE        : codeGenerator.js:3 and the per-service copies use MAX() on a text column.
+  SOLUTION     : fixed by ISSUE-02 (numeric counters). If 02 is deferred, a stop-gap reads the
+                 highest value numerically.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-23 — IDs like "19abc" open record 19
+----------------------------------------------------------------------------------------------------
+  Severity: Low   Phase: 1 (5th)   Effort: S
+  Modules: every /:id route     Baseline tests: 1
+  Files likely to change: a small shared parameter check used by the route files
+  WHAT HAPPENS : GET /vehicles/19abc returns vehicle 19 (MySQL converts the text to a number);
+                 /vehicles/19abc/history finds the vehicle but returns an empty history.
+                 Organization isolation is NOT affected.
+  CAUSE        : :id values are passed to the database unchecked.
+  SOLUTION     : one shared check — the id must be a whole number >= 1, otherwise 404.
+  ADV / DISADV : + consistent, predictable URLs  - touches every route file (one line each)
+  SIDE EFFECTS : none for valid ids.
+  TESTING      : id fuzz tests (19abc, 1.5, -1, abc) -> 404; full regression.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-24 — Document uploads trust the file type the browser declares
+----------------------------------------------------------------------------------------------------
+  Severity: Low (security hardening)   Phase: 4 (3rd)   Effort: S
+  Modules: Vehicle and machinery documents     Baseline tests: 1
+  Files likely to change: server/src/middleware/upload.js or assetDocument.service.js
+  WHAT HAPPENS : an HTML file labelled as a PDF is accepted. Risk is limited: downloads are
+                 sent as attachments with "no-sniff". Logo uploads already check real contents.
+  CAUSE        : upload.js:11 checks only the declared type.
+  SOLUTION     : check the file's first bytes (%PDF in the first 1 KB; the JPEG and PNG
+                 signatures) before saving; store the detected type.
+  ADV / DISADV : + only real PDF/JPG/PNG files are stored
+                 - a damaged or mislabelled genuine file is refused (with a clear message)
+  TESTING      : disguised file -> 400; real PDF/JPG/PNG upload as before.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-25 — Machinery edit ignores compliance data sent as a JSON string
+----------------------------------------------------------------------------------------------------
+  Severity: Low   Phase: 1 (3rd)   Effort: S
+  Modules: Machinery, Compliance     Baseline tests: 1
+  Files likely to change: server/src/services/machinery.service.js
+  WHAT HAPPENS : on machinery edit, compliance data sent as a JSON string is silently ignored.
+                 Vehicle edit and machinery create accept it. The UI sends an object, so it is
+                 unaffected.
+  CAUSE        : machinery.service.js:269 uses the raw value instead of the existing
+                 parseComplianceField helper.
+  SOLUTION     : use the same parser as create (already in the same file).
+  ADV / DISADV : + consistent API  - none
+  TESTING      : string bundle on edit is saved; object bundle still works.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-26 — Deleting completed preventive maintenance leaves the schedule advanced
+----------------------------------------------------------------------------------------------------
+  Severity: Low   Phase: 5   Effort: S   Status: needs decision
+  Modules: Maintenance, the preventive schedule, the dashboard maintenance card
+  Baseline tests: 1 (written for option b; becomes "delete refused" under option a)
+  Files likely to change: server/src/services/maintenance.service.js
+  WHAT HAPPENS : completing preventive maintenance moves the next service point forward;
+                 deleting that record leaves it forward, so the asset can look "not due" when it
+                 is.
+  CAUSE        : maintenance.service.js:577 only marks the record deleted.
+  OPTIONS
+    a. Refuse to delete completed preventive records (409); correct mistakes by editing
+       (recommended)
+       + simple and safe
+       - admins can't delete those records
+    b. Roll the asset back, but only if nothing else changed its meter since
+       + undo is possible
+       - complex; edge cases when fuel entries moved the meter in between
+  TESTING      : depends on the option.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-27 — No way to correct fuel stock; an error message points to a missing feature
+----------------------------------------------------------------------------------------------------
+  Severity: Low   Phase: 5   Effort: S (a) / L (b)   Status: needs decision
+  Modules: Site fuel stock, Fuel collections     Baseline tests: 1
+  WHAT HAPPENS : cancelling a received collection says "Record a stock adjustment instead"
+                 (fuelCollection.service.js:356), but fuel has no adjustment feature. Losses,
+                 theft and dip-reading differences can't be recorded.
+  OPTIONS
+    a. Change the message now (recommended first step)
+       + immediate, no risk
+       - the gap remains
+    b. Build fuel stock adjustments (new ledger entry type and migration, endpoint, page,
+       report columns)
+       + complete stock control
+       - a new feature; best handled as a separate request
+  TESTING      : (a) message text; (b) a full feature test plan.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-28 — Saving the same compliance document twice at once returns 409
+----------------------------------------------------------------------------------------------------
+  Severity: Low   Phase: 3 (10th)   Effort: S
+  Modules: Compliance     Baseline tests: 1
+  Files likely to change: server/src/services/complianceDocument.service.js
+  WHAT HAPPENS : 5 simultaneous saves of one document: 1 succeeds, 4 get "already in use".
+  CAUSE        : the "does it exist?" check runs outside the transaction; the unique index then
+                 catches the race.
+  SOLUTION     : on that specific unique-index error, retry once as an update.
+  ADV / DISADV : + every save succeeds  - none
+  TESTING      : 5 parallel saves -> all 200, one row.
+
+----------------------------------------------------------------------------------------------------
+ ISSUE-29 — Leftover client code calls 11 endpoints that no longer exist
+----------------------------------------------------------------------------------------------------
+  Severity: Low   Phase: 1 (2nd)   Effort: S
+  Modules: client API layer only     Baseline tests: 1
+  Files likely to change: client/src/api/client.js
+  WHAT HAPPENS : "tyreApi" (client.js:389) points to tyre endpoints from before the redesign
+                 (/tyres/:id/install, /tyres/history, ...). No page imports it; the pages use
+                 "tyresApi".
+  SOLUTION     : delete the tyreApi object after confirming there are no imports.
+  ADV / DISADV : + less confusing code  - none
+  TESTING      : client build passes; the API contract test reports no missing routes.
+
+
+====================================================================================================
+ PART 6 — DECISIONS THAT ARE NOT BUGS
+====================================================================================================
+
+ D-01 — Registration and chassis numbers are unique across ALL organizations
+   Background : the client asked for this in Phase 3 (database triggers, migrations 0016 and
+                0063). The specification asks for uniqueness per organization.
+   Effects    : - one organization can learn that another already has a given registration
+                  (it gets "already in use")
+                - an ARCHIVED vehicle blocks its number for every organization forever: a
+                  vehicle sold by one organization can't be registered by the buyer (the
+                  seller can only archive, not delete)
+   Options    : keep / exclude archived vehicles from the check (restore must then re-check) /
+                return to per-organization uniqueness
+   Recommend  : confirm with the client.  Baseline tests: 1 (written for "exclude archived").
+
+ D-02 — A stock count can't add stock to an item with zero stock at the site
+   stockAdjustment.service.js:132 refuses a count when the site has none of the item, so
+   opening stock or found items can only enter through a purchase.
+   Recommend  : allow it (counts are the usual way to load opening stock).
+
+ D-03 — Login, forgot-password and reset share one rate limit per network address
+   200 attempts per 15 minutes in development, 20 in production. Many failed logins from an
+   office network also block password resets for everyone there.
+   Recommend  : optional; separate limits if offices share one internet address.
+
+
+====================================================================================================
+ PART 7 — TESTING: HOW EVERY FIX IS CHECKED WITHOUT BREAKING EXISTING FEATURES
+====================================================================================================
+  Baseline (2026-10-24): 203 tests — 144 pass, 59 fail. Tracker section 8 lists which failing
+  test belongs to which issue.
+
+  The suites
+    00 pure unit          validators, permissions, date and rounding helpers, model rules
+    01 auth & users       signup, login, tokens, password reset, supervisors
+    02 tenancy & roles    cross-organization isolation, supervisor site scoping, admin-only
+    03 sites & assets     sites, vehicles, machinery, documents, compliance
+    04 inventory          masters, purchases, oldest-first costing, issues, reversals, counts,
+                          transfers, reports
+    05 fuel               stations, collections, site stock, fuel issues, meters, reports
+    06 tyres              types, purchases, fitting, removal, reports
+    07 maintenance etc.   maintenance lifecycle, schedule, dashboard, branding
+    08 fuzz               malformed values in every write endpoint and in ids/queries
+    09 concurrency        parallel requests on race-prone actions
+    10 client contract    permission parity, every client API path exists, production build
+
+  For every fix (T1–T5)
+    T1 Issue tests      : its mapped tests pass (and any new test for it)
+    T2 Full regression  : on a freshly rebuilt test DB (about 15 s). Rule: every test that passed
+                          before still passes, and the fail count drops by exactly this issue's
+                          number. Example after ISSUE-03: pass 147, fail 56.
+    T3 Build & wiring   : client production build if client files changed; route-to-function
+                          wiring check
+    T4 Migration        : up, down, up again on the test DB (only if a migration was added)
+    T5 Manual check     : a short click-list for you, when the issue is reachable from the UI
+  If T2 shows any new failure, the fix is not finished. It is corrected or undone first.
+
+  Tests for "needs decision" issues
+    They were written for the recommended answer. If you decide differently (or "Won't fix"),
+    the test is changed to match your decision, and the change is noted in the results log.
+
+  Your dev database
+    Never used by tests. Migrations are applied to it only when you say so.
+
+
+====================================================================================================
+ PART 8 — DEPLOYMENT CHECKLIST (not code issues)
+====================================================================================================
+  - Run with NODE_ENV=production. This hides raw database messages in errors, and requires a
+    strong token secret and SMTP email.
+  - Use a dedicated MySQL user, not root (the dev .env uses root).
+  - Set the server time zone to the business time zone (Asia/Kolkata): "today", fuel dates and
+    compliance expiry use the server's local time.
+
+
+====================================================================================================
+ PART 9 — GLOSSARY
+====================================================================================================
+  400 / 403 / 404 / 409 / 500
+      Response codes: bad input / not allowed / not found (or another organization's record) /
+      conflict with current data / server crash.
+  Transaction
+      A group of database changes that succeed or fail together.
+  Row lock (SELECT ... FOR UPDATE)
+      Makes other requests wait until this transaction finishes using that row.
+  Race condition
+      Two requests at the same moment both pass a check that only one should pass.
+  Deadlock
+      Two requests each wait for the other forever; MySQL kills one, which surfaces as a 500.
+  Migration
+      A numbered script that changes the database structure; it can be applied (up) or undone
+      (down).
+  Regression
+      Something that worked before and breaks because of a change.
+  Tenant / organization
+      One customer company; its data is fully isolated from other organizations.
+  Archive
+      Soft delete: the record is hidden but kept, and can be restored.
+  FIFO / oldest-first costing
+      Stock leaves at the cost of the oldest batch first.
+  Fuzzing
+      Sending many malformed values automatically to find crashes.
+
+
+====================================================================================================
+ PART 10 — COMMON QUESTIONS
+====================================================================================================
+  What if a fix breaks something else?
+      The full regression run (T2) catches it before I report. I correct or undo it; a broken
+      state is never handed over.
+  Can two issues be fixed together?
+      Only if you say so. Natural pairs: 09b + 20 (shared date check), 02 + 22 (22 is solved by
+      02), 08 + 07 (shared test).
+  What if I don't agree with the recommended solution?
+      Say "Fix ISSUE-xx with option B", or describe what you want; I'll plan it first.
+  Will my development database change?
+      Not by tests. Only migrations you approve are applied to it.
+  How long does one issue take?
+      S: usually one request/answer round. M/L: plan first, then one or more rounds.
+  What if the temporary test folder disappears before T-1?
+      I re-create the tests an issue needs. Slower, so T-1 is recommended first.
+  My partner also works on the code. How do we avoid clashes?
+      One person per issue. The tracker status "In progress" shows who is working on what.
+      Commit (or at least save) between issues.
+  What if a new problem is discovered?
+      It is added as the next ISSUE number, explained in both files, and waits for you. It is
+      never fixed silently.

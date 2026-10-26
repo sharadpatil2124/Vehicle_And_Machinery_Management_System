@@ -19,6 +19,11 @@ function buildKey(tenantId, assetType, assetId, docType, originalFilename) {
   return path.posix.join(tenantId, assetType, assetId, `${docType}-${random}${ext}`);
 }
 
+function buildBrandingKey(tenantId, extension) {
+  const random = crypto.randomBytes(16).toString('hex');
+  return path.posix.join(tenantId, 'branding', `logo-${random}${extension}`);
+}
+
 async function saveFile(key, buffer) {
   const fullPath = resolveKey(key);
   await fsp.mkdir(path.dirname(fullPath), { recursive: true });
@@ -33,4 +38,4 @@ function readFileStream(key) {
   return fs.createReadStream(resolveKey(key));
 }
 
-module.exports = { buildKey, saveFile, deleteFile, readFileStream };
+module.exports = { buildKey, buildBrandingKey, saveFile, deleteFile, readFileStream };

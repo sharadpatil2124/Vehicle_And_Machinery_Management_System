@@ -205,7 +205,7 @@ export default function UnitsOfMeasurePage() {
         </Select>
       </div>
 
-      <div className="rounded border border-steel-200 bg-white">
+      <div className="rounded border border-steel-200 bg-surface">
         {!result ? (
           <Spinner label="Loading units of measure" />
         ) : (

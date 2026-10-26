@@ -309,6 +309,57 @@ async function listPreventiveSchedule({ tenantId, auth, query }) {
   return { ...buildListResponse(entries, { page, limit, total: count }), dueSoonThreshold: DUE_SOON_THRESHOLD };
 }
 
+async function getDashboardSummary({ tenantId, auth, siteId: requestedSiteId = null }) {
+  const siteId = supervisorSiteId(auth) ?? requestedSiteId;
+  const assetWhere = siteId ? { tenantId, status: 'active', currentSiteId: siteId } : { tenantId, status: 'active' };
+  const workWhere = siteId ? { tenantId, status: 'active', siteId } : { tenantId, status: 'active' };
+
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const scheduleCounts = (assetType) => {
+    const { model, remaining, dueSoon } = SCHEDULE_SQL[assetType];
+    const count = (condition) => model.count({ where: { [Op.and]: [assetWhere, sequelize.literal(`(${remaining}) IS NOT NULL`), sequelize.literal(condition)] } });
+    return Promise.all([count(`(${remaining}) <= 0`), count(`(${remaining}) > 0 AND (${remaining}) <= (${dueSoon})`)]);
+  };
+
+  const completedThisMonth = { ...workWhere, stage: 'resolved', completedAt: { [Op.gte]: monthStart } };
+
+  const [[vehiclesOverdue, vehiclesDueSoon], [machinesOverdue, machinesDueSoon], openByTypeAndStage, completed, cost, downtime] = await Promise.all([
+    scheduleCounts(ASSET_TYPES.VEHICLE),
+    scheduleCounts(ASSET_TYPES.MACHINERY),
+    Maintenance.count({ where: { ...workWhere, stage: { [Op.ne]: 'resolved' } }, group: ['type', 'stage'] }),
+    Maintenance.count({ where: completedThisMonth }),
+    Maintenance.sum('totalCost', { where: completedThisMonth }),
+    Maintenance.sum('downtimeMinutes', { where: { ...completedThisMonth, type: 'breakdown' } }),
+  ]);
+
+  const open = { breakdownReported: 0, breakdownInProgress: 0, preventive: 0 };
+  for (const row of openByTypeAndStage) {
+    const n = Number(row.count);
+    if (row.type === 'preventive') open.preventive += n;
+    else if (row.stage === 'in_progress') open.breakdownInProgress += n;
+    else open.breakdownReported += n;
+  }
+
+  return {
+    scope: { siteId },
+    service: {
+      overdue: vehiclesOverdue + machinesOverdue,
+      dueSoon: vehiclesDueSoon + machinesDueSoon,
+      vehicles: { overdue: vehiclesOverdue, dueSoon: vehiclesDueSoon },
+      machinery: { overdue: machinesOverdue, dueSoon: machinesDueSoon },
+    },
+    open,
+    month: {
+      completed,
+      cost: roundMoney(Number(cost) || 0),
+      downtimeMinutes: Number(downtime) || 0,
+    },
+    dueSoonThreshold: DUE_SOON_THRESHOLD,
+  };
+}
+
 async function createMaintenance({ tenantId, auth, actingUserId, payload }) {
   const { assetType, assetId } = readAssetInput(payload);
   const type = readType(payload.type);
@@ -547,6 +598,7 @@ module.exports = {
   getMaintenance,
   getPreventiveSchedule,
   listPreventiveSchedule,
+  getDashboardSummary,
   createMaintenance,
   updateMaintenance,
   changeStage,

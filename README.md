@@ -21,6 +21,7 @@ Each organization manages its own assets in complete data isolation.
 - **Reports** – one shared searchable, sortable, paged report table used across Fuel, Inventory and Tyre reports.
 - **Code cleanup** – source code comments removed.
 
+
 ### Earlier updates
 - Inventory module: items, storage locations, purchases, stock, transfers, adjustments and asset issues.
 - Site management, Fuel module and Dashboard improvements.

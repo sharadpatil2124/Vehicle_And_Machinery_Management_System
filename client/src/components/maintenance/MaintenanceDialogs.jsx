@@ -14,7 +14,7 @@ import {
 } from '../../config/maintenance';
 
 const textareaClasses = [
-  'w-full rounded border px-3 py-2 text-sm text-steel-900 placeholder:text-steel-300',
+  'w-full rounded border px-3 py-1.5 text-sm text-steel-900 placeholder:text-steel-300',
   'focus:outline-none focus:ring-2',
 ].join(' ');
 
@@ -109,9 +109,6 @@ function MaintenanceFormModal({ record, preset, onClose, onDone }) {
           startedAt: record.startedAt ? toDateTimeLocal(record.startedAt) : '',
           completedAt: record.completedAt ? toDateTimeLocal(record.completedAt) : '',
           meterReading: toInput(record.meterReading),
-          performedBy: record.performedBy ?? '',
-          labourCost: toInput(record.labourCost),
-          totalCost: toInput(record.totalCost),
         }
       : {
           type: preset?.type ?? 'breakdown',
@@ -120,9 +117,6 @@ function MaintenanceFormModal({ record, preset, onClose, onDone }) {
           description: '',
           reportedAt: toDateTimeLocal(),
           meterReading: '',
-          performedBy: '',
-          labourCost: '',
-          totalCost: '',
         }
   );
   const [vehicles, setVehicles] = useState(null);
@@ -155,7 +149,6 @@ function MaintenanceFormModal({ record, preset, onClose, onDone }) {
     if (isEdit && record.stage === 'resolved' && !form.completedAt) found.completedAt = 'Enter when it was completed.';
     validateTimeline(form, found);
     if (form.meterReading !== '' && !(Number(form.meterReading) >= 0)) found.meterReading = 'Meter reading cannot be negative.';
-    validateCosts(form, found);
     return found;
   }
 
@@ -169,9 +162,6 @@ function MaintenanceFormModal({ record, preset, onClose, onDone }) {
     const payload = {
       description: form.description.trim(),
       reportedAt: fromDateTimeLocal(form.reportedAt),
-      performedBy: form.performedBy.trim() || null,
-      labourCost: toPayloadNumber(form.labourCost),
-      totalCost: toPayloadNumber(form.totalCost),
     };
     if (!meterLocked) payload.meterReading = toPayloadNumber(form.meterReading);
 
@@ -222,7 +212,7 @@ function MaintenanceFormModal({ record, preset, onClose, onDone }) {
       <form id="maintenance-form" onSubmit={handleSubmit} noValidate>
         <Alert tone="error">{submitError}</Alert>
 
-        <div className="grid gap-x-6 sm:grid-cols-2">
+        <div className="grid gap-x-4 sm:grid-cols-2">
           {!isEdit && !preset?.type && (
             <div className="sm:col-span-2">
               <Field label="Maintenance type" required>
@@ -320,13 +310,6 @@ function MaintenanceFormModal({ record, preset, onClose, onDone }) {
               )}
             </Field>
           )}
-
-          <Field label="Performed by" hint="Optional. Mechanic, team or workshop.">
-            {({ id, describedBy }) => <Input id={id} describedBy={describedBy} value={form.performedBy} onChange={update('performedBy')} maxLength={150} />}
-          </Field>
-          <div className="hidden sm:block" />
-
-          <CostFields form={form} errors={errors} update={update} />
         </div>
       </form>
     </Modal>
@@ -391,8 +374,8 @@ function StageModal({ kind, record, onClose, onDone }) {
     const payload = {
       stage: resolving ? 'resolved' : 'in_progress',
       at: fromDateTimeLocal(form.at),
-      performedBy: form.performedBy.trim() || null,
     };
+    if (!resolving) payload.performedBy = form.performedBy.trim() || null;
     if (resolving) {
       payload.meterReading = toPayloadNumber(form.meterReading);
       payload.labourCost = toPayloadNumber(form.labourCost);
@@ -439,9 +422,9 @@ function StageModal({ kind, record, onClose, onDone }) {
     >
       <form id="maintenance-stage-form" onSubmit={handleSubmit} noValidate>
         <Alert tone="error">{submitError}</Alert>
-        <p className="mb-4 text-sm text-steel-600">{record.description}</p>
+        <p className="mb-3 text-sm text-steel-600">{record.description}</p>
 
-        <div className={resolving ? 'grid gap-x-6 sm:grid-cols-2' : ''}>
+        <div className={resolving ? 'grid gap-x-4 sm:grid-cols-2' : ''}>
           <Field label={resolving ? 'Completed at' : 'Work started at'} required error={errors.at}>
             {({ id, invalid, describedBy }) => (
               <Input id={id} invalid={invalid} describedBy={describedBy} type="datetime-local" max={toDateTimeLocal()} value={form.at} onChange={update('at')} />
@@ -467,21 +450,21 @@ function StageModal({ kind, record, onClose, onDone }) {
             </Field>
           )}
 
-          <Field label="Performed by" hint="Optional. Mechanic, team or workshop.">
-            {({ id, describedBy }) => <Input id={id} describedBy={describedBy} value={form.performedBy} onChange={update('performedBy')} maxLength={150} />}
-          </Field>
+          {!resolving && (
+            <Field label="Performed by" hint="Optional. Mechanic, team or workshop.">
+              {({ id, describedBy }) => <Input id={id} describedBy={describedBy} value={form.performedBy} onChange={update('performedBy')} maxLength={150} />}
+            </Field>
+          )}
 
           {resolving && (
             <>
-              <div className="mb-4">
-                {downtimePreview && (
-                  <>
-                    <p className="mb-1.5 text-sm font-semibold text-steel-700">Downtime</p>
-                    <p className="text-lg font-semibold text-steel-900 tabular-nums">{downtimePreview}</p>
-                    <p className="mt-0.5 text-xs text-steel-500">From when it was reported until the completion time above.</p>
-                  </>
-                )}
-              </div>
+              {downtimePreview && (
+                <div className="mb-3 sm:col-span-2">
+                  <p className="mb-1.5 text-sm font-semibold text-steel-700">Downtime</p>
+                  <p className="text-lg font-semibold text-steel-900 tabular-nums">{downtimePreview}</p>
+                  <p className="mt-0.5 text-xs text-steel-500">From when it was reported until the completion time above.</p>
+                </div>
+              )}
               <CostFields form={form} errors={errors} update={update} />
             </>
           )}

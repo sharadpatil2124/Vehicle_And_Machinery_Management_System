@@ -189,7 +189,7 @@ export default function TyreStockPage() {
         )}
       </div>
 
-      <div className="rounded border border-steel-200 bg-white">
+      <div className="rounded border border-steel-200 bg-surface">
         {!data ? (
           <Spinner label="Loading tyre stock" />
         ) : (

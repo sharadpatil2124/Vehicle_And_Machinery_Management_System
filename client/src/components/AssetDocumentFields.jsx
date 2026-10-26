@@ -30,18 +30,22 @@ function DocumentPickerRow({ docType, file, mandatory, missing, onChange }) {
   }
 
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-steel-100 py-3 last:border-b-0">
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-medium text-steel-900">{DOCUMENT_LABELS[docType]}</span>
+    <div
+      className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 rounded border px-3 py-2 ${
+        missing || error ? 'border-danger-500' : 'border-steel-200'
+      }`}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-sm font-medium text-steel-900">{DOCUMENT_LABELS[docType]}</span>
           <Badge tone={missing ? 'danger' : 'neutral'}>{mandatory ? 'Required' : 'Optional'}</Badge>
           {file && <Badge tone="success">Selected</Badge>}
         </div>
-        <p className="mt-0.5 truncate text-sm text-steel-500">{file ? file.name : 'No file selected'}</p>
-        {error && <p className="mt-0.5 text-sm font-medium text-danger-600">{error}</p>}
-        {!error && missing && (
-          <p className="mt-0.5 text-sm font-medium text-danger-600">This document is required</p>
-        )}
+        <p className="truncate text-xs text-steel-500" title={file?.name}>
+          {file ? file.name : 'No file selected'}
+        </p>
+        {error && <p className="text-xs font-medium text-danger-600">{error}</p>}
+        {!error && missing && <p className="text-xs font-medium text-danger-600">This document is required</p>}
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <Button type="button" variant="secondary" size="sm" onClick={() => inputRef.current?.click()}>
@@ -68,9 +72,9 @@ export default function AssetDocumentFields({ assetType, files, onChange, showRe
   const mandatoryDocTypes = getMandatoryDocTypes(assetType);
 
   return (
-    <div className="mt-6 border-t border-steel-200 pt-5">
-      <h2 className="mb-3 text-sm font-semibold text-steel-900">Documents</h2>
-      <div>
+    <div className="mt-4 border-t border-steel-200 pt-4">
+      <h2 className="mb-2 text-sm font-semibold text-steel-900">Documents</h2>
+      <div className="grid gap-2 sm:grid-cols-2">
         {DOC_TYPES.map((docType) => {
           const mandatory = mandatoryDocTypes.includes(docType);
           const file = files[docType] ?? null;

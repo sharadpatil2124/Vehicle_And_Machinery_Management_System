@@ -237,6 +237,7 @@ export const siteAssignmentsApi = {
 export const complianceApi = {
   listAll: (params) => api.get(`/compliance${toQueryString(params)}`),
   alerts: (params) => api.get(`/compliance/alerts${toQueryString(params)}`),
+  dashboard: (params) => api.get(`/compliance/dashboard${toQueryString(params)}`),
   list: (assetType, assetId) => api.get(`/compliance/${assetType}/${assetId}`),
   save: (assetType, assetId, docType, payload) =>
     api.put(`/compliance/${assetType}/${assetId}/${docType}`, payload),
@@ -402,6 +403,51 @@ export const tyreApi = {
 export const dashboardApi = {
   summary: () => api.get('/dashboard/summary'),
   monthlyCost: (params) => api.get(`/dashboard/monthly-cost${toQueryString(params)}`),
+  fleet: (params) => api.get(`/dashboard/fleet${toQueryString(params)}`),
+  maintenance: (params) => api.get(`/dashboard/maintenance${toQueryString(params)}`),
+};
+
+async function uploadBrandingLogo(file) {
+  const headers = { Accept: 'application/json' };
+  const token = readToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const form = new FormData();
+  form.append('logo', file);
+
+  let response;
+  try {
+    response = await fetch(`${BASE_URL}/branding/logo`, { method: 'POST', headers, body: form });
+  } catch {
+    throw new ApiError(0, 'Cannot reach the server. Check that the API is running.');
+  }
+
+  const payload = await readBody(response);
+  if (!response.ok) {
+    throw new ApiError(response.status, payload?.error ?? `Request failed (${response.status})`);
+  }
+  return payload;
+}
+
+async function fetchBrandingLogo(version, { signal } = {}) {
+  const headers = {};
+  const token = readToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const response = await fetch(`${BASE_URL}/branding/logo?v=${encodeURIComponent(version ?? '')}`, { headers, signal });
+  if (!response.ok) {
+    const payload = await readBody(response);
+    throw new ApiError(response.status, payload?.error ?? `Request failed (${response.status})`);
+  }
+  return response.blob();
+}
+
+export const brandingApi = {
+  get: () => api.get('/branding'),
+  updateTitle: (dashboardTitle) => api.put('/branding/title', { dashboardTitle }),
+  uploadLogo: uploadBrandingLogo,
+  removeLogo: () => api.delete('/branding/logo'),
+  fetchLogo: fetchBrandingLogo,
 };
 
 export const tyresApi = {

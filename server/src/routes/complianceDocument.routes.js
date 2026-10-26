@@ -10,6 +10,8 @@ router.get('/', requirePermission('COMPLIANCE', 'READ'), complianceController.li
 
 router.get('/alerts', requirePermission('COMPLIANCE', 'READ'), complianceController.alerts);
 
+router.get('/dashboard', requirePermission('COMPLIANCE', 'READ'), complianceController.dashboard);
+
 router.get('/:assetType/:assetId', requirePermission('COMPLIANCE', 'READ'), complianceController.list);
 
 router.put(

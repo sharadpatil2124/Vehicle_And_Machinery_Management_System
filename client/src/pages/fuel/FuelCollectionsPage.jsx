@@ -135,7 +135,7 @@ export default function FuelCollectionsPage() {
         <Input type="date" aria-label="To date" title="To date" value={filters.dateTo} onChange={(e) => updateFilter('dateTo', e.target.value)} />
       </div>
 
-      <div className="rounded border border-steel-200 bg-white">
+      <div className="rounded border border-steel-200 bg-surface">
         {!result ? (
           <Spinner label="Loading fuel collections" />
         ) : (

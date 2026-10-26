@@ -1,6 +1,6 @@
 const { QueryTypes } = require('sequelize');
 
-const { sequelize, Vehicle } = require('../models');
+const { sequelize } = require('../models');
 const { supervisorSiteId } = require('./siteAccess');
 const { requireNumber } = require('../utils/validation');
 const { todayDateOnly, roundMoney, roundQuantity } = require('./fuelCommon');
@@ -29,19 +29,14 @@ function num(value) {
 
 async function fleetSummary(tenantId, siteClause, replacements) {
   const [vehicles] = await query(
-    `SELECT COUNT(*) AS total,
-            SUM(CASE
-                  WHEN type = :hoursType THEN current_hours IS NOT NULL AND next_service_hours IS NOT NULL AND current_hours >= next_service_hours
-                  ELSE current_km IS NOT NULL AND next_service_km IS NOT NULL AND current_km >= next_service_km
-                END) AS serviceDue
+    `SELECT COUNT(*) AS total
        FROM vehicles
       WHERE tenant_id = :tenantId AND status = 'active'${siteClause('current_site_id')}`,
-    { ...replacements, hoursType: Vehicle.HOURS_BASED_TYPE }
+    replacements
   );
 
   const [machinery] = await query(
-    `SELECT COUNT(*) AS total,
-            SUM(current_hours IS NOT NULL AND next_service_hours IS NOT NULL AND current_hours >= next_service_hours) AS serviceDue
+    `SELECT COUNT(*) AS total
        FROM machinery
       WHERE tenant_id = :tenantId AND status = 'active'${siteClause('current_site_id')}`,
     replacements
@@ -57,11 +52,6 @@ async function fleetSummary(tenantId, siteClause, replacements) {
     vehicles: num(vehicles.total),
     machinery: num(machinery.total),
     sites,
-    serviceDue: {
-      vehicles: num(vehicles.serviceDue),
-      machinery: num(machinery.serviceDue),
-      total: num(vehicles.serviceDue) + num(machinery.serviceDue),
-    },
   };
 }
 
@@ -160,11 +150,18 @@ async function getSummary({ tenantId, auth }) {
   };
 }
 
-async function getMonthlyCost({ tenantId, auth, query }) {
+function requestedSiteScope(tenantId, auth, query) {
   const ownSiteId = supervisorSiteId(auth);
   const siteId = ownSiteId ?? (query.siteId ? requireNumber(query.siteId, 'Site', { min: 1 }) : null);
-  const replacements = { tenantId, siteId };
-  const siteClause = (column) => (siteId ? ` AND ${column} = :siteId` : '');
+  return {
+    siteId,
+    replacements: { tenantId, siteId },
+    siteClause: (column) => (siteId ? ` AND ${column} = :siteId` : ''),
+  };
+}
+
+async function getMonthlyCost({ tenantId, auth, query }) {
+  const { siteId, replacements, siteClause } = requestedSiteScope(tenantId, auth, query);
 
   return {
     scope: { siteId },
@@ -172,4 +169,13 @@ async function getMonthlyCost({ tenantId, auth, query }) {
   };
 }
 
-module.exports = { getSummary, getMonthlyCost };
+async function getFleet({ tenantId, auth, query }) {
+  const { siteId, replacements, siteClause } = requestedSiteScope(tenantId, auth, query);
+
+  return {
+    scope: { siteId },
+    fleet: await fleetSummary(tenantId, siteClause, replacements),
+  };
+}
+
+module.exports = { getSummary, getMonthlyCost, getFleet };

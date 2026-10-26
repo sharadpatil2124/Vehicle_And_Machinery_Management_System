@@ -46,6 +46,7 @@ export const PERMISSIONS = Object.freeze({
     VIEW_OWN_PROFILE: BOTH,
   },
   DASHBOARD: { VIEW: BOTH, VIEW_SUMMARY_METRICS: BOTH },
+  BRANDING: { READ: BOTH, UPDATE: ADMIN_ONLY },
 });
 
 export function hasPermission(role, resource, action) {

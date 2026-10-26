@@ -31,7 +31,7 @@ function SourceOption({ value, current, title, description, onSelect, disabled }
       aria-pressed={selected}
       className={[
         'flex-1 rounded border px-4 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60',
-        selected ? 'border-brand-600 bg-brand-50 ring-1 ring-brand-600' : 'border-steel-200 bg-white hover:border-steel-300',
+        selected ? 'border-brand-600 bg-brand-50 ring-1 ring-brand-600' : 'border-steel-200 bg-surface hover:border-steel-300',
       ].join(' ')}
     >
       <span className="block text-sm font-semibold text-steel-900">{title}</span>
@@ -230,7 +230,7 @@ export default function FuelIssueFormPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <div className="mb-5">
+      <div className="mb-3">
         <Link to="/fuel/issues" className="text-sm font-semibold text-brand-600 hover:underline">
           ← Fuel issues
         </Link>
@@ -242,7 +242,7 @@ export default function FuelIssueFormPage() {
           <Alert tone="error">{submitError}</Alert>
 
           <p className="mb-1.5 text-sm font-semibold text-steel-700">Where did the fuel come from?</p>
-          <div className="mb-5 flex flex-col gap-3 sm:flex-row">
+          <div className="mb-3 flex flex-col gap-3 sm:flex-row">
             <SourceOption
               value="SITE_STOCK"
               current={form.source}
@@ -261,7 +261,7 @@ export default function FuelIssueFormPage() {
             />
           </div>
 
-          <div className="grid gap-x-6 sm:grid-cols-2">
+          <div className="grid gap-x-4 sm:grid-cols-2">
             {isEdit ? (
               <div className="sm:col-span-2">
                 <Field label="Asset" hint={`${SOURCE_LABEL[existing.source]} · the asset and source can't be changed after the entry is saved.`}>
@@ -304,7 +304,7 @@ export default function FuelIssueFormPage() {
           )}
 
           {!isEdit && form.source === 'SITE_STOCK' && selectedAsset && storable && stock && (
-            <div className="mb-4 grid gap-4 rounded border border-steel-200 bg-steel-50 px-4 py-3 sm:grid-cols-3">
+            <div className="mb-3 grid gap-4 rounded border border-steel-200 bg-steel-50 px-4 py-3 sm:grid-cols-3">
               <div>
                 <p className="text-xs font-semibold tracking-wide text-steel-500 uppercase">
                   {fuelType} at {siteNames[siteId] ?? 'this site'}
@@ -324,7 +324,7 @@ export default function FuelIssueFormPage() {
             </div>
           )}
 
-          <div className="grid gap-x-6 sm:grid-cols-2">
+          <div className="grid gap-x-4 sm:grid-cols-2">
             <Field label="Date" required error={errors.txnDate}>
               {({ id: fieldId, invalid, describedBy }) => (
                 <Input id={fieldId} invalid={invalid} describedBy={describedBy} type="date" max={todayDateOnly()} value={form.txnDate} onChange={update('txnDate')} />
@@ -413,7 +413,7 @@ export default function FuelIssueFormPage() {
               </>
             )}
 
-            <div className="mb-4 sm:col-span-2">
+            <div className="mb-3 sm:col-span-2">
               <p className="mb-1.5 text-sm font-semibold text-steel-700">{form.source === 'SITE_STOCK' && !isEdit ? 'Estimated cost' : 'Cost'}</p>
               <p className="text-lg font-semibold text-steel-900 tabular-nums">{formatCurrency(estimatedCost)}</p>
               {form.source === 'SITE_STOCK' && !isEdit && <p className="mt-0.5 text-xs text-steel-500">Litres × the site's average cost at the moment you save.</p>}
@@ -428,7 +428,7 @@ export default function FuelIssueFormPage() {
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
             <Button variant="secondary" onClick={() => navigate(-1)}>
               Cancel
             </Button>

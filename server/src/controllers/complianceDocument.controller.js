@@ -18,6 +18,15 @@ async function alerts(req, res) {
   res.status(200).json({ ...response, message: 'Compliance alerts retrieved' });
 }
 
+async function dashboard(req, res) {
+  const data = await complianceService.getComplianceDashboard({
+    tenantId: req.auth.tenantId,
+    auth: req.auth,
+    query: req.query,
+  });
+  res.status(200).json({ data, message: 'Compliance dashboard retrieved' });
+}
+
 async function list(req, res) {
   const data = await complianceService.listComplianceDocuments({
     tenantId: req.auth.tenantId, auth: req.auth,
@@ -39,4 +48,4 @@ async function upsert(req, res) {
   res.status(200).json({ data, message: 'Compliance document saved' });
 }
 
-module.exports = { listAll, alerts, list, upsert };
+module.exports = { listAll, alerts, dashboard, list, upsert };

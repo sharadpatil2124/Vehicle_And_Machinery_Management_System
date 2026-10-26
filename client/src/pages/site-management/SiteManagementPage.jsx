@@ -71,7 +71,17 @@ function SitePickerModal({ open, onClose, onSelect }) {
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Select a site" description="Search or filter to find the site you want to view.">
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Select a site"
+      description="Search or filter to find the site you want to view."
+      footer={
+        <Button type="button" variant="secondary" onClick={onClose}>
+          Close
+        </Button>
+      }
+    >
       <div className="flex flex-col gap-2 sm:flex-row">
         <Input placeholder="Search by name or location..." value={search} onChange={(e) => setSearch(e.target.value)} />
         <Select value={status} onChange={(e) => setStatus(e.target.value)} className="sm:w-40">
@@ -269,7 +279,7 @@ export default function SiteManagementPage() {
         <Spinner label="Loading assets" />
       ) : (
         <div className="grid gap-5 lg:grid-cols-[380px_1fr]">
-          <div className="h-fit rounded border border-steel-200 bg-white">
+          <div className="h-fit rounded border border-steel-200 bg-surface">
             <div className="flex flex-col gap-2 border-b border-steel-200 p-3 sm:flex-row">
               <Input
                 placeholder="Search asset ID, type, reg. no..."

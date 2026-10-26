@@ -176,7 +176,7 @@ export default function MaintenanceHistoryPage() {
         </Select>
       </div>
 
-      <div className="rounded border border-steel-200 bg-white">
+      <div className="rounded border border-steel-200 bg-surface">
         {!result ? (
           error ? null : <Spinner label="Loading maintenance history" />
         ) : (

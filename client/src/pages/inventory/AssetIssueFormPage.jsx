@@ -9,6 +9,18 @@ import { machineryLabel } from '../../config/fuel';
 
 const EMPTY_LINE = { itemId: '', storageLocationId: '', issuedQuantity: '' };
 
+const LINE_GRID =
+  'grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-[1.5rem_minmax(0,2.2fr)_minmax(0,1.6fr)_minmax(0,1fr)_5rem] sm:items-center sm:gap-y-0';
+
+function CellLabel({ htmlFor, required = false, children }) {
+  return (
+    <label htmlFor={htmlFor} className="mb-1 block text-xs font-semibold text-steel-600 sm:sr-only">
+      {children}
+      {required && <span className="ml-0.5 text-danger-600">*</span>}
+    </label>
+  );
+}
+
 function assetLabel(assetType, asset) {
   return assetType === 'VEHICLE' ? asset.registrationNumber : machineryLabel(asset);
 }
@@ -124,7 +136,7 @@ export default function AssetIssueFormPage() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      <div className="mb-5">
+      <div className="mb-3">
         <h1 className="text-xl font-semibold text-steel-900">New asset issue</h1>
         <p className="mt-1 text-steel-500">Stock decreases immediately — there's no separate confirm step.</p>
       </div>
@@ -133,7 +145,7 @@ export default function AssetIssueFormPage() {
         <form onSubmit={handleSubmit} noValidate>
           <Alert tone="error">{submitError}</Alert>
 
-          <div className="grid gap-x-6 sm:grid-cols-2">
+          <div className="grid gap-x-4 sm:grid-cols-2">
             <Field label="Site" required hint={!isAdmin ? 'Assets at your own site.' : undefined}>
               {({ id: fieldId, invalid, describedBy }) => (
                 <Select
@@ -219,7 +231,7 @@ export default function AssetIssueFormPage() {
             </Field>
           </div>
 
-          <div className="mt-6 border-t border-steel-200 pt-5">
+          <div className="mt-4 border-t border-steel-200 pt-4">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-steel-900">Items</h2>
               <Button type="button" variant="secondary" size="sm" onClick={addLine} disabled={!selectedAsset}>
@@ -232,13 +244,39 @@ export default function AssetIssueFormPage() {
             ) : locationsAtAssetSite.length === 0 ? (
               <Alert tone="warning">No storage locations exist at this asset's site yet.</Alert>
             ) : (
-              <div className="flex flex-col gap-4">
-                {lines.map((line, index) => (
-                  <div key={index} className="rounded border border-steel-200 p-3">
-                    <div className="grid gap-x-4 sm:grid-cols-3">
-                      <Field label="Item" required>
-                        {({ id: fieldId, invalid, describedBy }) => (
-                          <Select id={fieldId} invalid={invalid} describedBy={describedBy} value={line.itemId} onChange={updateLine(index, 'itemId')} required>
+              <div>
+                <div
+                  aria-hidden="true"
+                  className={`${LINE_GRID} hidden border-b border-steel-200 pb-2 text-xs font-semibold tracking-wide text-steel-500 uppercase sm:grid`}
+                >
+                  <span>#</span>
+                  <span>
+                    Item<span className="ml-0.5 text-danger-600">*</span>
+                  </span>
+                  <span>
+                    Storage location<span className="ml-0.5 text-danger-600">*</span>
+                  </span>
+                  <span className="text-right">
+                    Issued quantity<span className="ml-0.5 text-danger-600">*</span>
+                  </span>
+                  <span />
+                </div>
+
+                <div className="border-t border-steel-200 sm:border-t-0">
+                  {lines.map((line, index) => {
+                    const rowId = `issue-line-${index}`;
+                    return (
+                      <div key={index} className={`${LINE_GRID} border-b border-steel-100 py-3 sm:py-1.5`}>
+                        <span className="col-start-1 row-start-1 self-center text-sm font-semibold text-steel-500 tabular-nums sm:col-start-auto sm:row-start-auto">
+                          <span className="sm:hidden">Item </span>
+                          {index + 1}
+                        </span>
+
+                        <div className="col-span-2 min-w-0 sm:col-span-1">
+                          <CellLabel htmlFor={`${rowId}-item`} required>
+                            Item
+                          </CellLabel>
+                          <Select id={`${rowId}-item`} aria-label={`Item ${index + 1}`} value={line.itemId} onChange={updateLine(index, 'itemId')} required>
                             <option value="">Select an item</option>
                             {items
                               .filter((it) => it.status === 'active' && itemIdsInStock.has(it.id))
@@ -248,15 +286,15 @@ export default function AssetIssueFormPage() {
                                 </option>
                               ))}
                           </Select>
-                        )}
-                      </Field>
+                        </div>
 
-                      <Field label="Storage location" required>
-                        {({ id: fieldId, invalid, describedBy }) => (
+                        <div className="min-w-0">
+                          <CellLabel htmlFor={`${rowId}-location`} required>
+                            Storage location
+                          </CellLabel>
                           <Select
-                            id={fieldId}
-                            invalid={invalid}
-                            describedBy={describedBy}
+                            id={`${rowId}-location`}
+                            aria-label={`Storage location for item ${index + 1}`}
                             value={line.storageLocationId}
                             onChange={updateLine(index, 'storageLocationId')}
                             required
@@ -268,38 +306,48 @@ export default function AssetIssueFormPage() {
                               </option>
                             ))}
                           </Select>
-                        )}
-                      </Field>
+                        </div>
 
-                      <Field label="Issued quantity" required>
-                        {({ id: fieldId, invalid, describedBy }) => (
+                        <div className="min-w-0">
+                          <CellLabel htmlFor={`${rowId}-quantity`} required>
+                            Issued quantity
+                          </CellLabel>
                           <Input
-                            id={fieldId}
-                            invalid={invalid}
-                            describedBy={describedBy}
+                            id={`${rowId}-quantity`}
+                            aria-label={`Issued quantity for item ${index + 1}`}
+                            className="text-right tabular-nums"
                             type="number"
                             min={0.001}
                             step="any"
+                            inputMode="decimal"
                             value={line.issuedQuantity}
                             onChange={updateLine(index, 'issuedQuantity')}
                             required
                           />
-                        )}
-                      </Field>
-                    </div>
+                        </div>
 
-                    {lines.length > 1 && (
-                      <button type="button" className="mt-1 text-sm font-semibold text-danger-600 hover:underline" onClick={() => removeLine(index)}>
-                        Remove this item
-                      </button>
-                    )}
-                  </div>
-                ))}
+                        <div className="col-start-2 row-start-1 text-right sm:col-start-auto sm:row-start-auto">
+                          {lines.length > 1 && (
+                            <button
+                              type="button"
+                              aria-label={`Remove item ${index + 1}`}
+                              title="Remove this item"
+                              className="rounded px-2 py-1 text-sm font-semibold text-danger-600 hover:bg-danger-50"
+                              onClick={() => removeLine(index)}
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
 
-          <div className="flex justify-end gap-2 pt-5">
+          <div className="flex flex-col-reverse gap-2 pt-3 sm:flex-row sm:justify-end">
             <Button variant="secondary" onClick={() => navigate(-1)}>
               Cancel
             </Button>

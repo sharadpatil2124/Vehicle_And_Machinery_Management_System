@@ -93,7 +93,7 @@ function StockTab({ isAdmin, siteNames }) {
         <FuelTypeFilter value={filters.fuelType} onChange={(fuelType) => setFilters((f) => ({ ...f, fuelType }))} />
       </div>
       <Alert tone="error">{error}</Alert>
-      <div className="rounded border border-steel-200 bg-white">
+      <div className="rounded border border-steel-200 bg-surface">
         {!rows ? (
           <Spinner label="Loading fuel stock" />
         ) : (
@@ -166,7 +166,7 @@ function MovementsTab({ isAdmin, siteNames }) {
       </div>
       <p className="mb-3 text-xs text-steel-500">Newest recorded first. Balance is the stock right after each movement was recorded.</p>
       <Alert tone="error">{error}</Alert>
-      <div className="rounded border border-steel-200 bg-white">
+      <div className="rounded border border-steel-200 bg-surface">
         {!result ? (
           <Spinner label="Loading movements" />
         ) : (

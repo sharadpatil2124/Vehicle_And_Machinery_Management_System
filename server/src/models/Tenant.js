@@ -32,6 +32,22 @@ Tenant.init(
       type: DataTypes.STRING(500),
       allowNull: true,
     },
+    dashboardTitle: {
+      type: DataTypes.STRING(150),
+      allowNull: true,
+    },
+    logoStoredFilename: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    logoMimeType: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    logoUpdatedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
     status: {
       type: DataTypes.ENUM(...TENANT_STATUSES),
       allowNull: false,

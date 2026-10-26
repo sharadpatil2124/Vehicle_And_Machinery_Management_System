@@ -20,7 +20,7 @@ export default function ReportTable({ title, noun, rows, columns, getRowKey, sea
   const description = subtitle ? subtitle(paged.sort, columns) : `${rows.length} ${rows.length === 1 ? noun : `${noun}s`}`;
 
   return (
-    <section className={`rounded border border-steel-200 bg-white ${className}`}>
+    <section className={`rounded border border-steel-200 bg-surface ${className}`}>
       {(title || showSearch) && (
         <header className="flex flex-col gap-3 border-b border-steel-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div>

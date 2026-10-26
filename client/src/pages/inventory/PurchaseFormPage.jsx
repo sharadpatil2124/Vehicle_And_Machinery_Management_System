@@ -34,7 +34,7 @@ function toLineValues(items) {
 
 const currency = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' });
 
-function LineTotals({ line }) {
+function lineFigures(line) {
   const quantity = Number(line.purchasedQuantity);
   const price = Number(line.unitPrice);
   const tax = line.taxPercentage === '' ? 0 : Number(line.taxPercentage);
@@ -44,16 +44,20 @@ function LineTotals({ line }) {
   const taxAmount = Math.round(subtotal * (tax / 100) * 100) / 100;
   const lineTotal = Math.round((subtotal + taxAmount) * 100) / 100;
   const priceInclTax = price * (1 + tax / 100);
+  return { lineTotal, priceInclTax };
+}
 
+const LINE_GRID =
+  'grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-4 lg:grid-cols-[1.75rem_minmax(0,2.4fr)_minmax(0,1.7fr)_minmax(0,0.9fr)_minmax(0,1.1fr)_minmax(0,0.7fr)_minmax(0,1.2fr)_2rem] lg:items-center lg:gap-y-0';
+
+const cellLabel = 'mb-1 block text-xs font-semibold text-steel-600 lg:sr-only';
+
+function CellLabel({ htmlFor, required = false, children }) {
   return (
-    <div className="mb-2 flex flex-wrap gap-x-6 gap-y-1 rounded bg-steel-50 px-3 py-2 text-sm text-steel-700">
-      <span>
-        Unit price incl. tax: <span className="font-semibold text-steel-900 tabular-nums">{currency.format(priceInclTax)}</span>
-      </span>
-      <span>
-        Purchase price incl. tax: <span className="font-semibold text-steel-900 tabular-nums">{currency.format(lineTotal)}</span>
-      </span>
-    </div>
+    <label htmlFor={htmlFor} className={cellLabel}>
+      {children}
+      {required && <span className="ml-0.5 text-danger-600">*</span>}
+    </label>
   );
 }
 
@@ -115,6 +119,12 @@ export default function PurchaseFormPage() {
     () => storageLocations.filter((l) => String(l.siteId) === String(effectiveSiteId)),
     [storageLocations, effectiveSiteId]
   );
+
+  const purchaseTotal = useMemo(() => {
+    const priced = lines.map(lineFigures).filter(Boolean);
+    if (priced.length === 0) return null;
+    return { count: priced.length, total: Math.round(priced.reduce((t, f) => t + f.lineTotal, 0) * 100) / 100 };
+  }, [lines]);
 
   function updateForm(field) {
     return (event) => setForm((f) => ({ ...f, [field]: event.target.value }));
@@ -197,8 +207,8 @@ export default function PurchaseFormPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
-      <div className="mb-5">
+    <div className="mx-auto max-w-6xl">
+      <div className="mb-3">
         <h1 className="text-xl font-semibold text-steel-900">{isEdit ? 'Edit purchase' : 'New purchase'}</h1>
         <p className="mt-1 text-steel-500">
           {isEdit ? 'Nothing here has been received yet.' : 'Nothing moves into stock until this is received.'}
@@ -209,7 +219,7 @@ export default function PurchaseFormPage() {
         <form onSubmit={handleSubmit} noValidate>
           <Alert tone="error">{submitError}</Alert>
 
-          <div className="grid gap-x-6 sm:grid-cols-2">
+          <div className="grid gap-x-4 sm:grid-cols-2">
             {isEdit ? (
               <Field label="Site">
                 {({ id: fieldId }) => (
@@ -263,122 +273,187 @@ export default function PurchaseFormPage() {
             </Field>
           </div>
 
-          <div className="mt-6 border-t border-steel-200 pt-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-steel-900">Items</h2>
-              <Button type="button" variant="secondary" size="sm" onClick={addLine}>
-                Add item
-              </Button>
-            </div>
+          <div className="mt-4 border-t border-steel-200 pt-4">
+            <h2 className="mb-2 text-sm font-semibold text-steel-900">Items</h2>
 
             {(!isAdmin || effectiveSiteId) && locationsAtEffectiveSite.length === 0 && (
               <Alert tone="warning">No storage locations exist at this site yet — create one first.</Alert>
             )}
 
-            <div className="flex flex-col gap-4">
-              {lines.map((line, index) => (
-                <div key={index} className="rounded border border-steel-200 p-3">
-                  <div className="grid gap-x-4 sm:grid-cols-2">
-                    <Field label="Item" required>
-                      {({ id: fieldId, invalid, describedBy }) => (
-                        <Select id={fieldId} invalid={invalid} describedBy={describedBy} value={line.itemId} onChange={updateLine(index, 'itemId')} required>
-                          <option value="">Select an item</option>
-                          {items
-                            .filter((it) => it.status === 'active')
-                            .map((it) => (
-                              <option key={it.id} value={it.id} data-added={it.id}>
-                                {it.itemName}
-                              </option>
-                            ))}
-                        </Select>
-                      )}
-                    </Field>
+            <div
+              aria-hidden="true"
+              className={`${LINE_GRID} hidden border-b border-steel-200 pb-2 text-xs font-semibold tracking-wide text-steel-500 uppercase lg:grid`}
+            >
+              <span>#</span>
+              <span>
+                Item<span className="ml-0.5 text-danger-600">*</span>
+              </span>
+              <span>
+                Storage location<span className="ml-0.5 text-danger-600">*</span>
+              </span>
+              <span className="text-right">
+                Quantity<span className="ml-0.5 text-danger-600">*</span>
+              </span>
+              <span className="text-right">
+                Unit price<span className="ml-0.5 text-danger-600">*</span>
+              </span>
+              <span className="text-right">Tax %</span>
+              <span className="text-right">Total incl. tax</span>
+              <span />
+            </div>
 
-                    <Field label="Storage location" required>
-                      {({ id: fieldId, invalid, describedBy }) => (
-                        <Select
-                          id={fieldId}
-                          invalid={invalid}
-                          describedBy={describedBy}
-                          value={line.storageLocationId}
-                          onChange={updateLine(index, 'storageLocationId')}
-                          required
+            <div className="flex flex-col gap-2 lg:gap-0">
+              {lines.map((line, index) => {
+                const figures = lineFigures(line);
+                const rowId = `purchase-line-${index}`;
+                return (
+                  <div
+                    key={index}
+                    className={`${LINE_GRID} rounded border border-steel-200 p-3 lg:rounded-none lg:border-0 lg:border-b lg:border-steel-100 lg:px-0 lg:py-1.5`}
+                  >
+                    <div className="col-span-2 flex items-center justify-between sm:col-span-4 lg:col-span-1">
+                      <span className="text-sm font-semibold text-steel-500 tabular-nums">
+                        <span className="lg:hidden">Item </span>
+                        {index + 1}
+                      </span>
+                      {lines.length > 1 && (
+                        <button
+                          type="button"
+                          className="text-sm font-semibold text-danger-600 hover:underline lg:hidden"
+                          onClick={() => removeLine(index)}
                         >
-                          <option value="">Select a location</option>
-                          {locationsAtEffectiveSite.map((loc) => (
-                            <option key={loc.id} value={loc.id} data-added={loc.id}>
-                              {loc.locationName}
+                          Remove
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="col-span-2 min-w-0 lg:col-span-1">
+                      <CellLabel htmlFor={`${rowId}-item`} required>
+                        Item
+                      </CellLabel>
+                      <Select id={`${rowId}-item`} aria-label={`Item ${index + 1}`} value={line.itemId} onChange={updateLine(index, 'itemId')} required showAllOnScroll>
+                        <option value="">Select an item</option>
+                        {items
+                          .filter((it) => it.status === 'active')
+                          .map((it) => (
+                            <option key={it.id} value={it.id} data-added={it.id}>
+                              {it.itemName}
                             </option>
                           ))}
-                        </Select>
-                      )}
-                    </Field>
+                      </Select>
+                    </div>
 
-                    <Field label="Purchased quantity" required>
-                      {({ id: fieldId, invalid, describedBy }) => (
-                        <Input
-                          id={fieldId}
-                          invalid={invalid}
-                          describedBy={describedBy}
-                          type="number"
-                          min={0.001}
-                          step="any"
-                          value={line.purchasedQuantity}
-                          onChange={updateLine(index, 'purchasedQuantity')}
-                          required
-                        />
-                      )}
-                    </Field>
+                    <div className="col-span-2 min-w-0 lg:col-span-1">
+                      <CellLabel htmlFor={`${rowId}-location`} required>
+                        Storage location
+                      </CellLabel>
+                      <Select
+                        id={`${rowId}-location`}
+                        aria-label={`Storage location for item ${index + 1}`}
+                        value={line.storageLocationId}
+                        onChange={updateLine(index, 'storageLocationId')}
+                        required
+                      >
+                        <option value="">Select a location</option>
+                        {locationsAtEffectiveSite.map((loc) => (
+                          <option key={loc.id} value={loc.id} data-added={loc.id}>
+                            {loc.locationName}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
 
-                    <Field label="Unit price (before tax)" required hint="As printed on the bill. Tax is added using Tax %.">
-                      {({ id: fieldId, invalid, describedBy }) => (
-                        <Input
-                          id={fieldId}
-                          invalid={invalid}
-                          describedBy={describedBy}
-                          type="number"
-                          min={0}
-                          step="any"
-                          value={line.unitPrice}
-                          onChange={updateLine(index, 'unitPrice')}
-                          required
-                        />
-                      )}
-                    </Field>
+                    <div className="min-w-0">
+                      <CellLabel htmlFor={`${rowId}-quantity`} required>
+                        Quantity
+                      </CellLabel>
+                      <Input
+                        id={`${rowId}-quantity`}
+                        aria-label={`Quantity for item ${index + 1}`}
+                        className="text-right tabular-nums"
+                        type="number"
+                        min={0.001}
+                        step="any"
+                        inputMode="decimal"
+                        value={line.purchasedQuantity}
+                        onChange={updateLine(index, 'purchasedQuantity')}
+                        required
+                      />
+                    </div>
 
-                    <Field label="Tax %">
-                      {({ id: fieldId, invalid, describedBy }) => (
-                        <Input
-                          id={fieldId}
-                          invalid={invalid}
-                          describedBy={describedBy}
-                          type="number"
-                          min={0}
-                          step="any"
-                          value={line.taxPercentage}
-                          onChange={updateLine(index, 'taxPercentage')}
-                        />
+                    <div className="min-w-0">
+                      <CellLabel htmlFor={`${rowId}-price`} required>
+                        Unit price (before tax)
+                      </CellLabel>
+                      <Input
+                        id={`${rowId}-price`}
+                        aria-label={`Unit price before tax for item ${index + 1}`}
+                        className="text-right tabular-nums"
+                        type="number"
+                        min={0}
+                        step="any"
+                        inputMode="decimal"
+                        value={line.unitPrice}
+                        onChange={updateLine(index, 'unitPrice')}
+                        required
+                      />
+                    </div>
+
+                    <div className="min-w-0">
+                      <CellLabel htmlFor={`${rowId}-tax`}>Tax %</CellLabel>
+                      <Input
+                        id={`${rowId}-tax`}
+                        aria-label={`Tax percent for item ${index + 1}`}
+                        className="text-right tabular-nums"
+                        type="number"
+                        min={0}
+                        step="any"
+                        inputMode="decimal"
+                        value={line.taxPercentage}
+                        onChange={updateLine(index, 'taxPercentage')}
+                      />
+                    </div>
+
+                    <div className="min-w-0 sm:text-right">
+                      <span className={cellLabel}>Total incl. tax</span>
+                      <div className="text-sm font-semibold text-steel-900 tabular-nums">{figures ? currency.format(figures.lineTotal) : '—'}</div>
+                      {figures && (
+                        <div className="text-xs text-steel-500 tabular-nums">{currency.format(figures.priceInclTax)} / unit</div>
                       )}
-                    </Field>
+                    </div>
+
+                    <div className="hidden text-right lg:block">
+                      {lines.length > 1 && (
+                        <button
+                          type="button"
+                          aria-label={`Remove item ${index + 1}`}
+                          title="Remove this item"
+                          className="rounded px-1.5 py-0.5 text-steel-500 hover:bg-danger-50 hover:text-danger-600"
+                          onClick={() => removeLine(index)}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
                   </div>
+                );
+              })}
+            </div>
 
-                  <LineTotals line={line} />
-
-                  {lines.length > 1 && (
-                    <button
-                      type="button"
-                      className="mt-1 text-sm font-semibold text-danger-600 hover:underline"
-                      onClick={() => removeLine(index)}
-                    >
-                      Remove this item
-                    </button>
-                  )}
-                </div>
-              ))}
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <Button type="button" variant="secondary" size="sm" onClick={addLine}>
+                + Add another item
+              </Button>
+              {purchaseTotal && (
+                <p className="text-sm text-steel-600">
+                  {purchaseTotal.count} {purchaseTotal.count === 1 ? 'item' : 'items'} · Total incl. tax{' '}
+                  <span className="font-semibold text-steel-900 tabular-nums">{currency.format(purchaseTotal.total)}</span>
+                </p>
+              )}
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-5">
+          <div className="flex flex-col-reverse gap-2 pt-3 sm:flex-row sm:justify-end">
             <Button variant="secondary" onClick={() => navigate(-1)}>
               Cancel
             </Button>

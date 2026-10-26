@@ -205,7 +205,7 @@ export default function StockMovementsPage() {
         </Select>
       </div>
 
-      <div className="rounded border border-steel-200 bg-white">
+      <div className="rounded border border-steel-200 bg-surface">
         {!rows ? (
           <Spinner label="Loading stock movements" />
         ) : (

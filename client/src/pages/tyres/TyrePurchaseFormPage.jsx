@@ -113,7 +113,7 @@ export default function TyrePurchaseFormPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <div className="mb-5">
+      <div className="mb-3">
         <Link to="/tyres/purchases" className="text-sm font-semibold text-brand-600 hover:underline">
           ← Tyre purchases
         </Link>

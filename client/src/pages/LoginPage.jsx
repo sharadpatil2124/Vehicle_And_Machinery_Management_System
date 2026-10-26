@@ -26,8 +26,9 @@ export default function LoginPage() {
     setSubmitting(true);
 
     try {
-      await logIn(form);
-      navigate(location.state?.from?.pathname ?? '/dashboard', { replace: true });
+      const { user } = await logIn(form);
+      const sameUser = user?.id != null && user.id === location.state?.fromUserId;
+      navigate(sameUser ? (location.state?.from?.pathname ?? '/dashboard') : '/dashboard', { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {

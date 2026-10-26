@@ -7,7 +7,7 @@ const POPUP_HEIGHT = 320;
 
 const fieldClasses = (invalid) =>
   [
-    'w-full rounded border bg-white px-3 py-2 text-sm text-steel-900',
+    'w-full rounded border bg-surface px-3 py-1.5 text-sm text-steel-900',
     'focus:outline-none focus:ring-2',
     'disabled:cursor-not-allowed disabled:bg-steel-50',
     invalid
@@ -88,6 +88,7 @@ function SearchableSelect({
   describedBy,
   className = '',
   'aria-label': ariaLabel,
+  showAllOnScroll = false,
 }) {
   const baseId = useId();
   const listId = `${baseId}-list`;
@@ -117,7 +118,7 @@ function SearchableSelect({
   }, [open, options]);
 
   const trimmed = query.trim();
-  const { shown, footer } = useMemo(() => {
+  const { shown, footer, dividerAt = -1 } = useMemo(() => {
     if (!open) return { shown: [], footer: null };
     const words = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
     if (words.length) {
@@ -134,6 +135,14 @@ function SearchableSelect({
     }
     if (!recentView) return { shown: options, footer: null };
     const { dated, recent, undated } = recentView;
+    if (showAllOnScroll) {
+      const rest = options.filter((o) => o.value !== '' && !recent.includes(o));
+      return {
+        shown: [...blanks, ...recent, ...rest],
+        dividerAt: blanks.length + recent.length,
+        footer: `The ${RECENT_COUNT} most recently added are shown first. Scroll to see all ${recent.length + rest.length}, or type to search.`,
+      };
+    }
     const pinned = selected && hasValue(selected.added) && !recent.includes(selected) ? [selected] : [];
     return {
       shown: [...blanks, ...pinned, ...recent, ...undated],
@@ -142,7 +151,7 @@ function SearchableSelect({
           ? `Showing the ${RECENT_COUNT} most recently added. Type to search all ${dated.length}.`
           : null,
     };
-  }, [open, trimmed, options, recentView, selected, blanks]);
+  }, [open, trimmed, options, recentView, selected, blanks, showAllOnScroll]);
 
   const firstEnabled = (list, from = 0, step = 1) => {
     for (let i = from; i >= 0 && i < list.length; i += step) if (!list[i].disabled) return i;
@@ -295,7 +304,7 @@ function SearchableSelect({
               ? { position: 'fixed', left: position.left, width: position.width, top: position.top, bottom: position.bottom, maxHeight: position.maxHeight }
               : { position: 'fixed', visibility: 'hidden' }
           }
-          className="z-50 flex flex-col overflow-hidden rounded border border-steel-200 bg-white shadow-lg"
+          className="z-50 flex flex-col overflow-hidden rounded border border-steel-200 bg-surface shadow-lg"
         >
           <div className="border-b border-steel-100 p-2">
             <input
@@ -332,6 +341,7 @@ function SearchableSelect({
                   onClick={() => choose(option)}
                   className={[
                     'cursor-pointer px-3 py-2 text-sm',
+                    index === dividerAt ? 'border-t border-steel-200' : '',
                     option.disabled ? 'cursor-not-allowed text-steel-300' : isActive ? 'bg-brand-50 text-steel-900' : 'text-steel-900',
                     isSelected ? 'font-semibold text-brand-700' : '',
                   ].join(' ')}
@@ -348,11 +358,11 @@ function SearchableSelect({
   );
 }
 
-export default function Select({ searchable, ...props }) {
+export default function Select({ searchable, showAllOnScroll, ...props }) {
   const options = collectOptions(props.children);
   const fromRecords = options.some((o) => hasValue(o.added));
   const entryCount = options.filter((o) => o.value !== '').length;
   const useSearch = searchable ?? (fromRecords || entryCount > SEARCH_THRESHOLD);
-  if (useSearch) return <SearchableSelect {...props} options={options} />;
+  if (useSearch) return <SearchableSelect {...props} options={options} showAllOnScroll={showAllOnScroll} />;
   return <NativeSelect {...props} />;
 }

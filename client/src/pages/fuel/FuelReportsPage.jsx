@@ -26,7 +26,7 @@ function Pair({ amount }) {
 
 function Summary({ items }) {
   return (
-    <dl className="mb-4 grid gap-4 rounded border border-steel-200 bg-white px-5 py-4 sm:grid-cols-2 lg:grid-cols-4">
+    <dl className="mb-4 grid gap-4 rounded border border-steel-200 bg-surface px-5 py-4 sm:grid-cols-2 lg:grid-cols-4">
       {items.map(([label, value, tone, detail]) => (
         <div key={label}>
           <dt className="text-xs font-semibold tracking-wide text-steel-500 uppercase">{label}</dt>

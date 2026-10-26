@@ -26,6 +26,7 @@ const fuelReportRoutes = require('./fuelReport.routes');
 const tyreRoutes = require('./tyre.routes');
 const maintenanceRoutes = require('./maintenance.routes');
 const dashboardRoutes = require('./dashboard.routes');
+const brandingRoutes = require('./branding.routes');
 const inventoryReportRoutes = require('./inventoryReport.routes');
 const { sequelize } = require('../config/database');
 
@@ -75,6 +76,7 @@ router.use('/tyres', tyreRoutes);
 router.use('/maintenance', maintenanceRoutes);
 
 router.use('/dashboard', dashboardRoutes);
+router.use('/branding', brandingRoutes);
 
 router.use('/inventory-reports', inventoryReportRoutes);
 

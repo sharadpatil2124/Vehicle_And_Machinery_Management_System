@@ -289,17 +289,13 @@ async function findDocuments(tenantId, conditions, replacements, { orderSql, lim
   });
 }
 
-async function countByExpiry(conditions, replacements) {
-  const [row] = await select(
-    `SELECT COUNT(*) AS total,
+const EXPIRY_COUNTS = `COUNT(*) AS total,
             SUM(cd.expiry_date < :today) AS expired,
             SUM(cd.expiry_date >= :today AND cd.expiry_date <= :warnUntil) AS expiringSoon,
             SUM(cd.expiry_date > :warnUntil) AS valid,
-            SUM(cd.expiry_date IS NULL) AS noExpiry
-       ${ASSET_JOINS}
-       ${whereSql(conditions)}`,
-    replacements
-  );
+            SUM(cd.expiry_date IS NULL) AS noExpiry`;
+
+function readCounts(row) {
   return {
     total: num(row.total),
     expired: num(row.expired),
@@ -307,6 +303,16 @@ async function countByExpiry(conditions, replacements) {
     valid: num(row.valid),
     noExpiry: num(row.noExpiry),
   };
+}
+
+async function countByExpiry(conditions, replacements) {
+  const [row] = await select(
+    `SELECT ${EXPIRY_COUNTS}
+       ${ASSET_JOINS}
+       ${whereSql(conditions)}`,
+    replacements
+  );
+  return readCounts(row);
 }
 
 async function listCompliance({ tenantId, auth, query }) {
@@ -350,7 +356,41 @@ async function getComplianceAlerts({ tenantId, auth, query }) {
   };
 }
 
+const DASHBOARD_ATTENTION_LIMIT = 50;
+
+async function getComplianceDashboard({ tenantId, auth, query }) {
+  const { conditions, replacements } = buildScope({ tenantId, auth, query: { siteId: query.siteId } });
+  const where = whereSql(conditions);
+
+  const [[totals], typeRows, attention] = await Promise.all([
+    select(
+      `SELECT ${EXPIRY_COUNTS},
+              COUNT(DISTINCT CASE WHEN cd.expiry_date <= :warnUntil THEN CONCAT(cd.asset_type, ':', cd.asset_id) END) AS assetsAffected
+         ${ASSET_JOINS}
+         ${where}`,
+      replacements
+    ),
+    select(`SELECT cd.doc_type AS docType, ${EXPIRY_COUNTS} ${ASSET_JOINS} ${where} GROUP BY cd.doc_type`, replacements),
+    findDocuments(tenantId, [...conditions, EXPIRY_FILTERS.ATTENTION], replacements, {
+      orderSql: 'cd.expiry_date ASC',
+      limit: DASHBOARD_ATTENTION_LIMIT,
+      offset: 0,
+    }),
+  ]);
+
+  const byType = new Map(typeRows.map((row) => [row.docType, readCounts(row)]));
+
+  return {
+    scope: { siteId: replacements.siteId ?? null },
+    warningDays: EXPIRY_WARNING_DAYS,
+    summary: { ...readCounts(totals), assetsAffected: num(totals.assetsAffected) },
+    byDocType: DOC_TYPES.map((docType) => ({ docType, ...(byType.get(docType) ?? readCounts({})) })),
+    attention,
+  };
+}
+
 module.exports = {
+  getComplianceDashboard,
   listComplianceDocuments,
   upsertComplianceDocument,
   saveComplianceDocuments,

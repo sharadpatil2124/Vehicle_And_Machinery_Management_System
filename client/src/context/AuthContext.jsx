@@ -11,6 +11,7 @@ function toSession({ token, user, organization }) {
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(readSession);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [previousUserId, setPreviousUserId] = useState(null);
 
   const startSession = useCallback((payload) => {
     const next = toSession(payload);
@@ -20,10 +21,13 @@ export function AuthProvider({ children }) {
     return next;
   }, []);
 
+  const currentUserId = session?.user?.id ?? null;
+
   const endSession = useCallback(() => {
+    setPreviousUserId(currentUserId);
     clearSession();
     setSession(null);
-  }, []);
+  }, [currentUserId]);
 
   useEffect(() => {
     function handleExpired() {
@@ -60,11 +64,12 @@ export function AuthProvider({ children }) {
       role: session?.user?.role ?? null,
       isAuthenticated: Boolean(session?.token),
       sessionExpired,
+      previousUserId,
       signUp,
       logIn,
       logOut,
     }),
-    [session, sessionExpired, signUp, logIn, logOut]
+    [session, sessionExpired, previousUserId, signUp, logIn, logOut]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

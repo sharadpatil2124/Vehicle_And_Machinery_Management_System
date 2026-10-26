@@ -124,7 +124,7 @@ export default function TyreFitFormPage() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      <div className="mb-5">
+      <div className="mb-3">
         <Link to="/tyres/fitting" className="text-sm font-semibold text-brand-600 hover:underline">
           ← Tyre fitting
         </Link>
@@ -166,7 +166,7 @@ export default function TyreFitFormPage() {
                 {({ id, invalid, describedBy }) => <Input id={id} invalid={invalid} describedBy={describedBy} value={effectiveSiteId ? siteNames[effectiveSiteId] ?? 'Your site' : 'Not assigned'} disabled />}
               </Field>
             )}
-            <fieldset className="mb-4">
+            <fieldset className="mb-3">
               <legend className="mb-1.5 text-sm font-semibold text-steel-700">
                 Asset type <span className="text-danger-600">*</span>
               </legend>
@@ -244,7 +244,7 @@ export default function TyreFitFormPage() {
           </div>
 
           {selectedStock?.usedQuantity > 0 && (
-            <fieldset className="mb-4">
+            <fieldset className="mb-3">
               <legend className="mb-1.5 text-sm font-semibold text-steel-700">New or returned tyres?</legend>
               <div className="grid gap-2 sm:max-w-md sm:grid-cols-2">
                 {[

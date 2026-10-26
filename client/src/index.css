@@ -18,16 +18,85 @@
   --color-steel-900: #16202a;
 
   --color-success-50: #e7f4ee;
+  --color-success-500: #2f8a5f;
   --color-success-600: #1c6647;
 
   --color-warning-50: #fdf3e2;
+  --color-warning-500: #d4881c;
   --color-warning-600: #96570b;
 
   --color-danger-50: #fbeae6;
   --color-danger-500: #c0492f;
   --color-danger-600: #a33421;
 
+  --color-surface: #ffffff;
+
+  --color-accent: #1d4e78;
+  --color-accent-hover: #17405f;
+
+  --color-danger-solid: #a33421;
+  --color-danger-solid-hover: #c0492f;
+
+  --color-nav-200: #d7dee5;
+  --color-nav-300: #b9c5d0;
+  --color-nav-600: #4a5c6b;
+
   --font-sans: 'Inter var', ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif;
+}
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+:root {
+  color-scheme: light;
+
+  --color-chart-fuel: #1d4e78;
+  --color-chart-parts: #8fb3d3;
+  --color-chart-fuel-selected: #0f2d47;
+  --color-chart-parts-selected: #5b89b3;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --color-surface: #19232d;
+
+  --color-steel-50: #1f2a35;
+  --color-steel-100: #111920;
+  --color-steel-200: #2e3b48;
+  --color-steel-300: #566676;
+  --color-steel-500: #8b9aa8;
+  --color-steel-600: #a8b5c1;
+  --color-steel-700: #c7d0d9;
+  --color-steel-900: #e9eef3;
+
+  --color-brand-50: #17304a;
+  --color-brand-100: #1d3b58;
+  --color-brand-500: #4a8ac4;
+  --color-brand-600: #6fa8dc;
+  --color-brand-700: #9cc4e8;
+
+  --color-success-50: #10301f;
+  --color-success-500: #36a06d;
+  --color-success-600: #63d09b;
+
+  --color-warning-50: #36280f;
+  --color-warning-500: #e09a35;
+  --color-warning-600: #f0b862;
+
+  --color-danger-50: #3b1c17;
+  --color-danger-500: #e2694f;
+  --color-danger-600: #f28d76;
+
+  --color-accent: #2b6aa3;
+  --color-accent-hover: #3779b4;
+
+  --color-danger-solid: #b93b25;
+  --color-danger-solid-hover: #cc4a32;
+
+  --color-chart-fuel: #6aa6dc;
+  --color-chart-parts: #36597a;
+  --color-chart-fuel-selected: #a9cff1;
+  --color-chart-parts-selected: #5f8cb5;
 }
 
 @layer base {

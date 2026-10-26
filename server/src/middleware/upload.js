@@ -26,8 +26,25 @@ const assetCreationUpload = multer({
   fileFilter,
 });
 
+const MAX_LOGO_SIZE_BYTES = 2 * 1024 * 1024;
+
+const LOGO_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
+
+const logoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_LOGO_SIZE_BYTES, files: 1 },
+  fileFilter(_req, file, callback) {
+    if (!LOGO_MIME_TYPES.has(file.mimetype)) {
+      return callback(AppError.badRequest('Logo must be a PNG, JPG or WEBP image'));
+    }
+    callback(null, true);
+  },
+});
+
 module.exports = {
   uploadSingleDocument: singleDocumentUpload.single('file'),
+  uploadLogo: logoUpload.single('logo'),
+  MAX_LOGO_SIZE_BYTES,
   uploadAssetCreationDocuments: assetCreationUpload.fields(
     AssetDocument.DOC_TYPES.map((docType) => ({ name: docType, maxCount: 1 }))
   ),

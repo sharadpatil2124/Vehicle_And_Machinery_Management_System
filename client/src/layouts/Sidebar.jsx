@@ -6,8 +6,8 @@ const linkClasses = ({ isActive }) =>
   [
     'block rounded px-3 py-1.5 text-sm transition-colors',
     isActive
-      ? 'bg-brand-600 font-semibold text-white'
-      : 'text-steel-300 hover:bg-white/10 hover:text-white',
+      ? 'bg-accent font-semibold text-white'
+      : 'text-nav-300 hover:bg-white/10 hover:text-white',
   ].join(' ');
 
 function NavSection({ title, paths, children }) {
@@ -27,7 +27,7 @@ function NavSection({ title, paths, children }) {
         aria-expanded={open}
         className={[
           'flex w-full items-center justify-between rounded px-3 py-2 text-sm font-semibold transition-colors',
-          isInSection ? 'text-white' : 'text-steel-200 hover:bg-white/10 hover:text-white',
+          isInSection ? 'text-white' : 'text-nav-200 hover:bg-white/10 hover:text-white',
         ].join(' ')}
       >
         {title}
@@ -48,7 +48,8 @@ export default function Sidebar({ open, onNavigate }) {
   return (
     <aside
       className={[
-        'fixed inset-y-0 left-0 z-40 flex w-60 shrink-0 flex-col overflow-y-auto bg-brand-900',
+        'fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col overflow-y-auto bg-brand-900',
+        'scrollbar-gutter-stable scrollbar-thin [scrollbar-color:var(--color-nav-600)_transparent]',
         'transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0',
         open ? 'translate-x-0' : '-translate-x-full',
       ].join(' ')}
@@ -63,7 +64,7 @@ export default function Sidebar({ open, onNavigate }) {
           className={({ isActive }) =>
             [
               'block rounded px-3 py-2 text-sm font-semibold transition-colors',
-              isActive ? 'bg-brand-600 text-white' : 'text-steel-200 hover:bg-white/10 hover:text-white',
+              isActive ? 'bg-accent text-white' : 'text-nav-200 hover:bg-white/10 hover:text-white',
             ].join(' ')
           }
           onClick={onNavigate}

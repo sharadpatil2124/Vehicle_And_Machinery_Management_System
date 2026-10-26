@@ -175,7 +175,7 @@ export default function StockAdjustmentFormPage() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      <div className="mb-5">
+      <div className="mb-3">
         <h1 className="text-xl font-semibold text-steel-900">New stock adjustment</h1>
         <p className="mt-1 text-steel-500">Enter what was physically counted — the system quantity is looked up automatically.</p>
       </div>
@@ -184,7 +184,7 @@ export default function StockAdjustmentFormPage() {
         <form onSubmit={handleSubmit} noValidate>
           <Alert tone="error">{submitError}</Alert>
 
-          <div className="grid gap-x-6 sm:grid-cols-2">
+          <div className="grid gap-x-4 sm:grid-cols-2">
             {isAdmin && (
               <Field label="Site" required>
                 {({ id: fieldId, invalid, describedBy }) => (
@@ -213,7 +213,7 @@ export default function StockAdjustmentFormPage() {
             </Field>
           </div>
 
-          <div className="mt-6 border-t border-steel-200 pt-5">
+          <div className="mt-4 border-t border-steel-200 pt-4">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-steel-900">Items</h2>
               <Button type="button" variant="secondary" size="sm" onClick={addLine} disabled={isAdmin && !form.siteId}>
@@ -226,7 +226,7 @@ export default function StockAdjustmentFormPage() {
             ) : locationsAtSite.length === 0 ? (
               <Alert tone="warning">No storage locations exist at this site yet.</Alert>
             ) : (
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-3">
                 {lines.map((line, index) => (
                   <AdjustmentLine
                     key={index}
@@ -243,7 +243,7 @@ export default function StockAdjustmentFormPage() {
             )}
           </div>
 
-          <div className="flex justify-end gap-2 pt-5">
+          <div className="flex flex-col-reverse gap-2 pt-3 sm:flex-row sm:justify-end">
             <Button variant="secondary" onClick={() => navigate(-1)}>
               Cancel
             </Button>

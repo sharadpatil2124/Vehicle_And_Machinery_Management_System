@@ -19,7 +19,7 @@ function Tiles({ items }) {
   return (
     <dl className={`mb-4 grid gap-3 sm:grid-cols-2 ${TILE_COLUMNS[items.length] ?? 'lg:grid-cols-4'}`}>
       {items.map(([label, value, hint]) => (
-        <div key={label} className="rounded border border-steel-200 bg-white px-4 py-3">
+        <div key={label} className="rounded border border-steel-200 bg-surface px-4 py-3">
           <dt className="text-xs font-semibold tracking-wide text-steel-500 uppercase">{label}</dt>
           <dd className="mt-1 text-xl font-semibold text-steel-900 tabular-nums">{value}</dd>
           {hint && <dd className="text-xs text-steel-500">{hint}</dd>}
@@ -54,7 +54,7 @@ function AssetReport({ data }) {
           ['Tyre cost', formatCurrency(t.tyreCost), 'Incl. GST'],
         ]}
       />
-      <section className="rounded border border-steel-200 bg-white">
+      <section className="rounded border border-steel-200 bg-surface">
         {paged.needsControls && (
           <header className="flex flex-col gap-3 border-b border-steel-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-steel-500">

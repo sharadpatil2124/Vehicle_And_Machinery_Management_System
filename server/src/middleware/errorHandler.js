@@ -1,7 +1,7 @@
 const AppError = require('../utils/AppError');
 const logger = require('../utils/logger');
 const env = require('../config/env');
-const { MAX_FILE_SIZE_BYTES } = require('./upload');
+const { MAX_FILE_SIZE_BYTES, MAX_LOGO_SIZE_BYTES } = require('./upload');
 
 function translateDatabaseError(error) {
   if (error.name === 'SequelizeDatabaseError' && error.original?.sqlState === '45000') {
@@ -23,7 +23,8 @@ function translateDatabaseError(error) {
 function translateUploadError(error) {
   if (error.name !== 'MulterError') return null;
   if (error.code === 'LIMIT_FILE_SIZE') {
-    const maxMB = Math.round(MAX_FILE_SIZE_BYTES / (1024 * 1024));
+    const limit = error.field === 'logo' ? MAX_LOGO_SIZE_BYTES : MAX_FILE_SIZE_BYTES;
+    const maxMB = Math.round(limit / (1024 * 1024));
     return AppError.badRequest(`File is too large — the limit is ${maxMB}MB`);
   }
   return AppError.badRequest('File upload failed');

@@ -19,7 +19,6 @@ export default function MachineryListPage() {
   const [filters, setFilters] = useState({
     search: '',
     status: '',
-    fuelType: '',
     page: 1,
     sort: 'createdAt:desc',
   });
@@ -34,12 +33,11 @@ export default function MachineryListPage() {
       const response = await machineryApi.list({
         search: activeFilters.search || undefined,
         status: activeFilters.status || undefined,
-        fuelType: activeFilters.fuelType || undefined,
         page: activeFilters.page,
         sort: activeFilters.sort,
       });
       setResult(response);
-      if (!activeFilters.search && !activeFilters.fuelType) setOverallTotal(response.pagination.total);
+      if (!activeFilters.search) setOverallTotal(response.pagination.total);
     } catch (err) {
       setError(err.message);
     }
@@ -123,7 +121,7 @@ export default function MachineryListPage() {
 
       {error && <Alert tone="error">{error}</Alert>}
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
+      <div className="mb-4 grid gap-3 sm:grid-cols-2">
         <Input
           placeholder="Search RCPL, asset ID, name, model, chassis..."
           value={filters.search}
@@ -136,14 +134,9 @@ export default function MachineryListPage() {
             </option>
           ))}
         </Select>
-        <Input
-          placeholder="Filter by fuel type"
-          value={filters.fuelType}
-          onChange={(e) => updateFilter('fuelType', e.target.value)}
-        />
       </div>
 
-      <div className="rounded border border-steel-200 bg-white">
+      <div className="rounded border border-steel-200 bg-surface">
         {!result ? (
           <Spinner label="Loading machinery" />
         ) : (

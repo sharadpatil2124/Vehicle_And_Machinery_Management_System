@@ -1,6 +1,6 @@
 export default function Card({ title, subtitle, actions, className = '', children }) {
   return (
-    <section className={`rounded border border-steel-200 bg-white ${className}`}>
+    <section className={`rounded border border-steel-200 bg-surface ${className}`}>
       {(title || actions) && (
         <header className="flex items-start justify-between gap-4 border-b border-steel-200 px-5 py-4">
           <div>

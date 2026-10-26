@@ -28,9 +28,9 @@ export function getComplianceDateErrors(value) {
 
 function Row({ title, children }) {
   return (
-    <div className="border-b border-steel-100 py-4 last:border-b-0">
+    <div className="border-b border-steel-100 py-3 last:border-b-0">
       <p className="mb-2 text-sm font-medium text-steel-700">{title}</p>
-      <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">{children}</div>
+      <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">{children}</div>
     </div>
   );
 }
@@ -66,7 +66,7 @@ export default function ComplianceFields({ value, onChange }) {
   }
 
   return (
-    <div id="compliance" ref={sectionRef} className="mt-6 scroll-mt-4 border-t border-steel-200 pt-5">
+    <div id="compliance" ref={sectionRef} className="mt-4 scroll-mt-4 border-t border-steel-200 pt-4">
       <h2 className="mb-3 text-sm font-semibold text-steel-900">Compliance</h2>
 
       <Row title="Road Tax">

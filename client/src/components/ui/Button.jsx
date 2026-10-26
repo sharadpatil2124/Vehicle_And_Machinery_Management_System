@@ -1,8 +1,8 @@
 const VARIANTS = {
-  primary: 'bg-brand-600 text-white hover:bg-brand-700 disabled:hover:bg-brand-600',
+  primary: 'bg-accent text-white hover:bg-accent-hover disabled:hover:bg-accent',
   secondary:
-    'bg-white text-steel-700 border border-steel-200 hover:bg-steel-50 disabled:hover:bg-white',
-  danger: 'bg-danger-600 text-white hover:bg-danger-500 disabled:hover:bg-danger-600',
+    'bg-surface text-steel-700 border border-steel-200 hover:bg-steel-50 disabled:hover:bg-surface',
+  danger: 'bg-danger-solid text-white hover:bg-danger-solid-hover disabled:hover:bg-danger-solid',
   ghost: 'text-steel-600 hover:bg-steel-100 hover:text-steel-900 disabled:hover:bg-transparent',
 };
 

@@ -2,173 +2,57 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { dashboardApi } from '../api/client';
 import { Alert, Select, Spinner } from '../components/ui';
+import { hasPermission } from '../config/permissions';
+import { DocTypeTable, useComplianceDashboard } from '../components/dashboard/ComplianceOverview';
+import { RunningCostCard, UsageCard } from '../components/dashboard/RunningCost';
+import MaintenanceCard, { useMaintenanceSummary } from '../components/dashboard/MaintenanceCard';
 import { useAuth } from '../context/AuthContext';
 import useSiteNames from '../hooks/useSiteNames';
 
-const rupees = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
-const rupeesCompact = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', notation: 'compact', maximumFractionDigits: 1 });
 const numberFormat = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
 
-const FUEL_COLOR = '#1d4e78';
-const PARTS_COLOR = '#8fb3d3';
+const KPI_COLUMNS = { 3: 'md:grid-cols-3', 4: 'md:grid-cols-4' };
 
-function formatLitres(value) {
-  return `${numberFormat.format(value)} L`;
-}
-
-function monthName(key, style = 'short') {
-  const [year, month] = key.split('-').map(Number);
-  return new Date(year, month - 1, 1).toLocaleDateString(style === 'long' ? 'en-IN' : 'en-US', { month: style, ...(style === 'long' ? { year: 'numeric' } : {}) });
-}
-
-function SectionTitle({ children, aside }) {
-  return (
-    <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-      <h2 className="text-xs font-semibold tracking-wider text-steel-500 uppercase">{children}</h2>
-      {aside && (typeof aside === 'string' ? <span className="text-xs text-steel-500">{aside}</span> : aside)}
-    </div>
-  );
-}
-
-function StatTile({ label, value, detail, to, tone = 'default' }) {
-  const toneClasses = tone === 'warning' ? 'border-warning-600/30 bg-warning-50' : 'border-steel-200 bg-white hover:border-brand-500';
-  const valueClass = tone === 'warning' ? 'text-warning-600' : 'text-steel-900';
+function KpiCell({ label, value, detail, detailTone = 'text-steel-500', valueClass = 'text-xl sm:text-2xl', to, className = '' }) {
   const body = (
     <>
-      <span className="text-xs font-semibold tracking-wide text-steel-500 uppercase">{label}</span>
-      <span className={`mt-2 text-2xl font-semibold tabular-nums ${valueClass}`}>{value}</span>
-      {detail && <span className="mt-1 text-xs text-steel-500">{detail}</span>}
+      <span className="truncate text-xs font-semibold tracking-wider text-steel-900 uppercase">{label}</span>
+      <span className="flex flex-wrap items-baseline justify-between gap-x-3">
+        <span className={`truncate text-[13px] ${detailTone}`}>{detail}</span>
+        <span className={`ml-auto max-w-full truncate font-semibold tracking-tight text-steel-900 tabular-nums ${valueClass}`}>{value}</span>
+      </span>
     </>
   );
-  const className = `flex min-w-0 flex-col rounded border px-4 py-4 transition-colors ${toneClasses}`;
+  const classes = `flex min-w-0 flex-col justify-between gap-1 bg-surface px-4 py-2 ${className}`;
   return to ? (
-    <Link to={to} className={className}>
+    <Link to={to} className={`${classes} transition-colors hover:bg-steel-50`}>
       {body}
     </Link>
   ) : (
-    <div className={className}>{body}</div>
+    <div className={classes}>{body}</div>
   );
 }
 
-function TrendChart({ trend, selected, onSelect }) {
-  const max = Math.max(...trend.map((m) => m.total), 0);
-  const pct = (value) => (max > 0 ? (value / max) * 100 : 0);
-
+function CardPlaceholder({ label }) {
   return (
-    <div className="flex gap-2 sm:gap-4">
-      {trend.map((m) => {
-        const isSelected = m.month === selected;
-        return (
-          <button
-            key={m.month}
-            type="button"
-            onClick={() => onSelect(m.month)}
-            aria-pressed={isSelected}
-            aria-label={`${monthName(m.month, 'long')}: ${rupees.format(m.total)}`}
-            className={`group flex min-w-0 flex-1 flex-col items-center rounded px-1 pt-1 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none ${
-              isSelected ? 'bg-brand-50' : 'hover:bg-steel-50'
-            }`}
-          >
-            <div className="flex h-40 w-full max-w-12 flex-col justify-end border-b border-steel-200">
-              <span
-                className={`mb-1 text-center text-xs tabular-nums ${m.total > 0 ? (isSelected ? 'font-semibold text-steel-900' : 'text-steel-600') : 'text-steel-300'}`}
-              >
-                {m.total > 0 ? rupeesCompact.format(m.total) : '—'}
-              </span>
-              {m.parts > 0 && (
-                <div
-                  className={`shrink-0 rounded-t-sm transition-opacity ${isSelected ? '' : 'opacity-60 group-hover:opacity-90'}`}
-                  style={{ height: `${pct(m.parts) * 0.82}%`, background: PARTS_COLOR }}
-                />
-              )}
-              {m.fuel > 0 && (
-                <div
-                  className={`shrink-0 transition-opacity ${m.parts > 0 ? '' : 'rounded-t-sm'} ${isSelected ? '' : 'opacity-60 group-hover:opacity-90'}`}
-                  style={{ height: `${pct(m.fuel) * 0.82}%`, background: FUEL_COLOR }}
-                />
-              )}
-            </div>
-            <span className={`mt-1.5 mb-1 text-xs ${isSelected ? 'font-semibold text-brand-700' : 'text-steel-500'}`}>{monthName(m.month)}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function MonthFigure({ label, value, detail }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-xs text-steel-500">{label}</dt>
-      <dd className="mt-0.5 font-semibold text-steel-900 tabular-nums">{value}</dd>
-      {detail && <dd className="text-xs text-steel-500">{detail}</dd>}
-    </div>
-  );
-}
-
-function MonthlyCard({ trend }) {
-  const [selected, setSelected] = useState(trend[trend.length - 1].month);
-  const month = trend.find((m) => m.month === selected) ?? trend[trend.length - 1];
-  const fuelShare = month.total > 0 ? (month.fuel / month.total) * 100 : 0;
-
-  return (
-    <div className="grid gap-6 rounded border border-steel-200 bg-white p-5 lg:grid-cols-[minmax(0,17rem)_minmax(0,1fr)]">
-      <div className="flex min-w-0 flex-col">
-        <span className="text-xs font-semibold tracking-wide text-steel-500 uppercase">Fleet running cost</span>
-        <span className="mt-1 text-xs text-steel-500">{monthName(month.month, 'long')} · fuel + parts used</span>
-        <span className="mt-3 text-3xl font-semibold text-steel-900 tabular-nums">{rupees.format(month.total)}</span>
-
-        <div className="mt-4 flex h-2 overflow-hidden rounded-full bg-steel-100" aria-hidden="true">
-          <div style={{ width: `${fuelShare}%`, background: FUEL_COLOR }} />
-          <div style={{ width: `${month.total > 0 ? 100 - fuelShare : 0}%`, background: PARTS_COLOR }} />
-        </div>
-        <dl className="mt-3 grid gap-1.5 text-sm">
-          <div className="flex items-center justify-between gap-3">
-            <dt className="flex items-center gap-2 text-steel-600">
-              <span className="size-2.5 rounded-sm" style={{ background: FUEL_COLOR }} />
-              Fuel
-            </dt>
-            <dd className="font-semibold text-steel-900 tabular-nums">{rupees.format(month.fuel)}</dd>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <dt className="flex items-center gap-2 text-steel-600">
-              <span className="size-2.5 rounded-sm" style={{ background: PARTS_COLOR }} />
-              Parts &amp; consumables
-            </dt>
-            <dd className="font-semibold text-steel-900 tabular-nums">{rupees.format(month.parts)}</dd>
-          </div>
-        </dl>
-
-        <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-steel-100 pt-4 text-sm">
-          <MonthFigure label="Fuel used" value={formatLitres(month.fuelLitres)} detail={`${month.fills} fills`} />
-          <MonthFigure label="Parts used" value={rupees.format(month.parts)} detail={`${month.issues} issues`} />
-          <MonthFigure label="Purchases received" value={rupees.format(month.purchases)} />
-          <MonthFigure label="Fuel bought" value={rupees.format(month.fuelBought)} detail={formatLitres(month.fuelBoughtLitres)} />
-        </dl>
-      </div>
-
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <span className="text-xs font-semibold tracking-wide text-steel-500 uppercase">Last 6 months</span>
-          <span className="text-xs text-steel-500">Click a month to see its figures</span>
-        </div>
-        <div className="mt-2">
-          <TrendChart trend={trend} selected={month.month} onSelect={setSelected} />
-        </div>
-      </div>
+    <div className="flex min-h-40 items-center justify-center rounded border border-steel-200 bg-surface">
+      <Spinner label={label} />
     </div>
   );
 }
 
 export default function DashboardPage() {
-  const { user, organization, role } = useAuth();
+  const { user, role } = useAuth();
   const siteNames = useSiteNames();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [costSiteId, setCostSiteId] = useState('');
+  const [siteId, setSiteId] = useState('');
   const [siteCost, setSiteCost] = useState(null);
   const [costError, setCostError] = useState(null);
+  const [siteFleet, setSiteFleet] = useState(null);
+  const [fleetError, setFleetError] = useState(null);
+  const [selectedMonth, setSelectedMonth] = useState(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -187,16 +71,16 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setCostError(null);
-    if (!costSiteId) {
+    if (!siteId) {
       setSiteCost(null);
       return undefined;
     }
     let cancelled = false;
-    setSiteCost((current) => (current?.siteId === costSiteId ? current : null));
+    setSiteCost((current) => (current?.siteId === siteId ? current : null));
     dashboardApi
-      .monthlyCost({ siteId: costSiteId })
+      .monthlyCost({ siteId })
       .then((response) => {
-        if (!cancelled) setSiteCost({ siteId: costSiteId, monthly: response.data.monthly });
+        if (!cancelled) setSiteCost({ siteId, monthly: response.data.monthly });
       })
       .catch((err) => {
         if (!cancelled) setCostError(err.message);
@@ -204,30 +88,76 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [costSiteId, refreshKey]);
+  }, [siteId, refreshKey]);
+
+  useEffect(() => {
+    setFleetError(null);
+    if (!siteId) {
+      setSiteFleet(null);
+      return undefined;
+    }
+    let cancelled = false;
+    setSiteFleet((current) => (current?.siteId === siteId ? current : null));
+    dashboardApi
+      .fleet({ siteId })
+      .then((response) => {
+        if (!cancelled) setSiteFleet({ siteId, fleet: response.data.fleet });
+      })
+      .catch((err) => {
+        if (!cancelled) setFleetError(err.message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [siteId, refreshKey]);
 
   const isAdmin = role === 'admin';
+  const showCompliance = hasPermission(role, 'COMPLIANCE', 'READ');
+  const compliance = useComplianceDashboard({ enabled: showCompliance && refreshKey > 0, siteId, refreshKey });
+  const showMaintenance = hasPermission(role, 'MAINTENANCE', 'READ');
+  const maintenance = useMaintenanceSummary({ enabled: showMaintenance && refreshKey > 0, siteId, refreshKey });
+
   const siteName = user?.siteId ? siteNames[user.siteId] : null;
   const siteOptions = useMemo(
     () => Object.entries(siteNames).sort(([, a], [, b]) => a.localeCompare(b)),
     [siteNames]
   );
-  const monthly = costSiteId ? siteCost?.monthly : data?.monthly;
+  const linkSiteId = isAdmin && siteId ? siteId : undefined;
+
+  const monthly = siteId ? siteCost?.monthly : data?.monthly;
+  const currentMonth = monthly?.[monthly.length - 1];
+  const month = monthly ? (monthly.find((m) => m.month === selectedMonth) ?? currentMonth) : null;
+
+  const title = isAdmin ? (siteId ? `Overview · ${siteNames[siteId] ?? 'Site'}` : 'Overview') : `Overview · ${siteName ?? 'Your site'}`;
+
+  const fleet = siteId ? siteFleet?.fleet : data?.fleet;
+  const fleetCount = (key) => (fleet ? numberFormat.format(fleet[key]) : '—');
+
+  const kpis = data
+    ? [
+        { key: 'vehicles', label: 'Vehicles', value: fleetCount('vehicles'), detail: 'Active', to: '/vehicles' },
+        { key: 'machinery', label: 'Machinery', value: fleetCount('machinery'), detail: 'Active', to: '/machinery' },
+        isAdmin
+          ? { key: 'sites', label: 'Sites', value: numberFormat.format(data.fleet.sites), detail: 'Active', to: '/sites' }
+          : { key: 'site', label: 'Your site', value: siteName ?? '—', detail: 'Assigned', valueClass: 'text-lg', to: '/site-management' },
+      ]
+    : [];
 
   return (
-    <div className="mx-auto max-w-6xl">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-steel-900">Dashboard</h1>
-          <p className="mt-1 text-steel-500">
-            {organization?.organizationName}
-            {!isAdmin && siteName ? ` · ${siteName}` : ''}
-          </p>
-        </div>
-        {data && (
-          <button type="button" onClick={load} className="text-xs font-semibold text-brand-600 hover:underline">
-            Refresh
-          </button>
+    <div className="mx-auto flex max-w-7xl flex-col gap-3">
+      <div className="flex min-h-9 flex-wrap items-center justify-between gap-2 sm:flex-nowrap">
+        <h1 className="min-w-0 truncate text-xs font-semibold tracking-wider text-steel-900 uppercase">{title}</h1>
+        {isAdmin && (
+          <div className="w-full sm:w-56 sm:shrink-0">
+            <Select searchable aria-label="Site for compliance and running cost" value={siteId} onChange={(e) => setSiteId(e.target.value)}>
+              <option value="">All sites</option>
+              {siteOptions.map(([id, name]) => (
+                <option key={id} value={id}>
+                  {name}
+                </option>
+              ))}
+            </Select>
+          </div>
         )}
       </div>
 
@@ -236,61 +166,45 @@ export default function DashboardPage() {
       {!data && !error && <Spinner label="Loading dashboard" />}
 
       {data && (
-        <div className="flex flex-col gap-8">
-          <section>
-            <SectionTitle>{isAdmin ? 'Fleet' : 'Fleet at your site'}</SectionTitle>
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <StatTile label="Vehicles" value={numberFormat.format(data.fleet.vehicles)} detail="Active" to="/vehicles" />
-              <StatTile label="Machinery" value={numberFormat.format(data.fleet.machinery)} detail="Active" to="/machinery" />
-              {isAdmin ? (
-                <StatTile label="Sites" value={numberFormat.format(data.fleet.sites)} detail="Active" to="/sites" />
-              ) : (
-                <StatTile label="Your site" value={siteName ?? '—'} detail="Assigned site" to="/site-management" />
-              )}
-              <StatTile
-                label="Service due"
-                value={numberFormat.format(data.fleet.serviceDue.total)}
-                detail={
-                  data.fleet.serviceDue.total > 0
-                    ? `${data.fleet.serviceDue.vehicles} vehicles · ${data.fleet.serviceDue.machinery} machines`
-                    : 'All assets within interval'
-                }
-                to={data.fleet.serviceDue.vehicles > 0 || data.fleet.serviceDue.machinery === 0 ? '/vehicles' : '/machinery'}
-                tone={data.fleet.serviceDue.total > 0 ? 'warning' : 'default'}
-              />
-            </div>
+        <>
+          <section
+            aria-label="Key figures"
+            className={`grid grid-cols-2 gap-px overflow-hidden rounded border border-steel-200 bg-steel-200 ${KPI_COLUMNS[kpis.length] ?? ''}`}
+          >
+            {kpis.map(({ key, ...kpi }, index) => (
+              <KpiCell key={key} {...kpi} className={kpis.length % 2 === 1 && index === kpis.length - 1 ? 'col-span-2 md:col-span-1' : ''} />
+            ))}
           </section>
 
-          {data.monthly && (
-            <section>
-              <SectionTitle
-                aside={
-                  isAdmin && (
-                    <div className="w-full sm:w-64">
-                      <Select searchable aria-label="Site for monthly running cost" value={costSiteId} onChange={(e) => setCostSiteId(e.target.value)}>
-                        <option value="">All sites</option>
-                        {siteOptions.map(([id, name]) => (
-                          <option key={id} value={id}>
-                            {name}
-                          </option>
-                        ))}
-                      </Select>
-                    </div>
-                  )
-                }
-              >
-                {isAdmin ? (costSiteId ? `Monthly running cost · ${siteNames[costSiteId] ?? 'Site'}` : 'Monthly running cost') : 'Monthly running cost at your site'}
-              </SectionTitle>
-              {costError ? (
-                <Alert tone="error">{costError}</Alert>
-              ) : monthly ? (
-                <MonthlyCard trend={monthly} />
+          <Alert tone="error">{fleetError}</Alert>
+
+          <div
+            className={`grid gap-3 ${
+              showMaintenance ? 'xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)_minmax(0,1.25fr)]' : 'xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]'
+            }`}
+          >
+            {costError ? (
+              <Alert tone="error">{costError}</Alert>
+            ) : month ? (
+              <RunningCostCard trend={monthly} selected={month.month} onSelect={setSelectedMonth} />
+            ) : (
+              <CardPlaceholder label="Loading site costs" />
+            )}
+
+            {month ? <UsageCard month={month} /> : !costError && <CardPlaceholder label="Loading usage" />}
+
+            {showMaintenance &&
+              (maintenance.error ? (
+                <Alert tone="error">{maintenance.error}</Alert>
+              ) : maintenance.data ? (
+                <MaintenanceCard data={maintenance.data} />
               ) : (
-                <Spinner label="Loading site costs" />
-              )}
-            </section>
-          )}
-        </div>
+                <CardPlaceholder label="Loading maintenance" />
+              ))}
+          </div>
+
+          {compliance.error ? <Alert tone="error">{compliance.error}</Alert> : compliance.data && <DocTypeTable data={compliance.data} siteId={linkSiteId} />}
+        </>
       )}
     </div>
   );

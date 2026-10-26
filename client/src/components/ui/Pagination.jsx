@@ -40,7 +40,7 @@ export default function Pagination({ page, pages, total, onPageChange, showPageN
                 onClick={() => onPageChange(item)}
                 className={[
                   'min-w-8 rounded border px-2 py-1 text-xs font-semibold tabular-nums',
-                  item === page ? 'border-brand-600 bg-brand-600 text-white' : 'border-steel-200 bg-white text-steel-700 hover:bg-steel-50',
+                  item === page ? 'border-accent bg-accent text-white' : 'border-steel-200 bg-surface text-steel-700 hover:bg-steel-50',
                 ].join(' ')}
               >
                 {item}

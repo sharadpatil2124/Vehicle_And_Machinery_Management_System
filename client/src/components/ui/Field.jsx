@@ -6,8 +6,8 @@ export default function Field({ label, error, hint, required = false, children }
   const hintId = `${id}-hint`;
 
   return (
-    <div className="mb-4">
-      <label htmlFor={id} className="mb-1.5 block text-sm font-semibold text-steel-700">
+    <div className="mb-3">
+      <label htmlFor={id} className="mb-1 block text-sm font-semibold text-steel-700">
         {label}
         {required && <span className="ml-0.5 text-danger-600">*</span>}
       </label>
@@ -19,12 +19,12 @@ export default function Field({ label, error, hint, required = false, children }
       })}
 
       {hint && !error && (
-        <p id={hintId} className="mt-1 text-xs text-steel-500">
+        <p id={hintId} className="mt-0.5 text-xs text-steel-500">
           {hint}
         </p>
       )}
       {error && (
-        <p id={errorId} className="mt-1 text-xs font-medium text-danger-600">
+        <p id={errorId} className="mt-0.5 text-xs font-medium text-danger-600">
           {error}
         </p>
       )}

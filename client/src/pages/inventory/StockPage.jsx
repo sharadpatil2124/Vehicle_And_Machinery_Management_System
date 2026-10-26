@@ -154,7 +154,7 @@ function TabButton({ active, onClick, children }) {
       onClick={onClick}
       className={[
         'rounded px-3 py-2 text-sm font-semibold transition-colors',
-        active ? 'bg-brand-600 text-white' : 'text-steel-600 hover:bg-steel-100',
+        active ? 'bg-accent text-white' : 'text-steel-600 hover:bg-steel-100',
       ].join(' ')}
     >
       {children}
@@ -348,7 +348,7 @@ export default function StockPage() {
         )}
       </div>
 
-      <div className="rounded border border-steel-200 bg-white">
+      <div className="rounded border border-steel-200 bg-surface">
         {tab === 'balances' ? (
           !balances ? (
             <Spinner label="Loading stock balances" />

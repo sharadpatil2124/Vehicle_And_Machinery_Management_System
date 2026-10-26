@@ -33,7 +33,7 @@ function SummaryTile({ label, value, tone, active, onClick }) {
       onClick={onClick}
       aria-pressed={active}
       className={[
-        'rounded border bg-white px-4 py-3 text-left transition-colors hover:bg-steel-50',
+        'rounded border bg-surface px-4 py-3 text-left transition-colors hover:bg-steel-50',
         active ? 'border-brand-600 ring-1 ring-brand-600' : 'border-steel-200',
       ].join(' ')}
     >
@@ -75,13 +75,14 @@ export default function ComplianceDocumentsPage() {
     ? { assetType: searchParams.get('assetType') ?? '', assetId: searchParams.get('assetId') }
     : null;
   const initialExpiry = searchParams.get('expiry');
+  const initialDocType = searchParams.get('docType');
 
   const [filters, setFilters] = useState({
     search: '',
     expiry: EXPIRY_FILTER_VALUES.includes(initialExpiry) ? initialExpiry : assetFilter ? '' : 'ATTENTION',
-    docType: '',
+    docType: DOC_TYPE_OPTIONS.some((o) => o.value === initialDocType) ? initialDocType : '',
     assetType: '',
-    siteId: '',
+    siteId: isAdmin ? searchParams.get('siteId') ?? '' : '',
     page: 1,
     sort: 'expiryDate:asc',
   });
@@ -262,7 +263,7 @@ export default function ComplianceDocumentsPage() {
         )}
       </div>
 
-      <div className="rounded border border-steel-200 bg-white">
+      <div className="rounded border border-steel-200 bg-surface">
         {!result ? (
           error ? null : <Spinner label="Loading compliance documents" />
         ) : (

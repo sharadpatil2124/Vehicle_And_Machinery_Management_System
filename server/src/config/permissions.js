@@ -73,6 +73,11 @@ const PERMISSIONS = Object.freeze({
     VIEW: BOTH,
     VIEW_SUMMARY_METRICS: BOTH,
   }),
+
+  BRANDING: Object.freeze({
+    READ: BOTH,
+    UPDATE: ADMIN_ONLY,
+  }),
 });
 
 function hasPermission(role, resource, action) {

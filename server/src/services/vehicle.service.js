@@ -238,6 +238,7 @@ async function listVehicles({ tenantId, auth, query }) {
   const status = parseEnumFilter(query.status, Vehicle.STATUSES, 'Status') ?? 'active';
   const where = scopeToSite({ status }, auth);
   if (query.fuelType) where.fuelType = query.fuelType;
+  if (query.siteId && supervisorSiteId(auth) === null) where.currentSiteId = requireNumber(query.siteId, 'Site', { min: 1 });
 
   const search = typeof query.search === 'string' ? query.search.trim() : '';
   if (search) {

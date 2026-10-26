@@ -49,25 +49,28 @@ function DocumentRow({ assetType, assetId, slot, onUploaded }) {
   }
 
   return (
-    <div className="flex flex-col gap-2 border-b border-steel-100 py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-semibold text-steel-900">{DOCUMENT_LABELS[slot.docType]}</span>
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 rounded border border-steel-200 px-3 py-2">
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-sm font-semibold text-steel-900">{DOCUMENT_LABELS[slot.docType]}</span>
           <Badge tone="neutral">{slot.mandatory ? 'Required' : 'Optional'}</Badge>
           {slot.uploaded && <Badge tone="success">Uploaded</Badge>}
           {!slot.uploaded && slot.mandatory && <Badge tone="warning">Missing</Badge>}
         </div>
         {slot.uploaded ? (
-          <p className="mt-1 truncate text-sm text-steel-500">
-            {slot.document.originalFilename}
-            {slot.document.uploadedByName ? ` · uploaded by ${slot.document.uploadedByName}` : ''}
-            {' · '}
-            {formatDate(slot.document.updatedAt)}
-          </p>
+          <>
+            <p className="truncate text-xs text-steel-600" title={slot.document.originalFilename}>
+              {slot.document.originalFilename}
+            </p>
+            <p className="truncate text-xs text-steel-400">
+              {slot.document.uploadedByName ? `${slot.document.uploadedByName} · ` : ''}
+              {formatDate(slot.document.updatedAt)}
+            </p>
+          </>
         ) : (
-          <p className="mt-1 text-sm text-steel-400">Not uploaded yet</p>
+          <p className="text-xs text-steel-400">Not uploaded yet</p>
         )}
-        {error && <p className="mt-1 text-sm font-medium text-danger-600">{error}</p>}
+        {error && <p className="text-xs font-medium text-danger-600">{error}</p>}
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
@@ -115,13 +118,13 @@ export default function AssetDocumentsCard({ assetType, assetId }) {
       {!slots ? (
         <Spinner label="Loading documents" />
       ) : (
-        <div>
+        <div className="grid gap-2 sm:grid-cols-2">
           {slots.map((slot) => (
             <DocumentRow key={slot.docType} assetType={assetType} assetId={assetId} slot={slot} onUploaded={load} />
           ))}
         </div>
       )}
-      <p className="mt-3 text-xs text-steel-400">Accepted formats: PDF, JPG or PNG — up to 10MB.</p>
+      <p className="mt-2 text-xs text-steel-400">Accepted formats: PDF, JPG or PNG — up to 10MB.</p>
     </Card>
   );
 }

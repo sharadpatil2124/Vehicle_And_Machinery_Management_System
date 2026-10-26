@@ -163,7 +163,7 @@ export default function FuelCollectionFormPage() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      <div className="mb-5">
+      <div className="mb-3">
         <Link to={isEdit ? `/fuel/collections/${id}` : '/fuel/collections'} className="text-sm font-semibold text-brand-600 hover:underline">
           ← {isEdit ? existing.collectionNumber : 'Fuel collections'}
         </Link>
@@ -189,7 +189,7 @@ export default function FuelCollectionFormPage() {
         <form onSubmit={handleSubmit} noValidate>
           <Alert tone="error">{submitError}</Alert>
 
-          <div className="grid gap-x-6 sm:grid-cols-2">
+          <div className="grid gap-x-4 sm:grid-cols-2">
             <Field label="Site" required error={errors.siteId} hint={!isAdmin ? 'Your site.' : isEdit ? "The site can't be changed." : undefined}>
               {({ id: fieldId, invalid, describedBy }) => (
                 <Select id={fieldId} invalid={invalid} describedBy={describedBy} value={form.siteId} onChange={update('siteId')} disabled={!isAdmin || isEdit}>
@@ -260,10 +260,10 @@ export default function FuelCollectionFormPage() {
             </Field>
           </div>
 
-          <div className="mt-2 border-t border-steel-200 pt-5">
+          <div className="mt-2 border-t border-steel-200 pt-4">
             <div className="mb-3 flex items-center justify-between">
               <div>
-                <h2 className="text-sm font-semibold text-steel-900">Cans</h2>
+                <h2 className="text-sm font-semibold text-steel-900">Cans/Tanks</h2>
                 <p className="text-xs text-steel-500">One row per can size, e.g. 5 cans × 35 L.</p>
               </div>
               <Button type="button" variant="secondary" size="sm" onClick={() => setRows((r) => [...r, { ...EMPTY_ROW }])} disabled={locked}>
@@ -276,18 +276,18 @@ export default function FuelCollectionFormPage() {
             <div className="flex flex-col gap-3">
               {rows.map((row, index) => (
                 <div key={index} className="grid items-end gap-x-4 sm:grid-cols-[1fr_1fr_8rem_auto]">
-                  <Field label={`Number of cans${rows.length > 1 ? ` (row ${index + 1})` : ''}`}>
+                  <Field label={`Number of Can/Tanks${rows.length > 1 ? ` (row ${index + 1})` : ''}`}>
                     {({ id: fieldId, describedBy }) => (
                       <Input id={fieldId} describedBy={describedBy} type="number" min={1} step={1} value={row.containerCount} onChange={updateRow(index, 'containerCount')} disabled={locked} />
                     )}
                   </Field>
-                  <Field label="Litres in each can">
+                  <Field label="Litres in each Can/Tanks">
                     {({ id: fieldId, describedBy }) => (
                       <Input id={fieldId} describedBy={describedBy} type="number" min={0} step="any" value={row.litresPerContainer} onChange={updateRow(index, 'litresPerContainer')} disabled={locked} />
                     )}
                   </Field>
-                  <p className="mb-4 py-2 text-sm text-steel-600 tabular-nums">= {formatLitres(rowLitres(row))}</p>
-                  <div className="mb-4 py-2">
+                  <p className="mb-3 py-2 text-sm text-steel-600 tabular-nums">= {formatLitres(rowLitres(row))}</p>
+                  <div className="mb-3 py-2">
                     {rows.length > 1 && !locked && (
                       <button type="button" className="text-sm font-semibold text-danger-600 hover:underline" onClick={() => setRows((r) => r.filter((_, i) => i !== index))}>
                         Remove
@@ -310,7 +310,7 @@ export default function FuelCollectionFormPage() {
             </div>
           </div>
 
-          <div className="mt-5 grid gap-x-6 border-t border-steel-200 pt-5 sm:grid-cols-2">
+          <div className="mt-4 grid gap-x-4 border-t border-steel-200 pt-4 sm:grid-cols-2">
             <Field label="Bill / receipt number">
               {({ id: fieldId, invalid, describedBy }) => (
                 <Input id={fieldId} invalid={invalid} describedBy={describedBy} value={form.billNumber} onChange={update('billNumber')} maxLength={64} disabled={locked} />
@@ -330,7 +330,7 @@ export default function FuelCollectionFormPage() {
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
             <Button variant="secondary" onClick={() => navigate(-1)}>
               Cancel
             </Button>

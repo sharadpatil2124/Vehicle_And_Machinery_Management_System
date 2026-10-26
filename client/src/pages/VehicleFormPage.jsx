@@ -154,7 +154,7 @@ export default function VehicleFormPage() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      <div className="mb-5">
+      <div className="mb-3">
         <h1 className="text-xl font-semibold text-steel-900">
           {isEdit ? 'Edit vehicle' : 'Add vehicle'}
         </h1>
@@ -168,7 +168,7 @@ export default function VehicleFormPage() {
           <Alert tone="error">{submitError}</Alert>
 
           <h2 className="mb-3 text-sm font-semibold text-steel-900">Vehicle Details</h2>
-          <div className="grid gap-x-6 sm:grid-cols-2">
+          <div className="grid gap-x-4 sm:grid-cols-2">
             <Field label="Registration number" required>
               {({ id: fieldId, invalid, describedBy }) => (
                 <Input
@@ -375,7 +375,7 @@ export default function VehicleFormPage() {
             />
           )}
 
-          <div className="flex justify-end gap-2 pt-5">
+          <div className="flex flex-col-reverse gap-2 pt-3 sm:flex-row sm:justify-end">
             <Button variant="secondary" onClick={() => navigate(-1)}>
               Cancel
             </Button>

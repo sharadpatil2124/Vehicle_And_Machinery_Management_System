@@ -11,7 +11,7 @@ import { elapsedMinutes, formatDateTime, formatDuration } from '../../config/mai
 
 function Stat({ label, value, tone = 'text-steel-900' }) {
   return (
-    <div className="rounded border border-steel-200 bg-white px-4 py-3">
+    <div className="rounded border border-steel-200 bg-surface px-4 py-3">
       <p className="text-xs font-semibold tracking-wide text-steel-500 uppercase">{label}</p>
       <p className={`mt-1 text-xl font-semibold tabular-nums ${tone}`}>{value}</p>
     </div>
@@ -85,7 +85,7 @@ export default function BreakdownMaintenancePage() {
         </div>
       )}
 
-      <div className="rounded border border-steel-200 bg-white">
+      <div className="rounded border border-steel-200 bg-surface">
         {!rows ? (
           error ? null : <Spinner label="Loading breakdowns" />
         ) : (
