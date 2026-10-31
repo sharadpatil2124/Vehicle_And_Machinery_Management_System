@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const { Vehicle, Machinery } = require('../models');
 const AppError = require('../utils/AppError');
+const { containsPattern } = require('../utils/queryOptions');
 
 async function assertChassisNumberAvailable({ value, excludeVehicleId, excludeMachineId }) {
   if (!value) return;
@@ -58,7 +59,7 @@ function isRcplCollision(error) {
 
 async function machineAssetIdsMatchingRcpl(tenantId, search) {
   const machines = await Machinery.findAll({
-    where: { tenantId, rcpl: { [Op.like]: `%${search}%` } },
+    where: { tenantId, rcpl: { [Op.like]: containsPattern(search) } },
     attributes: ['assetId'],
   });
   return machines.map((m) => m.assetId);
@@ -66,7 +67,7 @@ async function machineAssetIdsMatchingRcpl(tenantId, search) {
 
 async function vehicleAssetIdsMatchingRegistration(tenantId, search) {
   const vehicles = await Vehicle.findAll({
-    where: { tenantId, registrationNumber: { [Op.like]: `%${search}%` } },
+    where: { tenantId, registrationNumber: { [Op.like]: containsPattern(search) } },
     attributes: ['assetId'],
   });
   return vehicles.map((v) => v.assetId);

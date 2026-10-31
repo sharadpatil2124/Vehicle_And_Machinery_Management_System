@@ -1,11 +1,13 @@
 const express = require('express');
 const machineryController = require('../controllers/machinery.controller');
 const { authenticated, requirePermission } = require('../middleware/authorize');
+const { validateIdParam } = require('../middleware/idParam');
 const { uploadAssetCreationDocuments } = require('../middleware/upload');
 
 const router = express.Router();
 
 router.use(authenticated);
+router.param('id', validateIdParam('Machinery not found'));
 
 router.get('/', requirePermission('MACHINERY', 'READ'), machineryController.list);
 
@@ -27,5 +29,7 @@ router.delete('/:id', requirePermission('MACHINERY', 'DELETE'), machineryControl
 router.post('/:id/restore', requirePermission('MACHINERY', 'RESTORE'), machineryController.restore);
 
 router.get('/:id/history', requirePermission('MACHINERY', 'READ'), machineryController.history);
+
+router.get('/:id/costs', requirePermission('MACHINERY', 'READ'), machineryController.costs);
 
 module.exports = router;

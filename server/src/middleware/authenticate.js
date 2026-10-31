@@ -35,6 +35,10 @@ async function authenticate(req, _res, next) {
     return next(AppError.unauthorized('Organization is no longer active'));
   }
 
+  if (user.sessionsRevokedAt && !(payload.iat * 1000 >= user.sessionsRevokedAt.getTime())) {
+    return next(AppError.unauthorized('Invalid or expired token'));
+  }
+
   req.auth = {
     userId: user.id,
     tenantId: user.tenantId,

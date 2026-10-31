@@ -3,7 +3,7 @@ const { QueryTypes } = require('sequelize');
 const { sequelize, ComplianceDocument, Machinery } = require('../models');
 const AppError = require('../utils/AppError');
 const { optionalText } = require('../utils/validation');
-const { parseListQuery, parseEnumFilter } = require('../utils/queryOptions');
+const { parseListQuery, parseEnumFilter, containsPattern } = require('../utils/queryOptions');
 const { buildListResponse } = require('../utils/listResponse');
 const { resolveAsset, ASSET_TYPES } = require('./asset.service');
 const { recordCreate, recordUpdate } = require('./audit.service');
@@ -251,7 +251,7 @@ function buildScope({ tenantId, auth, query }) {
       `(cd.asset_id LIKE :search OR cd.document_number LIKE :search
         OR v.registration_number LIKE :search OR m.rcpl LIKE :search OR m.name LIKE :search)`
     );
-    replacements.search = `%${search}%`;
+    replacements.search = containsPattern(search);
   }
 
   return { conditions, replacements };

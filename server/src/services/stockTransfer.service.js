@@ -3,9 +3,10 @@ const { Op } = require('sequelize');
 const { sequelize, StockTransfer, StockTransferItem, Item, StorageLocation, Site } = require('../models');
 const AppError = require('../utils/AppError');
 const { optionalText, requireNumber, optionalNumber } = require('../utils/validation');
-const { parseListQuery } = require('../utils/queryOptions');
+const { parseListQuery, containsPattern } = require('../utils/queryOptions');
 const { buildListResponse } = require('../utils/listResponse');
 const { createTenantScopedRepository } = require('./tenantScopedRepository');
+const { nextSequentialCode } = require('./codeGenerator');
 const { recordCreate, recordUpdate } = require('./audit.service');
 const { assertSiteAllowed, assertEitherSiteAllowed, supervisorSiteId } = require('./siteAccess');
 const { assertSiteAssignable } = require('./site.service');
@@ -46,9 +47,7 @@ function toPublic(transfer) {
 }
 
 async function generateTransferNumber(tenantId, { transaction } = {}) {
-  const highest = await StockTransfer.max('transferNumber', { where: { tenantId }, transaction });
-  const nextNumber = highest ? Number(highest.slice(TRANSFER_NUMBER_PREFIX.length)) + 1 : 1;
-  return `${TRANSFER_NUMBER_PREFIX}${String(nextNumber).padStart(6, '0')}`;
+  return nextSequentialCode(StockTransfer, 'transferNumber', TRANSFER_NUMBER_PREFIX, { tenantId, transaction });
 }
 
 function isTransferNumberCollision(error) {
@@ -116,7 +115,7 @@ async function listStockTransfers({ tenantId, auth, query }) {
   if (status) where.status = status;
 
   const search = typeof query.search === 'string' ? query.search.trim() : '';
-  if (search) where.transferNumber = { [Op.like]: `%${search}%` };
+  if (search) where.transferNumber = { [Op.like]: containsPattern(search) };
 
   const { rows, count } = await repo.findAndCountAll(tenantId, {
     where,

@@ -65,6 +65,10 @@ User.init(
       type: DataTypes.DATE,
       allowNull: true,
     },
+    sessionsRevokedAt: {
+      type: DataTypes.DATE(3),
+      allowNull: true,
+    },
     siteId: {
       type: DataTypes.INTEGER.UNSIGNED,
       allowNull: true,

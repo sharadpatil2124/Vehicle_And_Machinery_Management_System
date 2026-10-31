@@ -1,10 +1,12 @@
 const express = require('express');
 const purchaseController = require('../controllers/purchase.controller');
 const { authenticated, requirePermission } = require('../middleware/authorize');
+const { validateIdParam } = require('../middleware/idParam');
 
 const router = express.Router();
 
 router.use(authenticated);
+router.param('id', validateIdParam('Purchase not found'));
 
 router.get('/', requirePermission('PURCHASE', 'READ'), purchaseController.list);
 

@@ -3,6 +3,8 @@ import { usersApi, sitesApi, listAll } from '../api/client';
 import { Alert, Badge, Button, Card, Field, Input, Modal, RoleBadge, Select, Spinner } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 
+const MIN_PASSWORD_LENGTH = 8;
+
 function formatDate(value) {
   if (!value) return 'Never';
   return new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
@@ -12,7 +14,7 @@ function StatusBadge({ status }) {
   return <Badge tone={status === 'active' ? 'success' : 'neutral'}>{status}</Badge>;
 }
 
-function AccountDetails({ account, siteName }) {
+function AccountDetails({ account, siteName, organizationName }) {
   return (
     <dl className="grid gap-4 sm:grid-cols-2">
       <div>
@@ -33,6 +35,12 @@ function AccountDetails({ account, siteName }) {
         <dt className="text-xs font-semibold tracking-wide text-steel-500 uppercase">Last sign-in</dt>
         <dd className="mt-0.5 text-steel-900">{formatDate(account.lastLoginAt)}</dd>
       </div>
+      {organizationName && (
+        <div className="sm:col-span-2">
+          <dt className="text-xs font-semibold tracking-wide text-steel-500 uppercase">Organization</dt>
+          <dd className="mt-0.5 text-steel-900">{organizationName}</dd>
+        </div>
+      )}
       {account.role === 'supervisor' && (
         <div className="sm:col-span-2">
           <dt className="text-xs font-semibold tracking-wide text-steel-500 uppercase">Assigned site</dt>
@@ -170,19 +178,330 @@ function SupervisorForm({ mode, initial, sites, onCancel, onSaved }) {
   );
 }
 
-function SupervisorCard({ supervisor, sites, isEditing, isCreatingAnother, onEdit, onCancelEdit, onSaved, onRequestStatusChange }) {
+function validateNewPassword(form) {
+  const errors = {};
+  if (form.password.length < MIN_PASSWORD_LENGTH) {
+    errors.password = `Password must be at least ${MIN_PASSWORD_LENGTH} characters`;
+  }
+  if (form.confirmPassword !== form.password) {
+    errors.confirmPassword = 'Passwords do not match';
+  }
+  return errors;
+}
+
+function useFormFields(initial) {
+  const [form, setForm] = useState(initial);
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  const update = (field) => (event) => {
+    setForm((f) => ({ ...f, [field]: event.target.value }));
+    setFieldErrors((errors) => ({ ...errors, [field]: undefined }));
+  };
+
+  return { form, fieldErrors, setFieldErrors, update };
+}
+
+function NewPasswordFields({ form, fieldErrors, update }) {
+  return (
+    <>
+      <Field
+        label="New password"
+        error={fieldErrors.password}
+        hint={`At least ${MIN_PASSWORD_LENGTH} characters`}
+        required
+      >
+        {({ id, invalid, describedBy }) => (
+          <Input
+            id={id}
+            invalid={invalid}
+            describedBy={describedBy}
+            type="password"
+            name="password"
+            autoComplete="new-password"
+            value={form.password}
+            onChange={update('password')}
+            required
+          />
+        )}
+      </Field>
+
+      <Field label="Confirm new password" error={fieldErrors.confirmPassword} required>
+        {({ id, invalid, describedBy }) => (
+          <Input
+            id={id}
+            invalid={invalid}
+            describedBy={describedBy}
+            type="password"
+            name="confirmPassword"
+            autoComplete="new-password"
+            value={form.confirmPassword}
+            onChange={update('confirmPassword')}
+            required
+          />
+        )}
+      </Field>
+    </>
+  );
+}
+
+function SupervisorPasswordForm({ supervisor, onCancel, onSaved }) {
+  const { form, fieldErrors, setFieldErrors, update } = useFormFields({ password: '', confirmPassword: '' });
+  const [error, setError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setError(null);
+    const errors = validateNewPassword(form);
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    setSubmitting(true);
+    try {
+      const response = await usersApi.changeSupervisorPassword(supervisor.id, form.password);
+      onSaved(response.message);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} noValidate>
+      <Alert tone="error">{error}</Alert>
+
+      <p className="mb-3 text-sm text-steel-500">
+        {supervisor.name} will be signed out of any open sessions and will need this new password
+        to sign in. Share it with them securely.
+      </p>
+
+      <NewPasswordFields form={form} fieldErrors={fieldErrors} update={update} />
+
+      <div className="flex justify-end gap-2">
+        <Button variant="secondary" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit" loading={submitting}>
+          Save new password
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function OwnProfileForm({ account, organizationName, onCancel, onSaved }) {
+  const { updateSession } = useAuth();
+  const { form, update } = useFormFields({
+    name: account.name,
+    email: account.email,
+    organizationName: organizationName ?? '',
+    currentPassword: '',
+  });
+  const [error, setError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const emailChanged = form.email.trim().toLowerCase() !== account.email;
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setError(null);
+    setSubmitting(true);
+
+    try {
+      const { currentPassword, ...profile } = form;
+      const response = await usersApi.updateOwnProfile(emailChanged ? { ...profile, currentPassword } : profile);
+      updateSession(response.data);
+      onSaved(response.message);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} noValidate>
+      <Alert tone="error">{error}</Alert>
+
+      <Field label="Name" required>
+        {({ id, invalid, describedBy }) => (
+          <Input
+            id={id}
+            invalid={invalid}
+            describedBy={describedBy}
+            name="name"
+            autoComplete="name"
+            value={form.name}
+            onChange={update('name')}
+            required
+          />
+        )}
+      </Field>
+
+      <Field
+        label="Email"
+        required
+        hint={emailChanged ? 'You will sign in with this email from now on.' : undefined}
+      >
+        {({ id, invalid, describedBy }) => (
+          <Input
+            id={id}
+            invalid={invalid}
+            describedBy={describedBy}
+            type="email"
+            name="email"
+            autoComplete="email"
+            value={form.email}
+            onChange={update('email')}
+            required
+          />
+        )}
+      </Field>
+
+      <Field label="Organization name" required hint="Shown in the header and on printed reports.">
+        {({ id, invalid, describedBy }) => (
+          <Input
+            id={id}
+            invalid={invalid}
+            describedBy={describedBy}
+            name="organizationName"
+            autoComplete="organization"
+            value={form.organizationName}
+            onChange={update('organizationName')}
+            required
+          />
+        )}
+      </Field>
+
+      {emailChanged && (
+        <Field label="Current password" required hint="Required to change your email.">
+          {({ id, invalid, describedBy }) => (
+            <Input
+              id={id}
+              invalid={invalid}
+              describedBy={describedBy}
+              type="password"
+              name="currentPassword"
+              autoComplete="current-password"
+              value={form.currentPassword}
+              onChange={update('currentPassword')}
+              required
+            />
+          )}
+        </Field>
+      )}
+
+      <div className="flex justify-end gap-2">
+        <Button variant="secondary" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit" loading={submitting}>
+          Save profile
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function OwnPasswordForm({ onCancel, onSaved }) {
+  const { updateSession } = useAuth();
+  const { form, fieldErrors, setFieldErrors, update } = useFormFields({
+    currentPassword: '',
+    password: '',
+    confirmPassword: '',
+  });
+  const [error, setError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setError(null);
+    const errors = validateNewPassword(form);
+    if (!form.currentPassword) errors.currentPassword = 'Enter your current password';
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    setSubmitting(true);
+    try {
+      const response = await usersApi.changeOwnPassword({
+        currentPassword: form.currentPassword,
+        newPassword: form.password,
+      });
+      updateSession(response.data);
+      onSaved(response.message);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} noValidate>
+      <Alert tone="error">{error}</Alert>
+
+      <Field label="Current password" error={fieldErrors.currentPassword} required>
+        {({ id, invalid, describedBy }) => (
+          <Input
+            id={id}
+            invalid={invalid}
+            describedBy={describedBy}
+            type="password"
+            name="currentPassword"
+            autoComplete="current-password"
+            value={form.currentPassword}
+            onChange={update('currentPassword')}
+            required
+          />
+        )}
+      </Field>
+
+      <NewPasswordFields form={form} fieldErrors={fieldErrors} update={update} />
+
+      <p className="mb-3 text-xs text-steel-500">
+        You stay signed in here; any other devices signed in to your account will be signed out.
+      </p>
+
+      <div className="flex justify-end gap-2">
+        <Button variant="secondary" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit" loading={submitting}>
+          Save new password
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function SupervisorCard({
+  supervisor,
+  sites,
+  isEditing,
+  isChangingPassword,
+  isCreatingAnother,
+  onEdit,
+  onChangePassword,
+  onCancelEdit,
+  onSaved,
+  onRequestStatusChange,
+}) {
   const siteName = sites.find((site) => site.id === supervisor.siteId)?.name;
 
   return (
     <Card
       title={isEditing ? 'Edit supervisor' : supervisor.name}
-      subtitle={isEditing ? undefined : supervisor.email}
+      subtitle={isEditing ? undefined : isChangingPassword ? 'Set a new password' : supervisor.email}
       actions={
-        !isEditing && !isCreatingAnother ? (
+        !isEditing && !isChangingPassword && !isCreatingAnother ? (
           <div className="flex items-center gap-2">
             <RoleBadge role="supervisor" />
             <Button variant="secondary" size="sm" onClick={onEdit}>
               Edit
+            </Button>
+            <Button variant="secondary" size="sm" onClick={onChangePassword}>
+              Change password
             </Button>
             <Button
               variant={supervisor.status === 'active' ? 'danger' : 'primary'}
@@ -205,6 +524,8 @@ function SupervisorCard({ supervisor, sites, isEditing, isCreatingAnother, onEdi
           onCancel={onCancelEdit}
           onSaved={onSaved}
         />
+      ) : isChangingPassword ? (
+        <SupervisorPasswordForm supervisor={supervisor} onCancel={onCancelEdit} onSaved={onSaved} />
       ) : (
         <AccountDetails account={supervisor} siteName={siteName} />
       )}
@@ -213,13 +534,15 @@ function SupervisorCard({ supervisor, sites, isEditing, isCreatingAnother, onEdi
 }
 
 export default function UsersPage() {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, organization } = useAuth();
 
   const [accounts, setAccounts] = useState(null);
   const [sites, setSites] = useState([]);
   const [loadError, setLoadError] = useState(null);
   const [notice, setNotice] = useState(null);
   const [editingId, setEditingId] = useState(null);
+  const [passwordId, setPasswordId] = useState(null);
+  const [adminForm, setAdminForm] = useState(null);
   const [creating, setCreating] = useState(false);
   const [statusTarget, setStatusTarget] = useState(null);
   const [statusPending, setStatusPending] = useState(false);
@@ -245,8 +568,16 @@ export default function UsersPage() {
   const admin = accounts?.find((account) => account.role === 'admin') ?? null;
   const supervisors = accounts?.filter((account) => account.role === 'supervisor') ?? [];
 
-  async function handleSaved(message) {
+  const isOwnAccount = Boolean(admin) && admin.id === currentUser?.id;
+
+  function closeSupervisorForms() {
     setEditingId(null);
+    setPasswordId(null);
+  }
+
+  async function handleSaved(message) {
+    closeSupervisorForms();
+    setAdminForm(null);
     setCreating(false);
     setNotice(message);
     await load();
@@ -299,16 +630,50 @@ export default function UsersPage() {
 
       <div className="grid gap-4">
         <Card
-          title="Admin"
-          subtitle="The primary account for this organization"
-          actions={<RoleBadge role="admin" />}
+          title={adminForm === 'profile' ? 'Edit your profile' : adminForm === 'password' ? 'Change your password' : 'Admin'}
+          subtitle={adminForm ? undefined : 'The primary account for this organization'}
+          actions={
+            isOwnAccount && !adminForm ? (
+              <div className="flex items-center gap-2">
+                <RoleBadge role="admin" />
+                <Button variant="secondary" size="sm" onClick={() => setAdminForm('profile')}>
+                  Edit profile
+                </Button>
+                <Button variant="secondary" size="sm" onClick={() => setAdminForm('password')}>
+                  Change password
+                </Button>
+              </div>
+            ) : (
+              <RoleBadge role="admin" />
+            )
+          }
         >
-          {admin ? <AccountDetails account={admin} /> : <p className="text-steel-500">Not found.</p>}
-          {admin?.id === currentUser?.id && (
-            <p className="mt-4 border-t border-steel-200 pt-3 text-xs text-steel-500">
-              This is your account. The admin account cannot be deactivated — it would lock the
-              organization out of its own management.
-            </p>
+          {isOwnAccount && adminForm === 'profile' ? (
+            <OwnProfileForm
+              account={admin}
+              organizationName={organization?.organizationName}
+              onCancel={() => setAdminForm(null)}
+              onSaved={handleSaved}
+            />
+          ) : isOwnAccount && adminForm === 'password' ? (
+            <OwnPasswordForm onCancel={() => setAdminForm(null)} onSaved={handleSaved} />
+          ) : (
+            <>
+              {admin ? (
+                <AccountDetails
+                  account={admin}
+                  organizationName={isOwnAccount ? organization?.organizationName : undefined}
+                />
+              ) : (
+                <p className="text-steel-500">Not found.</p>
+              )}
+              {isOwnAccount && (
+                <p className="mt-4 border-t border-steel-200 pt-3 text-xs text-steel-500">
+                  This is your account. The admin account cannot be deactivated — it would lock the
+                  organization out of its own management.
+                </p>
+              )}
+            </>
           )}
         </Card>
 
@@ -329,9 +694,17 @@ export default function UsersPage() {
             supervisor={supervisor}
             sites={sites}
             isEditing={editingId === supervisor.id}
+            isChangingPassword={passwordId === supervisor.id}
             isCreatingAnother={creating}
-            onEdit={() => setEditingId(supervisor.id)}
-            onCancelEdit={() => setEditingId(null)}
+            onEdit={() => {
+              setPasswordId(null);
+              setEditingId(supervisor.id);
+            }}
+            onChangePassword={() => {
+              setEditingId(null);
+              setPasswordId(supervisor.id);
+            }}
+            onCancelEdit={closeSupervisorForms}
             onSaved={handleSaved}
             onRequestStatusChange={setStatusTarget}
           />

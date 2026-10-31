@@ -1,10 +1,12 @@
 const express = require('express');
 const assetIssueController = require('../controllers/assetIssue.controller');
 const { authenticated, requirePermission } = require('../middleware/authorize');
+const { validateIdParam } = require('../middleware/idParam');
 
 const router = express.Router();
 
 router.use(authenticated);
+router.param('id', validateIdParam('Asset issue not found'));
 
 router.get('/', requirePermission('ASSET_ISSUE', 'READ'), assetIssueController.list);
 

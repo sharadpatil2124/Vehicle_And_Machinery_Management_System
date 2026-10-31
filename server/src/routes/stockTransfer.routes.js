@@ -1,10 +1,12 @@
 const express = require('express');
 const stockTransferController = require('../controllers/stockTransfer.controller');
 const { authenticated, requirePermission } = require('../middleware/authorize');
+const { validateIdParam } = require('../middleware/idParam');
 
 const router = express.Router();
 
 router.use(authenticated);
+router.param('id', validateIdParam('Stock transfer not found'));
 
 router.get('/', requirePermission('STOCK_TRANSFER', 'READ'), stockTransferController.list);
 

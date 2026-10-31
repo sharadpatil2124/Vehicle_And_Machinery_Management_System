@@ -5,6 +5,7 @@ const { Op } = require('sequelize');
 const env = require('../config/env');
 const { sequelize, User, Tenant, PasswordResetToken } = require('../models');
 const AppError = require('../utils/AppError');
+const logger = require('../utils/logger');
 const { requirePassword } = require('../utils/validation');
 const { recordAudit } = require('./audit.service');
 const emailService = require('./email.service');
@@ -32,24 +33,30 @@ async function issueResetToken(user, { transaction } = {}) {
   return `${env.clientUrl}/reset-password?token=${rawToken}`;
 }
 
-async function requestPasswordReset({ email }) {
-  const cleanEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
-  if (!cleanEmail) throw AppError.badRequest('Email is required');
-
+async function sendResetLink(cleanEmail) {
   const user = await User.findOne({
     where: { email: cleanEmail },
     include: [{ model: Tenant, as: 'tenant' }],
   });
 
-  if (user?.isActive && user.tenant?.isActive) {
-    const resetUrl = await issueResetToken(user);
-    await emailService.sendPasswordResetEmail({
-      to: user.email,
-      name: user.name,
-      resetUrl,
-      expiresInMinutes: env.passwordResetTtlMinutes,
-    });
-  }
+  if (!user?.isActive || !user.tenant?.isActive) return;
+
+  const resetUrl = await issueResetToken(user);
+  await emailService.sendPasswordResetEmail({
+    to: user.email,
+    name: user.name,
+    resetUrl,
+    expiresInMinutes: env.passwordResetTtlMinutes,
+  });
+}
+
+async function requestPasswordReset({ email }) {
+  const cleanEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+  if (!cleanEmail) throw AppError.badRequest('Email is required');
+
+  sendResetLink(cleanEmail).catch((error) => {
+    logger.error('Password reset link could not be sent', { reason: error.message });
+  });
 }
 
 async function resetPassword({ token, password }) {

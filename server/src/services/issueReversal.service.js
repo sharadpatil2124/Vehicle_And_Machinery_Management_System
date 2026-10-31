@@ -1,5 +1,6 @@
 const { sequelize, AssetIssue, AssetIssueItem, IssueReversal, IssueReversalItem } = require('../models');
 const AppError = require('../utils/AppError');
+const { nextSequentialCode } = require('./codeGenerator');
 const { optionalText, requireNumber } = require('../utils/validation');
 const { recordCreate } = require('./audit.service');
 const { assertSiteAllowed } = require('./siteAccess');
@@ -15,9 +16,7 @@ function toPublic(reversal) {
 }
 
 async function generateReversalNumber(tenantId, { transaction } = {}) {
-  const highest = await IssueReversal.max('reversalNumber', { where: { tenantId }, transaction });
-  const nextNumber = highest ? Number(highest.slice(REVERSAL_NUMBER_PREFIX.length)) + 1 : 1;
-  return `${REVERSAL_NUMBER_PREFIX}${String(nextNumber).padStart(6, '0')}`;
+  return nextSequentialCode(IssueReversal, 'reversalNumber', REVERSAL_NUMBER_PREFIX, { tenantId, transaction });
 }
 
 function isReversalNumberCollision(error) {

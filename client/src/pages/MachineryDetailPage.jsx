@@ -5,8 +5,7 @@ import { Alert, Badge, Button, Card, Spinner } from '../components/ui';
 import Can from '../components/Can';
 import DeleteWordModal from '../components/DeleteWordModal';
 import AssetDocumentsCard from '../components/AssetDocumentsCard';
-import InventoryHistoryCard from '../components/InventoryHistoryCard';
-import MaintenanceHistoryCard from '../components/maintenance/MaintenanceHistoryCard';
+import AssetCostCard from '../components/AssetCostCard';
 
 function Detail({ label, children }) {
   return (
@@ -173,13 +172,7 @@ export default function MachineryDetailPage() {
 
       <AssetDocumentsCard assetType="MACHINERY" assetId={machine.assetId} />
 
-      <Can resource="MAINTENANCE" action="READ">
-        <MaintenanceHistoryCard assetType="MACHINERY" asset={machine} onAssetChanged={load} />
-      </Can>
-
-      <Can resource="ASSET_ISSUE" action="READ">
-        <InventoryHistoryCard assetType="MACHINERY" assetId={machine.assetId} />
-      </Can>
+      <AssetCostCard assetType="MACHINERY" asset={machine} />
 
       <DeleteWordModal
         open={confirmingDelete}

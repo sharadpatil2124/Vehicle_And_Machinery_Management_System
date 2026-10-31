@@ -213,7 +213,15 @@ export default function SiteManagementPage() {
     setPickerOpen(false);
   }
 
-  if (sites === null) return <Spinner label="Loading site management" />;
+  if (sites === null) {
+    if (!loadError) return <Spinner label="Loading site management" />;
+    return (
+      <div>
+        <h1 className="mb-4 text-xl font-semibold text-steel-900">Site Management</h1>
+        <Alert tone="error">{loadError}</Alert>
+      </div>
+    );
+  }
 
   if (sites.length === 0) {
     return (

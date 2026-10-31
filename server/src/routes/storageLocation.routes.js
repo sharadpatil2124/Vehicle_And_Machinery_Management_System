@@ -1,10 +1,12 @@
 const express = require('express');
 const storageLocationController = require('../controllers/storageLocation.controller');
 const { authenticated, requirePermission } = require('../middleware/authorize');
+const { validateIdParam } = require('../middleware/idParam');
 
 const router = express.Router();
 
 router.use(authenticated);
+router.param('id', validateIdParam('Storage location not found'));
 
 router.get('/', requirePermission('STORAGE_LOCATION', 'READ'), storageLocationController.list);
 

@@ -1,12 +1,11 @@
 import { useState } from 'react';
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Alert, Button, Field, Input } from '../components/ui';
 import AuthShell from './AuthShell';
 
 export default function LoginPage() {
-  const { logIn, isAuthenticated } = useAuth();
-  const navigate = useNavigate();
+  const { logIn, isAuthenticated, user } = useAuth();
   const location = useLocation();
 
   const [form, setForm] = useState({ email: '', password: '' });
@@ -16,7 +15,10 @@ export default function LoginPage() {
   const notice = location.state?.notice ?? null;
   const noticeTone = location.state?.noticeTone ?? 'success';
 
-  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
+  if (isAuthenticated) {
+    const sameUser = user?.id != null && user.id === location.state?.fromUserId;
+    return <Navigate to={sameUser ? (location.state?.from?.pathname ?? '/dashboard') : '/dashboard'} replace />;
+  }
 
   const update = (field) => (event) => setForm((f) => ({ ...f, [field]: event.target.value }));
 
@@ -26,9 +28,7 @@ export default function LoginPage() {
     setSubmitting(true);
 
     try {
-      const { user } = await logIn(form);
-      const sameUser = user?.id != null && user.id === location.state?.fromUserId;
-      navigate(sameUser ? (location.state?.from?.pathname ?? '/dashboard') : '/dashboard', { replace: true });
+      await logIn(form);
     } catch (err) {
       setError(err.message);
     } finally {

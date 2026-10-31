@@ -27,6 +27,17 @@ export function AssetCell({ record }) {
   );
 }
 
+export function AssetPrintCell({ record }) {
+  return (
+    <>
+      <span className="font-semibold">{record.assetLabel ?? record.assetId}</span>
+      <span className="block text-neutral-600">
+        {record.assetId} · {record.assetType === 'VEHICLE' ? 'Vehicle' : 'Machinery'}
+      </span>
+    </>
+  );
+}
+
 export function TypeBadge({ type }) {
   const meta = MAINTENANCE_TYPE[type];
   return <Badge tone={meta?.tone}>{meta?.label ?? type}</Badge>;
@@ -47,6 +58,12 @@ export function DowntimeCell({ record, now }) {
       {formatDuration(elapsedMinutes(record.reportedAt, now))}
     </span>
   );
+}
+
+export function downtimeText(record, now) {
+  if (record.type !== 'breakdown') return '—';
+  if (record.stage === 'resolved' || record.status === 'archived') return formatDuration(record.downtimeMinutes);
+  return `${formatDuration(elapsedMinutes(record.reportedAt, now))} (still down)`;
 }
 
 export function RowActions({ record, onAction }) {

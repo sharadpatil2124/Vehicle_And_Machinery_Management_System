@@ -3,9 +3,10 @@ const { Op } = require('sequelize');
 const { sequelize, Purchase, PurchaseItem, Item, Supplier, StorageLocation } = require('../models');
 const AppError = require('../utils/AppError');
 const { optionalText, requireNumber, optionalNumber } = require('../utils/validation');
-const { parseListQuery, parseEnumFilter } = require('../utils/queryOptions');
+const { parseListQuery, parseEnumFilter, containsPattern } = require('../utils/queryOptions');
 const { buildListResponse } = require('../utils/listResponse');
 const { createTenantScopedRepository } = require('./tenantScopedRepository');
+const { nextSequentialCode } = require('./codeGenerator');
 const { recordCreate, recordUpdate } = require('./audit.service');
 const { scopeToSite, assertSiteAllowed, supervisorSiteId } = require('./siteAccess');
 const { assertSiteAssignable } = require('./site.service');
@@ -37,9 +38,7 @@ function toPublic(purchase) {
 }
 
 async function generatePurchaseNumber(tenantId, { transaction } = {}) {
-  const highest = await Purchase.max('purchaseNumber', { where: { tenantId }, transaction });
-  const nextNumber = highest ? Number(highest.slice(PURCHASE_NUMBER_PREFIX.length)) + 1 : 1;
-  return `${PURCHASE_NUMBER_PREFIX}${String(nextNumber).padStart(6, '0')}`;
+  return nextSequentialCode(Purchase, 'purchaseNumber', PURCHASE_NUMBER_PREFIX, { tenantId, transaction });
 }
 
 function isPurchaseNumberCollision(error) {
@@ -156,7 +155,7 @@ async function listPurchases({ tenantId, auth, query }) {
   if (status) where.status = status;
 
   const search = typeof query.search === 'string' ? query.search.trim() : '';
-  if (search) where.purchaseNumber = { [Op.like]: `%${search}%` };
+  if (search) where.purchaseNumber = { [Op.like]: containsPattern(search) };
 
   const { rows, count } = await repo.findAndCountAll(tenantId, { where, order, limit, offset });
 

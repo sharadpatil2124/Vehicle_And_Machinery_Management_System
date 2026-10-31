@@ -7,25 +7,15 @@ Each organization manages its own assets in complete data isolation.
 
 ## Recent Changes
 
-### New modules
-- **Maintenance** – preventive service schedule (overdue / due soon, by km or hours), breakdown tracking (reported → in progress → resolved) and maintenance history per asset.
-- **Compliance** – tenant-wide Compliance Documents page with expiry alerts (Critical = expired, Priority Alert = expiring within 15 days).
-- **Tyres (redesigned)** – tyre types, tyre purchases, per-site tyre stock, fitting/removal on vehicles and machinery, asset and cost reports.
+### Latest update
 
-### Updates
-- **Dashboard** – monthly running cost can be filtered by site; supervisors now see cost for their own site.
-- **Fuel** – transaction time, typed station name for direct-at-pump fills, asset km/hours updated from fuel entries, collection reports by station and by carrier.
-- **Inventory** – purchase reports by supplier and by item; unused fields removed (batch number, expiry date, batch tracking, hazardous flag, storage capacity/type, issue remarks).
-- **Machinery** – registration number replaced by **RCPL** (required, uppercase, unique per organization) with a live availability check on the form.
-- **Compliance documents** – document number added; **PUC replaced by Fitness**.
-- **Reports** – one shared searchable, sortable, paged report table used across Fuel, Inventory and Tyre reports.
-- **Code cleanup** – source code comments removed.
+Account management: admins can edit their own profile, change their own password, and set a password for a supervisor.
 
+Session revocation: a password change signs the user out on all devices. This needs migration 0067 to be run.
 
-### Earlier updates
-- Inventory module: items, storage locations, purchases, stock, transfers, adjustments and asset issues.
-- Site management, Fuel module and Dashboard improvements.
+Asset cost summary: a cost card on the vehicle and machinery detail pages, with new /costs endpoints.
 
+Printable reports: Maintenance History can now be printed.
 
 ## Stack
 

@@ -3,7 +3,7 @@ const { Op } = require('sequelize');
 const { sequelize, TyreFitment, TyrePurchase, TyrePurchaseItem, TyreType, Vehicle, Machinery } = require('../models');
 const AppError = require('../utils/AppError');
 const { requireText, optionalText, requireNumber } = require('../utils/validation');
-const { parseListQuery, parseEnumFilter } = require('../utils/queryOptions');
+const { parseListQuery, parseEnumFilter, containsPattern } = require('../utils/queryOptions');
 const { buildListResponse } = require('../utils/listResponse');
 const { createTenantScopedRepository } = require('./tenantScopedRepository');
 const { recordAudit, recordCreate, recordUpdate } = require('./audit.service');
@@ -233,7 +233,7 @@ async function listFitments({ tenantId, auth, query }) {
 
   const search = typeof query.search === 'string' ? query.search.trim() : '';
   if (search) {
-    const like = { [Op.like]: `%${search}%` };
+    const like = { [Op.like]: containsPattern(search) };
     const [vehicles, machines, types] = await Promise.all([
       Vehicle.findAll({ where: { tenantId, [Op.or]: [{ registrationNumber: like }, { assetId: like }] }, attributes: ['assetId'] }),
       Machinery.findAll({ where: { tenantId, [Op.or]: [{ rcpl: like }, { name: like }, { assetId: like }] }, attributes: ['assetId'] }),

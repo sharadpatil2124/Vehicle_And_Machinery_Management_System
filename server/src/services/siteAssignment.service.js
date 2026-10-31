@@ -16,12 +16,11 @@ async function recordSiteAssignment({
 }) {
   if (previousSiteId === nextSiteId) return;
 
-  if (previousSiteId != null) {
-    await SiteAssignment.update(
-      { unassignedAt: new Date() },
-      { where: { tenantId, assetType, assetId, siteId: previousSiteId, unassignedAt: null }, transaction }
-    );
-  }
+  // Close every open row of the asset, not only the previous site's, so it can never stay "current" at two sites.
+  await SiteAssignment.update(
+    { unassignedAt: new Date() },
+    { where: { tenantId, assetType, assetId, unassignedAt: null }, transaction }
+  );
 
   if (nextSiteId != null) {
     await SiteAssignment.create(
@@ -47,7 +46,7 @@ async function listSiteHistory({ tenantId, auth, assetType, assetId }) {
       { model: Site, as: 'site', attributes: ['id', 'name', 'location'] },
       { model: User, as: 'assigner', attributes: ['id', 'name'] },
     ],
-    order: [['assignedAt', 'DESC']],
+    order: [['assignedAt', 'DESC'], ['id', 'DESC']],
   });
 
   return assignments.map(toPublic);

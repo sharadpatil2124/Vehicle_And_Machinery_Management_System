@@ -16,7 +16,7 @@ async function archiveEntity({
   }
 
   return sequelize.transaction(async (transaction) => {
-    const record = await model.findOne({ where: { id, tenantId }, transaction });
+    const record = await model.findOne({ where: { id, tenantId }, transaction, lock: transaction.LOCK.UPDATE });
     if (!record) {
       throw AppError.notFound(`${entityType} not found`);
     }
@@ -44,7 +44,7 @@ async function archiveEntity({
 
 async function restoreEntity({ model, entityType, tenantId, id, performedBy }) {
   return sequelize.transaction(async (transaction) => {
-    const record = await model.findOne({ where: { id, tenantId }, transaction });
+    const record = await model.findOne({ where: { id, tenantId }, transaction, lock: transaction.LOCK.UPDATE });
     if (!record) {
       throw AppError.notFound(`${entityType} not found`);
     }

@@ -2,9 +2,10 @@ const AppError = require('./AppError');
 
 const MAX_LIMIT = 100;
 const DEFAULT_LIMIT = 20;
+const MAX_PAGE = Math.floor(Number.MAX_SAFE_INTEGER / MAX_LIMIT);
 
 function parseListQuery(query, { sortableFields, defaultSort }) {
-  const page = Math.max(1, Number.parseInt(query.page, 10) || 1);
+  const page = Math.min(MAX_PAGE, Math.max(1, Number.parseInt(query.page, 10) || 1));
   const limit = Math.min(MAX_LIMIT, Math.max(1, Number.parseInt(query.limit, 10) || DEFAULT_LIMIT));
 
   const [defaultField, defaultDirection] = defaultSort.split(':');
@@ -29,4 +30,9 @@ function parseEnumFilter(value, allowed, label) {
   return value;
 }
 
-module.exports = { parseListQuery, parseEnumFilter, MAX_LIMIT, DEFAULT_LIMIT };
+// LIKE pattern for "contains <text>": `%`, `_` and `\` in the text are matched literally.
+function containsPattern(text) {
+  return `%${String(text).replace(/[\\%_]/g, '\\$&')}%`;
+}
+
+module.exports = { parseListQuery, parseEnumFilter, containsPattern, MAX_LIMIT, DEFAULT_LIMIT, MAX_PAGE };

@@ -3,7 +3,7 @@ const { Op } = require('sequelize');
 const { sequelize, TyreType } = require('../models');
 const AppError = require('../utils/AppError');
 const { requireText, optionalText } = require('../utils/validation');
-const { parseListQuery, parseEnumFilter } = require('../utils/queryOptions');
+const { parseListQuery, parseEnumFilter, containsPattern } = require('../utils/queryOptions');
 const { buildListResponse } = require('../utils/listResponse');
 const { createTenantScopedRepository } = require('./tenantScopedRepository');
 const { recordCreate, recordUpdate } = require('./audit.service');
@@ -36,7 +36,7 @@ async function listTyreTypes({ tenantId, query }) {
   const where = { status };
   const search = typeof query.search === 'string' ? query.search.trim() : '';
   if (search) {
-    const like = { [Op.like]: `%${search}%` };
+    const like = { [Op.like]: containsPattern(search) };
     where[Op.or] = [{ brand: like }, { pattern: like }, { size: like }, { typeCode: like }];
   }
   const { rows, count } = await repo.findAndCountAll(tenantId, { where, order: [...order, ['size', 'ASC'], ['id', 'ASC']], limit, offset });

@@ -68,4 +68,9 @@ async function rcplAvailability(req, res) {
   res.status(200).json({ data, message: data.available ? 'RCPL is available' : 'RCPL is already in use' });
 }
 
-module.exports = { list, get, create, update, remove, restore, history, rcplAvailability };
+async function costs(req, res) {
+  const data = await machineryService.getMachineCosts({ tenantId: req.auth.tenantId, auth: req.auth, id: req.params.id });
+  res.status(200).json({ data, message: 'Machine costs retrieved' });
+}
+
+module.exports = { list, get, create, update, remove, restore, history, rcplAvailability, costs };

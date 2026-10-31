@@ -1,10 +1,12 @@
 const express = require('express');
 const siteController = require('../controllers/site.controller');
 const { authenticated, requirePermission } = require('../middleware/authorize');
+const { validateIdParam } = require('../middleware/idParam');
 
 const router = express.Router();
 
 router.use(authenticated);
+router.param('id', validateIdParam('Site not found'));
 
 router.get('/', requirePermission('SITE', 'READ'), siteController.list);
 

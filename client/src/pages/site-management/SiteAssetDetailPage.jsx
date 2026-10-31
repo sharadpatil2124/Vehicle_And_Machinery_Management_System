@@ -20,7 +20,8 @@ function formatDate(value) {
 }
 
 function toTransferEvents(history) {
-  const chronological = [...history].sort((a, b) => new Date(a.assignedAt) - new Date(b.assignedAt));
+  // Times are stored to the second, so equal times are ordered by id (the order they were recorded).
+  const chronological = [...history].sort((a, b) => new Date(a.assignedAt) - new Date(b.assignedAt) || a.id - b.id);
   return chronological.map((entry, index) => ({
     id: entry.id,
     fromSiteName: index > 0 ? chronological[index - 1].siteName : null,

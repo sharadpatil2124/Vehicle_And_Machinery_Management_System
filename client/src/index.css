@@ -122,3 +122,17 @@
     margin: 0;
   }
 }
+
+@page report {
+  size: landscape;
+}
+
+@media print {
+  body:has(> [data-print-report]) {
+    background: white;
+  }
+
+  body:has(> [data-print-report]) > #root {
+    display: none;
+  }
+}

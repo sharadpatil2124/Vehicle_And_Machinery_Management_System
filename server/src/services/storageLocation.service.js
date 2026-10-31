@@ -3,7 +3,7 @@ const { Op } = require('sequelize');
 const { sequelize, StorageLocation } = require('../models');
 const AppError = require('../utils/AppError');
 const { requireText, requireNumber } = require('../utils/validation');
-const { parseListQuery, parseEnumFilter } = require('../utils/queryOptions');
+const { parseListQuery, parseEnumFilter, containsPattern } = require('../utils/queryOptions');
 const { buildListResponse } = require('../utils/listResponse');
 const { createTenantScopedRepository } = require('./tenantScopedRepository');
 const { archiveEntity, restoreEntity } = require('./archive.service');
@@ -52,7 +52,7 @@ async function listStorageLocations({ tenantId, auth, query }) {
 
   const search = typeof query.search === 'string' ? query.search.trim() : '';
   if (search) {
-    where.locationName = { [Op.like]: `%${search}%` };
+    where.locationName = { [Op.like]: containsPattern(search) };
   }
 
   const { rows, count } = await repo.findAndCountAll(tenantId, { where, order, limit, offset });

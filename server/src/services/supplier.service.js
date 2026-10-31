@@ -3,7 +3,7 @@ const { Op } = require('sequelize');
 const { sequelize, Supplier } = require('../models');
 const AppError = require('../utils/AppError');
 const { requireText, optionalText, optionalEmail, optionalPhone } = require('../utils/validation');
-const { parseListQuery, parseEnumFilter } = require('../utils/queryOptions');
+const { parseListQuery, parseEnumFilter, containsPattern } = require('../utils/queryOptions');
 const { buildListResponse } = require('../utils/listResponse');
 const { createTenantScopedRepository } = require('./tenantScopedRepository');
 const { archiveEntity, restoreEntity } = require('./archive.service');
@@ -58,7 +58,7 @@ async function listSuppliers({ tenantId, query }) {
 
   const search = typeof query.search === 'string' ? query.search.trim() : '';
   if (search) {
-    where.supplierName = { [Op.like]: `%${search}%` };
+    where.supplierName = { [Op.like]: containsPattern(search) };
   }
 
   const { rows, count } = await repo.findAndCountAll(tenantId, { where, order, limit, offset });

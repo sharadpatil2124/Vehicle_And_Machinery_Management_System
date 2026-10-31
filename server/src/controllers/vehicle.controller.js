@@ -63,4 +63,9 @@ async function history(req, res) {
   res.status(200).json({ data, message: 'Vehicle history retrieved' });
 }
 
-module.exports = { list, get, create, update, remove, restore, history };
+async function costs(req, res) {
+  const data = await vehicleService.getVehicleCosts({ tenantId: req.auth.tenantId, auth: req.auth, id: req.params.id });
+  res.status(200).json({ data, message: 'Vehicle costs retrieved' });
+}
+
+module.exports = { list, get, create, update, remove, restore, history, costs };

@@ -3,9 +3,9 @@ const bcrypt = require('bcryptjs');
 
 const env = require('../config/env');
 const { ROLES } = require('../config/permissions');
-const { sequelize, User, Tenant, Site } = require('../models');
+const { sequelize, User, Tenant, Site, PasswordResetToken } = require('../models');
 const AppError = require('../utils/AppError');
-const { requireText, requireEmail } = require('../utils/validation');
+const { requireText, requireEmail, requireNumber, requirePassword } = require('../utils/validation');
 const { recordAudit } = require('./audit.service');
 const { issueResetToken } = require('./passwordReset.service');
 const emailService = require('./email.service');
@@ -28,13 +28,18 @@ async function requireAssignableSiteId(tenantId, siteId, { transaction } = {}) {
     throw AppError.badRequest('Select the site this supervisor will work at');
   }
 
-  const site = await Site.findOne({ where: { id: siteId, tenantId }, transaction });
+  const id = requireNumber(siteId, 'Site', { min: 1 });
+  const site = await Site.findOne({ where: { id, tenantId }, transaction });
   if (!site) throw AppError.badRequest('Site not found');
   if (site.status !== 'active') {
     throw AppError.badRequest('That site is archived — pick an active site');
   }
 
   return site.id;
+}
+
+function unusablePasswordHash() {
+  return bcrypt.hash(crypto.randomBytes(32).toString('hex'), env.bcryptSaltRounds);
 }
 
 async function createSupervisorRecord({ tenantId, actingUserId, name, email, siteId, transaction }) {
@@ -49,8 +54,7 @@ async function createSupervisorRecord({ tenantId, actingUserId, name, email, sit
     throw AppError.conflict(`An account with this email already exists: ${cleanEmail}`);
   }
 
-  const unusablePassword = crypto.randomBytes(32).toString('hex');
-  const passwordHash = await bcrypt.hash(unusablePassword, env.bcryptSaltRounds);
+  const passwordHash = await unusablePasswordHash();
 
   const created = await User.create(
     {
@@ -121,10 +125,16 @@ async function updateSupervisor({ tenantId, actingUserId, supervisorId, name, em
   const emailChanged = cleanEmail !== supervisor.email;
 
   const tenant = await Tenant.findByPk(tenantId);
+  const handoverPasswordHash = emailChanged ? await unusablePasswordHash() : null;
 
   const resetUrl = await sequelize.transaction(async (transaction) => {
     await supervisor.update(
-      { name: cleanName, email: cleanEmail, siteId: cleanSiteId },
+      {
+        name: cleanName,
+        email: cleanEmail,
+        siteId: cleanSiteId,
+        ...(emailChanged ? { passwordHash: handoverPasswordHash, sessionsRevokedAt: new Date() } : {}),
+      },
       { transaction }
     );
 
@@ -196,10 +206,45 @@ async function setSupervisorStatus({ tenantId, actingUserId, supervisorId, statu
   return supervisor.toPublicJSON();
 }
 
+async function changeSupervisorPassword({ tenantId, actingUserId, supervisorId, password }) {
+  const newPassword = requirePassword(password);
+
+  const supervisor = await findSupervisorById(tenantId, supervisorId);
+  if (!supervisor) {
+    throw AppError.notFound('Supervisor not found');
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, env.bcryptSaltRounds);
+
+  await sequelize.transaction(async (transaction) => {
+    await supervisor.update({ passwordHash, sessionsRevokedAt: new Date() }, { transaction });
+
+    await PasswordResetToken.update(
+      { usedAt: new Date() },
+      { where: { userId: supervisor.id, usedAt: null }, transaction }
+    );
+
+    await recordAudit(
+      {
+        tenantId,
+        entityType: 'User',
+        entityId: supervisor.id,
+        action: 'SUPERVISOR_PASSWORD_CHANGED',
+        performedBy: actingUserId,
+      },
+      { transaction }
+    );
+  });
+
+  const safeSupervisor = await User.findByPk(supervisor.id);
+  return safeSupervisor.toPublicJSON();
+}
+
 module.exports = {
   listOrganizationUsers,
   createSupervisorRecord,
   createSupervisor,
   updateSupervisor,
   setSupervisorStatus,
+  changeSupervisorPassword,
 };

@@ -101,6 +101,9 @@ export const usersApi = {
   createSupervisor: (payload) => api.post('/users/supervisors', payload),
   updateSupervisor: (id, payload) => api.put(`/users/supervisors/${id}`, payload),
   setSupervisorStatus: (id, status) => api.patch(`/users/supervisors/${id}/status`, { status }),
+  changeSupervisorPassword: (id, password) => api.put(`/users/supervisors/${id}/password`, { password }),
+  updateOwnProfile: (payload) => api.put('/users/me', payload),
+  changeOwnPassword: (payload) => api.put('/users/me/password', payload),
 };
 
 function toQueryString(params = {}) {
@@ -148,6 +151,7 @@ export const vehiclesApi = {
   remove: (id, confirmation) => api.delete(`/vehicles/${id}`, { confirmation }),
   restore: (id) => api.post(`/vehicles/${id}/restore`),
   history: (id) => api.get(`/vehicles/${id}/history`),
+  costs: (id) => api.get(`/vehicles/${id}/costs`),
 };
 
 async function uploadAssetDocument(assetType, assetId, docType, file) {
@@ -217,6 +221,7 @@ export const machineryApi = {
   remove: (id, confirmation) => api.delete(`/machinery/${id}`, { confirmation }),
   restore: (id) => api.post(`/machinery/${id}/restore`),
   history: (id) => api.get(`/machinery/${id}/history`),
+  costs: (id) => api.get(`/machinery/${id}/costs`),
   rcplAvailability: (params) => api.get(`/machinery/rcpl-availability${toQueryString(params)}`),
 };
 

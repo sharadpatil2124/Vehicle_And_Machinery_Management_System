@@ -3,7 +3,7 @@ const { Op } = require('sequelize');
 const { sequelize, Item, ItemCategory, UnitOfMeasure } = require('../models');
 const AppError = require('../utils/AppError');
 const { requireText, optionalText, requireNumber, optionalNumber } = require('../utils/validation');
-const { parseListQuery, parseEnumFilter } = require('../utils/queryOptions');
+const { parseListQuery, parseEnumFilter, containsPattern } = require('../utils/queryOptions');
 const { buildListResponse } = require('../utils/listResponse');
 const { createTenantScopedRepository } = require('./tenantScopedRepository');
 const { archiveEntity, restoreEntity } = require('./archive.service');
@@ -83,7 +83,7 @@ async function listItems({ tenantId, query }) {
 
   const search = typeof query.search === 'string' ? query.search.trim() : '';
   if (search) {
-    where.itemName = { [Op.like]: `%${search}%` };
+    where.itemName = { [Op.like]: containsPattern(search) };
   }
 
   const { rows, count } = await repo.findAndCountAll(tenantId, { where, order, limit, offset });

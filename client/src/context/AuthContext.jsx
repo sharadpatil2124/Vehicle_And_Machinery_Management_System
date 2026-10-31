@@ -21,6 +21,16 @@ export function AuthProvider({ children }) {
     return next;
   }, []);
 
+  const updateSession = useCallback(
+    (changes) => {
+      if (!session) return;
+      const next = toSession({ ...session, ...changes });
+      writeSession(next);
+      setSession(next);
+    },
+    [session]
+  );
+
   const currentUserId = session?.user?.id ?? null;
 
   const endSession = useCallback(() => {
@@ -68,8 +78,9 @@ export function AuthProvider({ children }) {
       signUp,
       logIn,
       logOut,
+      updateSession,
     }),
-    [session, sessionExpired, previousUserId, signUp, logIn, logOut]
+    [session, sessionExpired, previousUserId, signUp, logIn, logOut, updateSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

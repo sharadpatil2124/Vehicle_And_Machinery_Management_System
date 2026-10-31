@@ -1,10 +1,12 @@
 const express = require('express');
 const fuelStationController = require('../controllers/fuelStation.controller');
 const { authenticated, requirePermission } = require('../middleware/authorize');
+const { validateIdParam } = require('../middleware/idParam');
 
 const router = express.Router();
 
 router.use(authenticated);
+router.param('id', validateIdParam('Fuel station not found'));
 
 router.get('/', requirePermission('FUEL_STATION', 'READ'), fuelStationController.list);
 

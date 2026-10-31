@@ -2,6 +2,7 @@ const { Op, Transaction } = require('sequelize');
 
 const { InventoryTransaction, StockBalance, StockBatch, StockBatchMovement } = require('../models');
 const AppError = require('../utils/AppError');
+const { nextSequentialCode } = require('./codeGenerator');
 
 const TRANSACTION_NUMBER_PREFIX = 'TXN-';
 const TRANSACTION_NUMBER_GENERATION_ATTEMPTS = 5;
@@ -22,12 +23,7 @@ const roundQuantity = (value) => round(value, 3);
 const roundMoney = (value) => round(value, 2);
 
 async function generateTransactionNumber(tenantId, { transaction } = {}) {
-  const highest = await InventoryTransaction.max('transactionNumber', {
-    where: { tenantId },
-    transaction,
-  });
-  const nextNumber = highest ? Number(highest.slice(TRANSACTION_NUMBER_PREFIX.length)) + 1 : 1;
-  return `${TRANSACTION_NUMBER_PREFIX}${String(nextNumber).padStart(6, '0')}`;
+  return nextSequentialCode(InventoryTransaction, 'transactionNumber', TRANSACTION_NUMBER_PREFIX, { tenantId, transaction });
 }
 
 function isTransactionNumberCollision(error) {

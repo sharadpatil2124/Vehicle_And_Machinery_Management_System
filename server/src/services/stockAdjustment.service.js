@@ -10,9 +10,10 @@ const {
 } = require('../models');
 const AppError = require('../utils/AppError');
 const { optionalText, requireNumber, optionalNumber } = require('../utils/validation');
-const { parseListQuery } = require('../utils/queryOptions');
+const { parseListQuery, containsPattern } = require('../utils/queryOptions');
 const { buildListResponse } = require('../utils/listResponse');
 const { createTenantScopedRepository } = require('./tenantScopedRepository');
+const { nextSequentialCode } = require('./codeGenerator');
 const { recordCreate } = require('./audit.service');
 const { scopeToSite, assertSiteAllowed, supervisorSiteId } = require('./siteAccess');
 const { postInventoryTransaction } = require('./inventoryTransaction.service');
@@ -42,9 +43,7 @@ function toPublic(adjustment) {
 }
 
 async function generateAdjustmentNumber(tenantId, { transaction } = {}) {
-  const highest = await StockAdjustment.max('adjustmentNumber', { where: { tenantId }, transaction });
-  const nextNumber = highest ? Number(highest.slice(ADJUSTMENT_NUMBER_PREFIX.length)) + 1 : 1;
-  return `${ADJUSTMENT_NUMBER_PREFIX}${String(nextNumber).padStart(6, '0')}`;
+  return nextSequentialCode(StockAdjustment, 'adjustmentNumber', ADJUSTMENT_NUMBER_PREFIX, { tenantId, transaction });
 }
 
 function isAdjustmentNumberCollision(error) {
@@ -102,7 +101,7 @@ async function listStockAdjustments({ tenantId, auth, query }) {
 
   const where = scopeToSite({}, auth, 'siteId');
   const search = typeof query.search === 'string' ? query.search.trim() : '';
-  if (search) where.adjustmentNumber = { [Op.like]: `%${search}%` };
+  if (search) where.adjustmentNumber = { [Op.like]: containsPattern(search) };
 
   const { rows, count } = await repo.findAndCountAll(tenantId, { where, order, limit, offset });
 

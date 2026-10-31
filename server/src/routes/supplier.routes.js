@@ -1,10 +1,12 @@
 const express = require('express');
 const supplierController = require('../controllers/supplier.controller');
 const { authenticated, requirePermission } = require('../middleware/authorize');
+const { validateIdParam } = require('../middleware/idParam');
 
 const router = express.Router();
 
 router.use(authenticated);
+router.param('id', validateIdParam('Supplier not found'));
 
 router.get('/', requirePermission('SUPPLIER', 'READ'), supplierController.list);
 

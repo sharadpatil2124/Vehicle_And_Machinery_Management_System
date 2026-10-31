@@ -3,7 +3,7 @@ const { Op, Transaction } = require('sequelize');
 const { sequelize, FuelCollection, FuelCollectionContainer, FuelStation, Vehicle, Site } = require('../models');
 const AppError = require('../utils/AppError');
 const { requireText, optionalText, requireNumber, optionalNumber } = require('../utils/validation');
-const { parseListQuery, parseEnumFilter } = require('../utils/queryOptions');
+const { parseListQuery, parseEnumFilter, containsPattern } = require('../utils/queryOptions');
 const { buildListResponse } = require('../utils/listResponse');
 const { createTenantScopedRepository } = require('./tenantScopedRepository');
 const { recordAudit, recordCreate, recordUpdate } = require('./audit.service');
@@ -137,9 +137,9 @@ async function listFuelCollections({ tenantId, auth, query }) {
 
   const search = typeof query.search === 'string' ? query.search.trim() : '';
   if (search) {
-    where[Op.or] = [{ collectionNumber: { [Op.like]: `%${search}%` } }, { billNumber: { [Op.like]: `%${search}%` } }];
+    where[Op.or] = [{ collectionNumber: { [Op.like]: containsPattern(search) } }, { billNumber: { [Op.like]: containsPattern(search) } }];
     const carriers = await Vehicle.findAll({
-      where: { tenantId, registrationNumber: { [Op.like]: `%${search}%` } },
+      where: { tenantId, registrationNumber: { [Op.like]: containsPattern(search) } },
       attributes: ['id'],
     });
     if (carriers.length) where[Op.or].push({ carrierVehicleId: carriers.map((v) => v.id) });

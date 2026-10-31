@@ -1,4 +1,5 @@
 const userService = require('../services/user.service');
+const authService = require('../services/auth.service');
 
 async function list(req, res) {
   const data = await userService.listOrganizationUsers({ tenantId: req.auth.tenantId });
@@ -47,4 +48,53 @@ async function setSupervisorStatus(req, res) {
   res.status(200).json({ data, message: `Supervisor ${status === 'active' ? 'reactivated' : 'deactivated'}` });
 }
 
-module.exports = { list, createSupervisor, updateSupervisor, setSupervisorStatus };
+async function changeSupervisorPassword(req, res) {
+  const { password } = req.body ?? {};
+
+  const data = await userService.changeSupervisorPassword({
+    tenantId: req.auth.tenantId,
+    actingUserId: req.auth.userId,
+    supervisorId: req.params.id,
+    password,
+  });
+
+  res.status(200).json({ data, message: 'Supervisor password changed' });
+}
+
+async function updateOwnProfile(req, res) {
+  const { name, email, organizationName, currentPassword } = req.body ?? {};
+
+  const data = await authService.updateOwnProfile({
+    tenantId: req.auth.tenantId,
+    userId: req.auth.userId,
+    name,
+    email,
+    organizationName,
+    currentPassword,
+  });
+
+  res.status(200).json({ data, message: 'Profile updated' });
+}
+
+async function changeOwnPassword(req, res) {
+  const { currentPassword, newPassword } = req.body ?? {};
+
+  const data = await authService.changeOwnPassword({
+    tenantId: req.auth.tenantId,
+    userId: req.auth.userId,
+    currentPassword,
+    newPassword,
+  });
+
+  res.status(200).json({ data, message: 'Password changed. You have been signed out on other devices.' });
+}
+
+module.exports = {
+  list,
+  createSupervisor,
+  updateSupervisor,
+  setSupervisorStatus,
+  changeSupervisorPassword,
+  updateOwnProfile,
+  changeOwnPassword,
+};

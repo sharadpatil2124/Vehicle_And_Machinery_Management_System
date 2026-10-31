@@ -4,11 +4,13 @@ const { sequelize, Machinery, AuditLog } = require('../models');
 const AppError = require('../utils/AppError');
 const { requireText, optionalText, requireNumber } = require('../utils/validation');
 const { assertMeterNotDecreasing } = require('../utils/meter');
-const { parseListQuery, parseEnumFilter } = require('../utils/queryOptions');
+const { parseListQuery, parseEnumFilter, containsPattern } = require('../utils/queryOptions');
 const { buildListResponse } = require('../utils/listResponse');
 const { createTenantScopedRepository } = require('./tenantScopedRepository');
+const { nextSequentialCode } = require('./codeGenerator');
 const { archiveEntity, restoreEntity } = require('./archive.service');
 const { recordCreate, recordUpdate } = require('./audit.service');
+const { assetCostSummary } = require('./assetCost.service');
 const {
   scopeToSite,
   assertSiteAllowed,
@@ -42,9 +44,7 @@ function toPublic(machine) {
 const ASSET_ID_PREFIX = 'MCH-';
 
 async function generateAssetId(tenantId, { transaction } = {}) {
-  const highest = await Machinery.max('assetId', { where: { tenantId }, transaction, paranoid: false });
-  const nextNumber = highest ? Number(highest.slice(ASSET_ID_PREFIX.length)) + 1 : 1;
-  return `${ASSET_ID_PREFIX}${String(nextNumber).padStart(6, '0')}`;
+  return nextSequentialCode(Machinery, 'assetId', ASSET_ID_PREFIX, { tenantId, transaction });
 }
 
 function isAssetIdCollision(error) {
@@ -136,11 +136,11 @@ async function listMachinery({ tenantId, auth, query }) {
   const search = typeof query.search === 'string' ? query.search.trim() : '';
   if (search) {
     where[Op.or] = [
-      { rcpl: { [Op.like]: `%${search}%` } },
-      { assetId: { [Op.like]: `%${search}%` } },
-      { name: { [Op.like]: `%${search}%` } },
-      { modelNumber: { [Op.like]: `%${search}%` } },
-      { serialNumber: { [Op.like]: `%${search}%` } },
+      { rcpl: { [Op.like]: containsPattern(search) } },
+      { assetId: { [Op.like]: containsPattern(search) } },
+      { name: { [Op.like]: containsPattern(search) } },
+      { modelNumber: { [Op.like]: containsPattern(search) } },
+      { serialNumber: { [Op.like]: containsPattern(search) } },
     ];
   }
 
@@ -263,7 +263,8 @@ async function updateMachine({ tenantId, auth, actingUserId, id, payload }) {
   }
   const siteInput = readCurrentSiteIdInput(payload, { partial: true });
   assertSiteChangeAllowed(auth, machine.currentSiteId, siteInput);
-  if (siteInput.currentSiteId != null) {
+  // Only a new site must be assignable: an asset may stay at a site that was archived after it arrived.
+  if (siteInput.currentSiteId != null && siteInput.currentSiteId !== machine.currentSiteId) {
     await assertSiteAssignable(tenantId, siteInput.currentSiteId);
   }
   const compliance = payload.compliance ?? {};
@@ -282,12 +283,14 @@ async function updateMachine({ tenantId, auth, actingUserId, id, payload }) {
       ? nextCurrentHours + nextIntervalHours
       : Number(machine.nextServiceHours);
 
-  const before = machine.toJSON();
-  const previousSiteId = machine.currentSiteId;
-  const nextSiteId = 'currentSiteId' in siteInput ? siteInput.currentSiteId : previousSiteId;
-
   const updated = await sequelize.transaction(async (transaction) => {
-    await machine.update(
+    // Re-read under a row lock so simultaneous saves see each other's site change.
+    const current = await repo.findByPk(tenantId, machine.id, { transaction, lock: transaction.LOCK.UPDATE });
+    const before = current.toJSON();
+    const previousSiteId = current.currentSiteId;
+    const nextSiteId = 'currentSiteId' in siteInput ? siteInput.currentSiteId : previousSiteId;
+
+    await current.update(
       {
         ...input,
         ...siteInput,
@@ -300,14 +303,14 @@ async function updateMachine({ tenantId, auth, actingUserId, id, payload }) {
     );
 
     await recordUpdate(
-      { tenantId, entityType: 'Machinery', entityId: machine.id, performedBy: actingUserId, before, after: machine },
+      { tenantId, entityType: 'Machinery', entityId: current.id, performedBy: actingUserId, before, after: current },
       { transaction }
     );
 
     await recordSiteAssignment({
       tenantId,
       assetType: 'MACHINERY',
-      assetId: machine.assetId,
+      assetId: current.assetId,
       previousSiteId,
       nextSiteId,
       actingUserId,
@@ -317,13 +320,13 @@ async function updateMachine({ tenantId, auth, actingUserId, id, payload }) {
     await saveComplianceDocuments({
       tenantId,
       assetType: 'MACHINERY',
-      assetId: machine.assetId,
+      assetId: current.assetId,
       actingUserId,
       compliance,
       transaction,
     });
 
-    return machine;
+    return current;
   }).catch((error) => {
     throw isRcplCollision(error) ? AppError.conflict(RCPL_TAKEN_MESSAGE) : error;
   });
@@ -376,6 +379,13 @@ async function getMachineHistory({ tenantId, auth, id }) {
   }));
 }
 
+async function getMachineCosts({ tenantId, auth, id }) {
+  const machine = await repo.findByPk(tenantId, id);
+  if (!machine) throw AppError.notFound('Machinery not found');
+  assertSiteAllowed(auth, machine.currentSiteId, 'Machinery not found');
+  return assetCostSummary({ tenantId, assetType: 'MACHINERY', assetId: machine.assetId });
+}
+
 module.exports = {
   listMachinery,
   getMachine,
@@ -384,5 +394,6 @@ module.exports = {
   deleteMachine,
   restoreMachine,
   getMachineHistory,
+  getMachineCosts,
   checkRcplAvailability,
 };

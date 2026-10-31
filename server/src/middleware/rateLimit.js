@@ -26,4 +26,11 @@ const signupLimiter = createLimiter({
   message: 'Too many organizations created from this address. Please try again later.',
 });
 
-module.exports = { authLimiter, signupLimiter };
+const accountChangeLimiter = createLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  devMax: 200,
+  message: 'Too many attempts. Please wait a few minutes and try again.',
+});
+
+module.exports = { authLimiter, signupLimiter, accountChangeLimiter };

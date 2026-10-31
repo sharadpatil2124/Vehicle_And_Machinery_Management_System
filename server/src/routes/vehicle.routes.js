@@ -1,11 +1,13 @@
 const express = require('express');
 const vehicleController = require('../controllers/vehicle.controller');
 const { authenticated, requirePermission } = require('../middleware/authorize');
+const { validateIdParam } = require('../middleware/idParam');
 const { uploadAssetCreationDocuments } = require('../middleware/upload');
 
 const router = express.Router();
 
 router.use(authenticated);
+router.param('id', validateIdParam('Vehicle not found'));
 
 router.get('/', requirePermission('VEHICLE', 'READ'), vehicleController.list);
 
@@ -25,5 +27,7 @@ router.delete('/:id', requirePermission('VEHICLE', 'DELETE'), vehicleController.
 router.post('/:id/restore', requirePermission('VEHICLE', 'RESTORE'), vehicleController.restore);
 
 router.get('/:id/history', requirePermission('VEHICLE', 'READ'), vehicleController.history);
+
+router.get('/:id/costs', requirePermission('VEHICLE', 'READ'), vehicleController.costs);
 
 module.exports = router;

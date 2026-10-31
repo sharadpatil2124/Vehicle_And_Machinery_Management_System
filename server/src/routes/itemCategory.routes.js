@@ -1,10 +1,12 @@
 const express = require('express');
 const itemCategoryController = require('../controllers/itemCategory.controller');
 const { authenticated, requirePermission } = require('../middleware/authorize');
+const { validateIdParam } = require('../middleware/idParam');
 
 const router = express.Router();
 
 router.use(authenticated);
+router.param('id', validateIdParam('Item category not found'));
 
 router.get('/', requirePermission('ITEM_CATEGORY', 'READ'), itemCategoryController.list);
 

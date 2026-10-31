@@ -1,10 +1,12 @@
 const express = require('express');
 const stockAdjustmentController = require('../controllers/stockAdjustment.controller');
 const { authenticated, requirePermission } = require('../middleware/authorize');
+const { validateIdParam } = require('../middleware/idParam');
 
 const router = express.Router();
 
 router.use(authenticated);
+router.param('id', validateIdParam('Stock adjustment not found'));
 
 router.get('/', requirePermission('STOCK_ADJUSTMENT', 'READ'), stockAdjustmentController.list);
 

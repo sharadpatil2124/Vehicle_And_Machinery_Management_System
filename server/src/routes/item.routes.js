@@ -1,10 +1,12 @@
 const express = require('express');
 const itemController = require('../controllers/item.controller');
 const { authenticated, requirePermission } = require('../middleware/authorize');
+const { validateIdParam } = require('../middleware/idParam');
 
 const router = express.Router();
 
 router.use(authenticated);
+router.param('id', validateIdParam('Item not found'));
 
 router.get('/', requirePermission('ITEM', 'READ'), itemController.list);
 

@@ -1,15 +1,54 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { maintenanceApi } from '../../api/client';
+import { listAll, maintenanceApi } from '../../api/client';
 import { Alert, Button, Input, Pagination, Select, Spinner, Table } from '../../components/ui';
 import Can from '../../components/Can';
+import PrintReportButton from '../../components/PrintReport';
 import MaintenanceDialogs from '../../components/maintenance/MaintenanceDialogs';
-import { AssetCell, DowntimeCell, RowActions, StageBadge, TypeBadge } from '../../components/maintenance/MaintenanceCells';
+import {
+  AssetCell,
+  AssetPrintCell,
+  DowntimeCell,
+  RowActions,
+  StageBadge,
+  TypeBadge,
+  downtimeText,
+} from '../../components/maintenance/MaintenanceCells';
 import { useAuth } from '../../context/AuthContext';
 import useNow from '../../hooks/useNow';
 import useSiteNames from '../../hooks/useSiteNames';
-import { formatDateTime } from '../../config/maintenance';
-import { formatCurrency, formatNumber, meterUnitLabel } from '../../config/fuel';
+import { MAINTENANCE_TYPE, STAGE, formatDateTime } from '../../config/maintenance';
+import { formatCurrency, formatDateOnly, formatNumber, meterUnitLabel } from '../../config/fuel';
+
+function listParams(active, assetFilter) {
+  return {
+    search: assetFilter ? undefined : active.search || undefined,
+    assetType: assetFilter?.assetType || active.assetType || undefined,
+    assetId: assetFilter?.assetId,
+    type: active.type || undefined,
+    stage: active.stage || undefined,
+    siteId: active.siteId || undefined,
+    dateFrom: active.dateFrom || undefined,
+    dateTo: active.dateTo || undefined,
+    status: active.status || undefined,
+    sort: active.sort,
+  };
+}
+
+function appliedFilters(active, assetFilter, siteNames) {
+  const applied = [];
+  if (assetFilter) applied.push({ label: 'Asset', value: assetFilter.assetId });
+  else if (active.search.trim()) applied.push({ label: 'Search', value: active.search.trim() });
+  const assetType = assetFilter ? assetFilter.assetType : active.assetType;
+  if (assetType) applied.push({ label: 'Asset type', value: assetType === 'VEHICLE' ? 'Vehicles' : 'Machinery' });
+  if (active.type) applied.push({ label: 'Type', value: MAINTENANCE_TYPE[active.type].label });
+  if (active.stage) applied.push({ label: 'Stage', value: STAGE[active.stage].label });
+  if (active.siteId) applied.push({ label: 'Site', value: siteNames[active.siteId] ?? active.siteId });
+  if (active.dateFrom) applied.push({ label: 'Reported from', value: formatDateOnly(active.dateFrom) });
+  if (active.dateTo) applied.push({ label: 'Reported to', value: formatDateOnly(active.dateTo) });
+  if (active.status === 'archived') applied.push({ label: 'Records', value: 'Deleted records' });
+  return applied;
+}
 
 export default function MaintenanceHistoryPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -43,19 +82,7 @@ export default function MaintenanceHistoryPage() {
     async (active) => {
       setError(null);
       try {
-        const response = await maintenanceApi.list({
-          search: assetFilter ? undefined : active.search || undefined,
-          assetType: assetFilter?.assetType || active.assetType || undefined,
-          assetId: assetFilter?.assetId,
-          type: active.type || undefined,
-          stage: active.stage || undefined,
-          siteId: active.siteId || undefined,
-          dateFrom: active.dateFrom || undefined,
-          dateTo: active.dateTo || undefined,
-          status: active.status || undefined,
-          page: active.page,
-          sort: active.sort,
-        });
+        const response = await maintenanceApi.list({ ...listParams(active, assetFilter), page: active.page });
         setResult(response);
       } catch (err) {
         setError(err.message);
@@ -89,6 +116,51 @@ export default function MaintenanceHistoryPage() {
 
   const [sortField, sortDirection] = filters.sort.split(':');
 
+  async function buildPrintReport(generatedAt) {
+    const { data } = await listAll(maintenanceApi.list, listParams(filters, assetFilter));
+    const totalCost = data.reduce((sum, r) => sum + (Number(r.totalCost) || 0), 0);
+
+    return {
+      title: 'Maintenance History',
+      filters: [
+        ...appliedFilters(filters, assetFilter, siteNames),
+        {
+          label: 'Sorted by',
+          value: `${columns.find((c) => c.key === sortField).label}, ${sortDirection === 'asc' ? 'ascending' : 'descending'}`,
+        },
+      ],
+      summary: [
+        { label: 'Records', value: formatNumber(data.length) },
+        { label: 'Total cost', value: formatCurrency(totalCost) },
+      ],
+      sections: [
+        {
+          title: 'Maintenance records',
+          rows: data,
+          getRowKey: (r) => r.id,
+          emptyMessage: 'No maintenance records match these filters.',
+          columns: [
+            { key: 'reportedAt', label: 'Reported', render: (r) => formatDateTime(r.reportedAt) },
+            { key: 'asset', label: 'Asset', render: (r) => <AssetPrintCell record={r} /> },
+            { key: 'type', label: 'Type', render: (r) => MAINTENANCE_TYPE[r.type].label },
+            { key: 'stage', label: 'Stage', render: (r) => STAGE[r.stage].label },
+            { key: 'description', label: 'Description', render: (r) => r.description },
+            { key: 'siteId', label: 'Site', render: (r) => siteNames[r.siteId] ?? '—' },
+            { key: 'completedAt', label: 'Completed', render: (r) => formatDateTime(r.completedAt) },
+            { key: 'downtime', label: 'Downtime', render: (r) => downtimeText(r, generatedAt) },
+            {
+              key: 'meterReading',
+              label: 'Meter',
+              align: 'right',
+              render: (r) => (r.meterReading === null ? '—' : `${formatNumber(r.meterReading)} ${meterUnitLabel(r.meterType)}`),
+            },
+            { key: 'totalCost', label: 'Total cost', align: 'right', render: (r) => formatCurrency(r.totalCost) },
+          ],
+        },
+      ],
+    };
+  }
+
   const columns = [
     { key: 'reportedAt', label: 'Reported', sortable: true, render: (r) => formatDateTime(r.reportedAt) },
     { key: 'asset', label: 'Asset', render: (r) => <AssetCell record={r} /> },
@@ -121,9 +193,12 @@ export default function MaintenanceHistoryPage() {
           <h1 className="text-xl font-semibold text-steel-900">Maintenance History</h1>
           <p className="mt-1 text-steel-500">Every preventive service and breakdown, newest first.</p>
         </div>
-        <Can resource="MAINTENANCE" action="CREATE">
-          <Button onClick={() => setDialog({ kind: 'create' })}>Record maintenance</Button>
-        </Can>
+        <div className="flex flex-wrap items-center gap-2">
+          <PrintReportButton buildReport={buildPrintReport} onError={setError} />
+          <Can resource="MAINTENANCE" action="CREATE">
+            <Button onClick={() => setDialog({ kind: 'create' })}>Record maintenance</Button>
+          </Can>
+        </div>
       </div>
 
       <Alert tone="success">{notice}</Alert>

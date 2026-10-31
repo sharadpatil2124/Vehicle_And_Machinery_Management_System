@@ -4,11 +4,13 @@ const { sequelize, Vehicle, AuditLog } = require('../models');
 const AppError = require('../utils/AppError');
 const { requireText, optionalText, requireNumber } = require('../utils/validation');
 const { assertMeterNotDecreasing } = require('../utils/meter');
-const { parseListQuery, parseEnumFilter } = require('../utils/queryOptions');
+const { parseListQuery, parseEnumFilter, containsPattern } = require('../utils/queryOptions');
 const { buildListResponse } = require('../utils/listResponse');
 const { createTenantScopedRepository } = require('./tenantScopedRepository');
+const { nextSequentialCode } = require('./codeGenerator');
 const { archiveEntity, restoreEntity } = require('./archive.service');
 const { recordCreate, recordUpdate } = require('./audit.service');
+const { assetCostSummary } = require('./assetCost.service');
 const {
   scopeToSite,
   assertSiteAllowed,
@@ -39,9 +41,7 @@ function toPublic(vehicle) {
 const ASSET_ID_PREFIX = 'VEH-';
 
 async function generateAssetId(tenantId, { transaction } = {}) {
-  const highest = await Vehicle.max('assetId', { where: { tenantId }, transaction, paranoid: false });
-  const nextNumber = highest ? Number(highest.slice(ASSET_ID_PREFIX.length)) + 1 : 1;
-  return `${ASSET_ID_PREFIX}${String(nextNumber).padStart(6, '0')}`;
+  return nextSequentialCode(Vehicle, 'assetId', ASSET_ID_PREFIX, { tenantId, transaction });
 }
 
 function isAssetIdCollision(error) {
@@ -243,9 +243,9 @@ async function listVehicles({ tenantId, auth, query }) {
   const search = typeof query.search === 'string' ? query.search.trim() : '';
   if (search) {
     where[Op.or] = [
-      { assetId: { [Op.like]: `%${search}%` } },
-      { registrationNumber: { [Op.like]: `%${search}%` } },
-      { modelNumber: { [Op.like]: `%${search}%` } },
+      { assetId: { [Op.like]: containsPattern(search) } },
+      { registrationNumber: { [Op.like]: containsPattern(search) } },
+      { modelNumber: { [Op.like]: containsPattern(search) } },
     ];
   }
 
@@ -366,17 +366,20 @@ async function updateVehicle({ tenantId, auth, actingUserId, id, payload }) {
   const meterInput = readMeterInputForUpdate(payload, vehicle, nextType);
   const siteInput = readCurrentSiteIdInput(payload, { partial: true });
   assertSiteChangeAllowed(auth, vehicle.currentSiteId, siteInput);
-  if (siteInput.currentSiteId != null) {
+  // Only a new site must be assignable: an asset may stay at a site that was archived after it arrived.
+  if (siteInput.currentSiteId != null && siteInput.currentSiteId !== vehicle.currentSiteId) {
     await assertSiteAssignable(tenantId, siteInput.currentSiteId);
   }
   const compliance = parseComplianceField(payload.compliance);
 
-  const before = vehicle.toJSON();
-  const previousSiteId = vehicle.currentSiteId;
-  const nextSiteId = 'currentSiteId' in siteInput ? siteInput.currentSiteId : previousSiteId;
-
   const updated = await sequelize.transaction(async (transaction) => {
-    await vehicle.update(
+    // Re-read under a row lock so simultaneous saves see each other's site change.
+    const current = await repo.findByPk(tenantId, vehicle.id, { transaction, lock: transaction.LOCK.UPDATE });
+    const before = current.toJSON();
+    const previousSiteId = current.currentSiteId;
+    const nextSiteId = 'currentSiteId' in siteInput ? siteInput.currentSiteId : previousSiteId;
+
+    await current.update(
       {
         ...baseInput,
         ...siteInput,
@@ -387,14 +390,14 @@ async function updateVehicle({ tenantId, auth, actingUserId, id, payload }) {
     );
 
     await recordUpdate(
-      { tenantId, entityType: 'Vehicle', entityId: vehicle.id, performedBy: actingUserId, before, after: vehicle },
+      { tenantId, entityType: 'Vehicle', entityId: current.id, performedBy: actingUserId, before, after: current },
       { transaction }
     );
 
     await recordSiteAssignment({
       tenantId,
       assetType: 'VEHICLE',
-      assetId: vehicle.assetId,
+      assetId: current.assetId,
       previousSiteId,
       nextSiteId,
       actingUserId,
@@ -404,13 +407,13 @@ async function updateVehicle({ tenantId, auth, actingUserId, id, payload }) {
     await saveComplianceDocuments({
       tenantId,
       assetType: 'VEHICLE',
-      assetId: vehicle.assetId,
+      assetId: current.assetId,
       actingUserId,
       compliance,
       transaction,
     });
 
-    return vehicle;
+    return current;
   });
 
   return toPublic(updated);
@@ -461,6 +464,13 @@ async function getVehicleHistory({ tenantId, auth, id }) {
   }));
 }
 
+async function getVehicleCosts({ tenantId, auth, id }) {
+  const vehicle = await repo.findByPk(tenantId, id);
+  if (!vehicle) throw AppError.notFound('Vehicle not found');
+  assertSiteAllowed(auth, vehicle.currentSiteId, 'Vehicle not found');
+  return assetCostSummary({ tenantId, assetType: 'VEHICLE', assetId: vehicle.assetId });
+}
+
 module.exports = {
   listVehicles,
   getVehicle,
@@ -469,4 +479,5 @@ module.exports = {
   deleteVehicle,
   restoreVehicle,
   getVehicleHistory,
+  getVehicleCosts,
 };

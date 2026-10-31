@@ -35,14 +35,6 @@ function createTenantScopedRepository(model) {
       requireTenantId(tenantId);
       return model.create({ ...data, tenantId }, options);
     },
-
-    update: async (tenantId, id, data, options = {}) => {
-      const [affected] = await model.update(data, {
-        ...options,
-        where: scopedWhere(tenantId, { id }),
-      });
-      return affected;
-    },
   };
 }
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { sitesApi } from '../api/client';
+import { sitesApi, usersApi } from '../api/client';
 import { Alert, Badge, Button, Field, Input, Modal, Pagination, Select, Spinner, Table } from '../components/ui';
 import Can from '../components/Can';
 import DeleteWordModal from '../components/DeleteWordModal';
@@ -8,6 +8,20 @@ const STATUS_OPTIONS = [
   { value: '', label: 'Active (default)' },
   { value: 'archived', label: 'Archived' },
 ];
+
+function plural(count, noun) {
+  return `${count} ${noun}${count === 1 ? '' : 's'}`;
+}
+
+function archiveDescription(site, impact) {
+  const base = `${site?.name} will be archived and disappear from the site list. Assets currently assigned to it keep their assignment.`;
+  if (!impact) return `${base} Checking what is at this site…`;
+  if (impact.failed) return base;
+  const here = `It has ${plural(impact.assets, 'asset')} and ${plural(impact.supervisors, 'supervisor')}.`;
+  const warning =
+    impact.supervisors > 0 ? " Its supervisors can't add vehicles or machinery until you move them to another site." : '';
+  return `${base} ${here}${warning}`;
+}
 
 function StatusBadge({ status }) {
   return <Badge tone={status === 'archived' ? 'neutral' : 'success'}>{status}</Badge>;
@@ -87,6 +101,7 @@ export default function SitesPage() {
   const [error, setError] = useState(null);
   const [formState, setFormState] = useState(null);
   const [archiving, setArchiving] = useState(null);
+  const [archiveImpact, setArchiveImpact] = useState(null);
   const [deletePending, setDeletePending] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
   const [restoringId, setRestoringId] = useState(null);
@@ -109,6 +124,27 @@ export default function SitesPage() {
     const timer = setTimeout(() => load(filters), 300);
     return () => clearTimeout(timer);
   }, [filters, load]);
+
+  // Before archiving, show what is still at the site so the admin can move its supervisors first.
+  useEffect(() => {
+    if (!archiving) return undefined;
+    let cancelled = false;
+    setArchiveImpact(null);
+    Promise.all([sitesApi.assets(archiving.id), usersApi.list()])
+      .then(([assetsResponse, usersResponse]) => {
+        if (cancelled) return;
+        const supervisors = usersResponse.data.filter(
+          (user) => user.role === 'supervisor' && user.status === 'active' && user.siteId === archiving.id
+        );
+        setArchiveImpact({ assets: assetsResponse.data.length, supervisors: supervisors.length });
+      })
+      .catch(() => {
+        if (!cancelled) setArchiveImpact({ failed: true });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [archiving]);
 
   async function handleArchive() {
     setDeletePending(true);
@@ -199,7 +235,7 @@ export default function SitesPage() {
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2 sm:max-w-md">
         <Input
-          placeholder="Search by name..."
+          placeholder="Search by name or location..."
           value={filters.search}
           onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value, page: 1 }))}
         />
@@ -257,7 +293,7 @@ export default function SitesPage() {
       <DeleteWordModal
         open={archiving !== null}
         title="Delete this site?"
-        description={`${archiving?.name} will be archived and disappear from the site list. Assets currently assigned to it keep their assignment.`}
+        description={archiveDescription(archiving, archiveImpact)}
         onCancel={() => setArchiving(null)}
         onConfirm={handleArchive}
         pending={deletePending}

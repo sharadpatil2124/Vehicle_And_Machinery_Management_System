@@ -2,6 +2,7 @@ const { Op, fn, col } = require('sequelize');
 
 const { TyreStock, TyreType, TyreFitment } = require('../models');
 const { roundMoney, siteNamesById } = require('./fuelCommon');
+const { containsPattern } = require('../utils/queryOptions');
 const { siteFilter } = require('./tyreCommon');
 
 async function listTyreStock({ tenantId, auth, query }) {
@@ -12,7 +13,7 @@ async function listTyreStock({ tenantId, auth, query }) {
   const typeWhere = { tenantId };
   const search = typeof query.search === 'string' ? query.search.trim() : '';
   if (search) {
-    const like = { [Op.like]: `%${search}%` };
+    const like = { [Op.like]: containsPattern(search) };
     typeWhere[Op.or] = [{ brand: like }, { pattern: like }, { size: like }, { typeCode: like }];
   }
 

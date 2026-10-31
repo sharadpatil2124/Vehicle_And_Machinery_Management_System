@@ -1,10 +1,12 @@
 const express = require('express');
 const unitOfMeasureController = require('../controllers/unitOfMeasure.controller');
 const { authenticated, requirePermission } = require('../middleware/authorize');
+const { validateIdParam } = require('../middleware/idParam');
 
 const router = express.Router();
 
 router.use(authenticated);
+router.param('id', validateIdParam('Unit of measure not found'));
 
 router.get('/', requirePermission('UOM', 'READ'), unitOfMeasureController.list);
 

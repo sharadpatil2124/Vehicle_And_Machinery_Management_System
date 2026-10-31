@@ -5,7 +5,7 @@ const { machineAssetIdsMatchingRcpl, vehicleAssetIdsMatchingRegistration } = req
 const AppError = require('../utils/AppError');
 const { requireText, optionalText, optionalNumber } = require('../utils/validation');
 const { assertMeterNotDecreasing } = require('../utils/meter');
-const { parseListQuery, parseEnumFilter } = require('../utils/queryOptions');
+const { parseListQuery, parseEnumFilter, containsPattern } = require('../utils/queryOptions');
 const { buildListResponse } = require('../utils/listResponse');
 const { createTenantScopedRepository } = require('./tenantScopedRepository');
 const { recordArchive, recordCreate, recordUpdate } = require('./audit.service');
@@ -175,7 +175,7 @@ async function listMaintenance({ tenantId, auth, query }) {
       machineAssetIdsMatchingRcpl(tenantId, search),
       vehicleAssetIdsMatchingRegistration(tenantId, search),
     ]);
-    where[Op.or] = [{ assetId: { [Op.like]: `%${search}%` } }];
+    where[Op.or] = [{ assetId: { [Op.like]: containsPattern(search) } }];
     if (machineIds.length) where[Op.or].push({ assetType: ASSET_TYPES.MACHINERY, assetId: machineIds });
     if (vehicleIds.length) where[Op.or].push({ assetType: ASSET_TYPES.VEHICLE, assetId: vehicleIds });
   }

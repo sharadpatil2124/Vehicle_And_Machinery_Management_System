@@ -33,13 +33,18 @@ function requirePassword(value) {
 }
 
 function optionalText(value, label, { max = 255 } = {}) {
-  if (value === undefined || value === null || value === '') return null;
+  if (value === undefined || value === null || isBlankString(value)) return null;
   return requireText(value, label, { max });
+}
+
+function isBlankString(value) {
+  return typeof value === 'string' && value.trim() === '';
 }
 
 function requireNumber(value, label, { min } = {}) {
   const number = Number(value);
-  if (typeof value === 'boolean' || value === '' || value === null || !Number.isFinite(number)) {
+  const isNumberOrText = typeof value === 'number' || (typeof value === 'string' && !isBlankString(value));
+  if (!isNumberOrText || !Number.isFinite(number)) {
     throw AppError.badRequest(`${label} must be a number`);
   }
   if (min !== undefined && number < min) {
@@ -49,7 +54,7 @@ function requireNumber(value, label, { min } = {}) {
 }
 
 function optionalNumber(value, label, options = {}) {
-  if (value === undefined || value === null || value === '') return null;
+  if (value === undefined || value === null || isBlankString(value)) return null;
   return requireNumber(value, label, options);
 }
 
@@ -59,7 +64,8 @@ const MAX_PHONE_DIGITS = 15;
 
 function optionalPhone(value, label = 'Phone') {
   if (value === undefined || value === null || value === '') return null;
-  const phone = typeof value === 'string' ? value.trim() : '';
+  if (typeof value !== 'string') throw AppError.badRequest(`${label} must be text`);
+  const phone = value.trim();
   if (!phone) return null;
   const digits = phone.replace(/\D/g, '');
   if (

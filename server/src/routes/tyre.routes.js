@@ -1,10 +1,18 @@
 const express = require('express');
 const tyreController = require('../controllers/tyre.controller');
 const { authenticated, requirePermission } = require('../middleware/authorize');
+const { validateIdParam } = require('../middleware/idParam');
+
+const TYRE_NOT_FOUND = Object.freeze({
+  types: 'Tyre type not found',
+  purchases: 'Tyre purchase not found',
+  fitments: 'Tyre fitting not found',
+});
 
 const router = express.Router();
 
 router.use(authenticated);
+router.param('id', validateIdParam((req) => TYRE_NOT_FOUND[req.path.split('/')[1]]));
 
 router.get('/types', requirePermission('TYRE', 'READ'), tyreController.listTypes);
 
