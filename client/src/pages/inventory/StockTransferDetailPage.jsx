@@ -77,8 +77,6 @@ export default function StockTransferDetailPage() {
 
   const columns = [
     { key: 'itemId', label: 'Item', render: (row) => row.itemName ?? '—' },
-    { key: 'fromStorageLocationId', label: 'From location', render: (row) => row.fromLocationName ?? '—' },
-    { key: 'toStorageLocationId', label: 'To location', render: (row) => row.toLocationName ?? '—' },
     { key: 'quantity', label: 'Quantity', render: (row) => row.quantity.toLocaleString() },
     { key: 'unitCost', label: 'Unit cost (incl. tax)', render: (row) => row.unitCost.toLocaleString() },
   ];
@@ -120,7 +118,7 @@ export default function StockTransferDetailPage() {
         open={confirmingReceive}
         onClose={() => setConfirmingReceive(false)}
         title="Receive this transfer?"
-        description={`Stock moves now: it leaves ${fromSiteName} and is added to ${toSiteName}'s storage locations. This can't be undone from this screen.`}
+        description={`Stock moves now: it leaves ${fromSiteName} and is added to ${toSiteName}. This can't be undone from this screen.`}
         footer={
           <>
             <Button variant="secondary" onClick={() => setConfirmingReceive(false)}>

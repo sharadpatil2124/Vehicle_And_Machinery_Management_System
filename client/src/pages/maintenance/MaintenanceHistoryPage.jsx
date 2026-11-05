@@ -145,7 +145,7 @@ export default function MaintenanceHistoryPage() {
             { key: 'type', label: 'Type', render: (r) => MAINTENANCE_TYPE[r.type].label },
             { key: 'stage', label: 'Stage', render: (r) => STAGE[r.stage].label },
             { key: 'description', label: 'Description', render: (r) => r.description },
-            { key: 'siteId', label: 'Site', render: (r) => siteNames[r.siteId] ?? '—' },
+            { key: 'siteId', label: 'Site', render: (r) => r.siteName ?? siteNames[r.siteId] ?? '—' },
             { key: 'completedAt', label: 'Completed', render: (r) => formatDateTime(r.completedAt) },
             { key: 'downtime', label: 'Downtime', render: (r) => downtimeText(r, generatedAt) },
             {
@@ -167,7 +167,7 @@ export default function MaintenanceHistoryPage() {
     { key: 'type', label: 'Type', render: (r) => <TypeBadge type={r.type} /> },
     { key: 'stage', label: 'Stage', render: (r) => <StageBadge stage={r.stage} /> },
     { key: 'description', label: 'Description', wrap: true, render: (r) => <span className="line-clamp-2 max-w-xs">{r.description}</span> },
-    { key: 'siteId', label: 'Site', render: (r) => siteNames[r.siteId] ?? '—' },
+    { key: 'siteId', label: 'Site', render: (r) => r.siteName ?? siteNames[r.siteId] ?? '—' },
     { key: 'completedAt', label: 'Completed', sortable: true, render: (r) => formatDateTime(r.completedAt) },
     { key: 'downtimeMinutes', label: 'Downtime', sortable: true, render: (r) => <DowntimeCell record={r} now={now} /> },
     {

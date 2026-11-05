@@ -3,7 +3,7 @@ const { Op, Transaction } = require('sequelize');
 const { sequelize, FuelTransaction, FuelStation, Vehicle, Machinery } = require('../models');
 const { machineAssetIdsMatchingRcpl, vehicleAssetIdsMatchingRegistration } = require('./assetIdentifier.service');
 const AppError = require('../utils/AppError');
-const { requireText, optionalText, requireNumber, optionalNumber } = require('../utils/validation');
+const { requireText, optionalText, requireNumber, optionalNumber, requireIdFilter } = require('../utils/validation');
 const { parseListQuery, parseEnumFilter, containsPattern } = require('../utils/queryOptions');
 const { buildListResponse } = require('../utils/listResponse');
 const { createTenantScopedRepository } = require('./tenantScopedRepository');
@@ -217,7 +217,7 @@ async function listFuelTransactions({ tenantId, auth, query }) {
   const assetType = parseEnumFilter(query.assetType, FuelTransaction.ASSET_TYPES, 'Asset type');
   if (assetType) where.assetType = assetType;
   if (query.assetId) where.assetId = String(query.assetId);
-  if (query.siteId && supervisorSiteId(auth) === null) where.siteId = Number(query.siteId);
+  if (query.siteId && supervisorSiteId(auth) === null) where.siteId = requireIdFilter(query.siteId, 'Site');
   const source = parseEnumFilter(query.source, FuelTransaction.SOURCES, 'Source');
   if (source) where.source = source;
   const fuelType = parseEnumFilter(query.fuelType, FuelTransaction.FUEL_TYPES, 'Fuel type');

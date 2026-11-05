@@ -80,4 +80,15 @@ async function remove(req, res) {
   res.status(200).json({ data, message: 'Maintenance record deleted' });
 }
 
-module.exports = { list, preventiveSchedule, preventiveScheduleAssets, get, create, update, changeStage, remove };
+async function correctCost(req, res) {
+  const data = await maintenanceService.correctMaintenanceCost({
+    tenantId: req.auth.tenantId,
+    auth: req.auth,
+    actingUserId: req.auth.userId,
+    id: req.params.id,
+    payload: req.body ?? {},
+  });
+  res.status(200).json({ data, message: 'Maintenance cost corrected' });
+}
+
+module.exports = { list, preventiveSchedule, preventiveScheduleAssets, get, create, update, changeStage, remove, correctCost };

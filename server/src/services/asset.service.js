@@ -15,13 +15,13 @@ function registerAssetModel(assetType, model) {
   registry.set(assetType, model);
 }
 
-async function resolveAsset(tenantId, assetType, assetId, { transaction, auth } = {}) {
+async function resolveAsset(tenantId, assetType, assetId, { transaction, auth, lock } = {}) {
   const model = registry.get(assetType);
   if (!model) {
     throw AppError.badRequest(`Unknown asset type "${assetType}"`);
   }
 
-  const asset = await model.findOne({ where: { assetId, tenantId }, transaction });
+  const asset = await model.findOne({ where: { assetId, tenantId }, transaction, lock });
   if (!asset) {
     throw AppError.notFound('Asset not found');
   }

@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
-import { stockApi, itemsApi, storageLocationsApi, sitesApi, listAll } from '../../api/client';
-import { Alert, Badge, Button, Modal, Pagination, Select, Spinner, Table } from '../../components/ui';
+import { useEffect, useState } from 'react';
+import { stockApi, itemsApi, sitesApi, listAll } from '../../api/client';
+import { Alert, Badge, Button, Input, Modal, Pagination, Select, Spinner, Table } from '../../components/ui';
+import PrintReportButton from '../../components/PrintReport';
 import { useAuth } from '../../context/AuthContext';
 import useSiteNames from '../../hooks/useSiteNames';
+import { assetNumber } from '../../config/assetDetails';
 
 const TABS = [
   { value: 'balances', label: 'Stock Balances' },
@@ -36,8 +38,39 @@ function StockStatusBadge({ balance }) {
 const currencyFormatter = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 });
 const money = (value) => currencyFormatter.format(Number(value));
 const qty = (value) => Number(value).toLocaleString('en-IN', { maximumFractionDigits: 3 });
+const dateTime = (value) => new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
 const PAGE_SIZE = 20;
+
+function filterColumns(tab, isAdmin) {
+  if (tab === 'transactions') return isAdmin ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3';
+  return isAdmin ? 'sm:grid-cols-3' : 'sm:grid-cols-2';
+}
+
+function listParams(active, isAdmin) {
+  return {
+    siteId: isAdmin ? active.siteId || undefined : undefined,
+    itemId: active.itemId || undefined,
+  };
+}
+
+function transactionTypeLabel(type) {
+  return TRANSACTION_TYPE_OPTIONS.find((option) => option.value === type)?.label ?? type.replaceAll('_', ' ');
+}
+
+function assetLabel({ asset }) {
+  return asset ? assetNumber(asset.assetType, asset.assetId, asset) : null;
+}
+
+function transactionParams(active) {
+  return { transactionType: active.transactionType || undefined, assetSearch: active.assetSearch || undefined };
+}
+
+function latestPriceLines({ latestUnitCost: latest, previousUnitCost: previous }) {
+  if (latest == null) return '—';
+  if (previous == null) return money(latest);
+  return [money(latest), `${latest > previous ? '▲' : '▼'} was ${money(previous)}`];
+}
 
 const BIG_PRICE_JUMP = 0.1;
 const INLINE_BATCH_LIMIT = 3;
@@ -128,7 +161,7 @@ function BatchesModal({ balance, siteName, onClose }) {
       title={balance ? `${balance.itemName} — prices in stock` : ''}
       description={
         balance
-          ? `${siteName ?? ''}${balance.locationName ? ` · ${balance.locationName}` : ''}. Prices include tax. The oldest batch is used first when stock goes out.`
+          ? `${siteName ?? ''}. Prices include tax. The oldest batch is used first when stock goes out.`
           : undefined
       }
       footer={
@@ -181,11 +214,11 @@ export default function StockPage() {
   const isAdmin = role === 'admin';
 
   const [tab, setTab] = useState('balances');
-  const [filters, setFilters] = useState({ siteId: '', itemId: '', storageLocationId: '', transactionType: '' });
+  const [filters, setFilters] = useState({ siteId: '', itemId: '', transactionType: '', assetSearch: '' });
+  const [assetSearchText, setAssetSearchText] = useState('');
   const [pages, setPages] = useState({ balances: 1, transactions: 1 });
   const [sites, setSites] = useState([]);
   const [items, setItems] = useState([]);
-  const [storageLocations, setStorageLocations] = useState([]);
   const [balances, setBalances] = useState(null);
   const [transactions, setTransactions] = useState(null);
   const [error, setError] = useState(null);
@@ -194,20 +227,13 @@ export default function StockPage() {
 
   useEffect(() => {
     listAll(itemsApi.list).then((r) => setItems(r.data)).catch(() => setItems([]));
-    listAll(storageLocationsApi.list).then((r) => setStorageLocations(r.data)).catch(() => setStorageLocations([]));
     if (isAdmin) listAll(sitesApi.list).then((r) => setSites(r.data)).catch(() => setSites([]));
   }, [isAdmin]);
 
   useEffect(() => {
     let cancelled = false;
     setError(null);
-    const params = {
-      siteId: isAdmin ? filters.siteId || undefined : undefined,
-      itemId: filters.itemId || undefined,
-      storageLocationId: filters.storageLocationId || undefined,
-      page: pages[tab],
-      limit: PAGE_SIZE,
-    };
+    const params = { ...listParams(filters, isAdmin), page: pages[tab], limit: PAGE_SIZE };
     if (tab === 'balances') {
       setBalances(null);
       stockApi
@@ -217,7 +243,7 @@ export default function StockPage() {
     } else {
       setTransactions(null);
       stockApi
-        .transactions({ ...params, transactionType: filters.transactionType || undefined })
+        .transactions({ ...params, ...transactionParams(filters) })
         .then((r) => !cancelled && setTransactions(r))
         .catch((err) => !cancelled && setError(err.message));
     }
@@ -226,16 +252,18 @@ export default function StockPage() {
     };
   }, [tab, filters, pages, isAdmin]);
 
+  const typedAssetSearch = assetSearchText.trim();
+  useEffect(() => {
+    if (typedAssetSearch === filters.assetSearch) return undefined;
+    const timer = setTimeout(() => changeFilters((f) => ({ ...f, assetSearch: typedAssetSearch })), 300);
+    return () => clearTimeout(timer);
+  }, [typedAssetSearch, filters.assetSearch]);
+
   const result = tab === 'balances' ? balances : transactions;
   useEffect(() => {
     const last = result?.pagination?.pages;
     if (last > 0 && pages[tab] > last) setPages((p) => ({ ...p, [tab]: last }));
   }, [result, tab, pages]);
-
-  const locationOptions = useMemo(
-    () => (isAdmin && filters.siteId ? storageLocations.filter((l) => String(l.siteId) === filters.siteId) : storageLocations),
-    [storageLocations, isAdmin, filters.siteId]
-  );
 
   function changeFilters(update) {
     setFilters(update);
@@ -254,7 +282,6 @@ export default function StockPage() {
     { key: 'itemName', label: 'Item' },
     { key: 'availableQuantity', label: 'Available' },
     { key: 'siteId', label: 'Site', render: (b) => siteNames[b.siteId] ?? '—' },
-    { key: 'locationName', label: 'Storage location' },
     { key: 'status', label: 'Status', render: (b) => <StockStatusBadge balance={b} /> },
     { key: 'latestUnitCost', label: 'Latest price', render: (b) => <LatestPrice balance={b} /> },
     { key: 'batches', label: 'Bought at', render: (b) => <BoughtAt balance={b} onShowBatches={setBatchesFor} /> },
@@ -279,7 +306,7 @@ export default function StockPage() {
     },
     { key: 'itemName', label: 'Item' },
     { key: 'siteId', label: 'Site', render: (t) => siteNames[t.siteId] ?? '—' },
-    { key: 'locationName', label: 'Storage location' },
+    { key: 'asset', label: 'Asset', render: (t) => assetLabel(t) ?? <span className="text-steel-400">—</span> },
     { key: 'quantity', label: 'Quantity' },
     { key: 'unitCost', label: 'Unit cost (incl. tax)' },
     { key: 'totalCost', label: 'Total cost (incl. tax)' },
@@ -290,14 +317,96 @@ export default function StockPage() {
     },
   ];
 
+  function appliedFilters() {
+    const applied = [];
+    if (isAdmin && filters.siteId) applied.push({ label: 'Site', value: siteNames[filters.siteId] ?? filters.siteId });
+    if (filters.itemId) applied.push({ label: 'Item', value: items.find((i) => String(i.id) === filters.itemId)?.itemName ?? filters.itemId });
+    if (tab === 'transactions' && filters.transactionType) applied.push({ label: 'Type', value: transactionTypeLabel(filters.transactionType) });
+    if (tab === 'transactions' && filters.assetSearch) applied.push({ label: 'Asset', value: filters.assetSearch });
+    return applied;
+  }
+
+  async function buildPrintReport() {
+    const params = listParams(filters, isAdmin);
+
+    if (tab === 'balances') {
+      const { data } = await listAll(stockApi.balances, params);
+      return {
+        title: 'Stock Balances',
+        filters: appliedFilters(),
+        summary: [
+          { label: 'Stock lines', value: qty(data.length) },
+          { label: 'Total stock value (incl. tax)', value: money(data.reduce((sum, b) => sum + Number(b.stockValue ?? 0), 0)) },
+        ],
+        sections: [
+          {
+            title: 'Stock balances',
+            rows: data,
+            getRowKey: (b) => b.id,
+            emptyMessage: 'No stock on hand matches these filters.',
+            columns: [
+              { key: 'itemName', label: 'Item', render: (b) => b.itemName ?? '—' },
+              { key: 'availableQuantity', label: 'Available', align: 'right', render: (b) => qty(b.availableQuantity) },
+              { key: 'siteId', label: 'Site', render: (b) => siteNames[b.siteId] ?? '—' },
+              { key: 'status', label: 'Status', render: (b) => stockStatus(b).label },
+              { key: 'latestUnitCost', label: 'Latest price', align: 'right', render: latestPriceLines },
+              {
+                key: 'batches',
+                label: 'Bought at',
+                render: (b) =>
+                  groupNeighboursByPrice(b.batches ?? [])
+                    .map((group) => `${money(group.unitCost)} (${qty(group.remainingQuantity)})`)
+                    .join(', ') || '—',
+              },
+              { key: 'stockValue', label: 'Stock value', align: 'right', render: (b) => money(b.stockValue ?? 0) },
+              { key: 'lastTransactionAt', label: 'Last movement', render: (b) => (b.lastTransactionAt ? dateTime(b.lastTransactionAt) : '—') },
+            ],
+          },
+        ],
+      };
+    }
+
+    const { data } = await listAll(stockApi.transactions, { ...params, ...transactionParams(filters) });
+    return {
+      title: 'Stock Transaction History',
+      filters: appliedFilters(),
+      summary: [
+        { label: 'Transactions', value: qty(data.length) },
+        { label: 'Total cost (incl. tax)', value: money(data.reduce((sum, t) => sum + Number(t.totalCost ?? 0), 0)) },
+      ],
+      sections: [
+        {
+          title: 'Transactions',
+          rows: data,
+          getRowKey: (t) => t.id,
+          emptyMessage: 'No transactions match these filters.',
+          columns: [
+            { key: 'transactionNumber', label: 'Reference', render: (t) => t.transactionNumber },
+            { key: 'transactionType', label: 'Type', render: (t) => transactionTypeLabel(t.transactionType) },
+            { key: 'itemName', label: 'Item', render: (t) => t.itemName ?? '—' },
+            { key: 'siteId', label: 'Site', render: (t) => siteNames[t.siteId] ?? '—' },
+            { key: 'asset', label: 'Asset', render: (t) => assetLabel(t) ?? '—' },
+            { key: 'quantity', label: 'Quantity', align: 'right', render: (t) => qty(t.quantity) },
+            { key: 'unitCost', label: 'Unit cost (incl. tax)', align: 'right', render: (t) => money(t.unitCost) },
+            { key: 'totalCost', label: 'Total cost (incl. tax)', align: 'right', render: (t) => money(t.totalCost) },
+            { key: 'transactionAt', label: 'Date', render: (t) => dateTime(t.transactionAt) },
+          ],
+        },
+      ],
+    };
+  }
+
   return (
     <div>
-      <div className="mb-5">
-        <h1 className="text-xl font-semibold text-steel-900">Stock</h1>
-        <p className="mt-1 text-steel-500">
-          {isAdmin ? 'Current stock and the full movement ledger, across every site.' : 'Current stock and the full movement ledger at your site.'}{' '}
-          All prices, costs and values include tax.
-        </p>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-steel-900">Stock</h1>
+          <p className="mt-1 text-steel-500">
+            {isAdmin ? 'Current stock and the full movement ledger, across every site.' : 'Current stock and the full movement ledger at your site.'}{' '}
+            All prices, costs and values include tax.
+          </p>
+        </div>
+        <PrintReportButton buildReport={buildPrintReport} onError={setError} />
       </div>
 
       <div className="mb-4 flex gap-1.5">
@@ -310,9 +419,9 @@ export default function StockPage() {
 
       {error && <Alert tone="error">{error}</Alert>}
 
-      <div className={`mb-4 grid gap-3 ${isAdmin ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
+      <div className={`mb-4 grid gap-3 ${filterColumns(tab, isAdmin)}`}>
         {isAdmin && (
-          <Select value={filters.siteId} onChange={(e) => changeFilters((f) => ({ ...f, siteId: e.target.value, storageLocationId: '' }))}>
+          <Select value={filters.siteId} onChange={(e) => updateFilter('siteId', e.target.value)}>
             <option value="">All sites</option>
             {sites.map((site) => (
               <option key={site.id} value={site.id} data-added={site.id}>
@@ -329,14 +438,6 @@ export default function StockPage() {
             </option>
           ))}
         </Select>
-        <Select value={filters.storageLocationId} onChange={(e) => updateFilter('storageLocationId', e.target.value)}>
-          <option value="">All storage locations</option>
-          {locationOptions.map((loc) => (
-            <option key={loc.id} value={loc.id} data-added={loc.id}>
-              {loc.locationName}
-            </option>
-          ))}
-        </Select>
         {tab === 'transactions' && (
           <Select value={filters.transactionType} onChange={(e) => updateFilter('transactionType', e.target.value)}>
             {TRANSACTION_TYPE_OPTIONS.map((option) => (
@@ -345,6 +446,14 @@ export default function StockPage() {
               </option>
             ))}
           </Select>
+        )}
+        {tab === 'transactions' && (
+          <Input
+            aria-label="Search by asset"
+            placeholder="Asset: RCPL or Registration Number..."
+            value={assetSearchText}
+            onChange={(e) => setAssetSearchText(e.target.value)}
+          />
         )}
       </div>
 

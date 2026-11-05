@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { assetIssuesApi, issueReversalsApi, itemsApi, storageLocationsApi, listAll } from '../../api/client';
+import { assetIssuesApi, issueReversalsApi } from '../../api/client';
 import { Alert, Badge, Button, Card, Field, Input, Modal, Spinner, Table } from '../../components/ui';
 import Can from '../../components/Can';
+import useSiteNames from '../../hooks/useSiteNames';
+import { assetIdentity, assetTypeLabel } from '../../config/assetDetails';
 
 function Detail({ label, children }) {
   return (
@@ -103,7 +105,7 @@ export default function AssetIssueDetailPage() {
 
   const [issue, setIssue] = useState(null);
   const [loadError, setLoadError] = useState(null);
-  const [lookups, setLookups] = useState({ items: [], locations: [] });
+  const siteNames = useSiteNames();
   const [reversingLine, setReversingLine] = useState(null);
 
   const load = useCallback(async () => {
@@ -120,12 +122,6 @@ export default function AssetIssueDetailPage() {
     load();
   }, [load]);
 
-  useEffect(() => {
-    Promise.all([listAll(itemsApi.list), listAll(storageLocationsApi.list)])
-      .then(([items, locations]) => setLookups({ items: items.data, locations: locations.data }))
-      .catch(() => {});
-  }, []);
-
   if (loadError) {
     return (
       <div className="mx-auto max-w-4xl">
@@ -139,12 +135,10 @@ export default function AssetIssueDetailPage() {
 
   if (!issue) return <Spinner label="Loading asset issue" />;
 
-  const itemName = (itemId) => lookups.items.find((i) => i.id === itemId)?.itemName ?? '—';
-  const locationName = (locationId) => lookups.locations.find((l) => l.id === locationId)?.locationName ?? '—';
+  const assetName = assetIdentity(issue.assetType, issue.asset);
 
   const itemColumns = [
-    { key: 'itemId', label: 'Item', render: (row) => itemName(row.itemId) },
-    { key: 'storageLocationId', label: 'Storage location', render: (row) => locationName(row.storageLocationId) },
+    { key: 'itemId', label: 'Item', render: (row) => row.itemName ?? '—' },
     { key: 'issuedQuantity', label: 'Issued', render: (row) => row.issuedQuantity.toLocaleString() },
     { key: 'reversedQuantity', label: 'Reversed', render: (row) => row.reversedQuantity.toLocaleString() },
     { key: 'unitCost', label: 'Unit cost (incl. tax)', render: (row) => row.unitCost.toLocaleString() },
@@ -182,10 +176,11 @@ export default function AssetIssueDetailPage() {
         <dl className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           <Detail label="Asset">
             <span className="inline-flex items-center gap-1.5">
-              <Badge tone={issue.assetType === 'VEHICLE' ? 'neutral' : 'brand'}>{issue.assetType === 'VEHICLE' ? 'Vehicle' : 'Machinery'}</Badge>
-              {issue.assetId}
+              <Badge tone={issue.assetType === 'VEHICLE' ? 'neutral' : 'brand'}>{assetTypeLabel(issue.assetType)}</Badge>
+              {assetName ?? issue.assetId}
             </span>
           </Detail>
+          <Detail label="Site">{siteNames[issue.siteId]}</Detail>
           <Detail label="Issue date">{formatDate(issue.issueDateTime)}</Detail>
           <Detail label="Meter reading">{issue.assetMeterReading != null ? `${issue.assetMeterReading.toLocaleString()} ${issue.meterType ?? ''}` : null}</Detail>
           <Detail label="Issued to">{issue.issuedToPerson}</Detail>

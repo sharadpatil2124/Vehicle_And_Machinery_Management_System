@@ -3,6 +3,7 @@ import { itemCategoriesApi } from '../../api/client';
 import { Alert, Badge, Button, Field, Input, Modal, Pagination, Select, Spinner, Table } from '../../components/ui';
 import Can from '../../components/Can';
 import DeleteWordModal from '../../components/DeleteWordModal';
+import useLastValidPage from '../../hooks/useLastValidPage';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'Active (default)' },
@@ -116,6 +117,8 @@ export default function ItemCategoriesPage() {
     return () => clearTimeout(timer);
   }, [filters, load]);
 
+  useLastValidPage(result, filters.page, setFilters);
+
   async function handleArchive() {
     setDeletePending(true);
     setDeleteError(null);
@@ -153,13 +156,15 @@ export default function ItemCategoriesPage() {
       render: (c) => (
         <div className="flex justify-end gap-3">
           <Can resource="ITEM_CATEGORY" action="UPDATE">
-            <button
-              type="button"
-              className="font-semibold text-brand-600 hover:underline"
-              onClick={() => setFormState(c)}
-            >
-              Edit
-            </button>
+            {c.status === 'active' && (
+              <button
+                type="button"
+                className="font-semibold text-brand-600 hover:underline"
+                onClick={() => setFormState(c)}
+              >
+                Edit
+              </button>
+            )}
           </Can>
           <Can resource="ITEM_CATEGORY" action="DELETE">
             {c.status === 'active' && (
@@ -264,7 +269,10 @@ export default function ItemCategoriesPage() {
         open={archiving !== null}
         title="Delete this category?"
         description={`${archiving?.categoryName} will be archived and disappear from the category list. This is blocked while any active item still uses it.`}
-        onCancel={() => setArchiving(null)}
+        onCancel={() => {
+          setArchiving(null);
+          setDeleteError(null);
+        }}
         onConfirm={handleArchive}
         pending={deletePending}
         error={deleteError}

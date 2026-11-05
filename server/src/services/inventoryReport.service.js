@@ -2,6 +2,7 @@ const { QueryTypes } = require('sequelize');
 
 const { sequelize, Vehicle, Machinery } = require('../models');
 const AppError = require('../utils/AppError');
+const { requireIdFilter } = require('../utils/validation');
 const { supervisorSiteId } = require('./siteAccess');
 const { roundQuantity, roundMoney, optionalDateFilter } = require('./fuelCommon');
 
@@ -30,7 +31,7 @@ function rangeClause({ fromAt, toAt }) {
 function siteFilter(auth, query) {
   const ownSiteId = supervisorSiteId(auth);
   if (ownSiteId !== null) return ownSiteId;
-  return query.siteId ? Number(query.siteId) : null;
+  return query.siteId ? requireIdFilter(query.siteId, 'Site') : null;
 }
 
 function select(sql, replacements) {

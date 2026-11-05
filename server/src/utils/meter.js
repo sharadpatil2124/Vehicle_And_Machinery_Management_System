@@ -2,8 +2,9 @@ const AppError = require('./AppError');
 
 function assertMeterNotDecreasing(current, incoming, unit) {
   const incomingValue = Number(incoming);
+  const isNumberOrText = typeof incoming === 'number' || (typeof incoming === 'string' && incoming.trim() !== '');
 
-  if (!Number.isFinite(incomingValue)) {
+  if (!isNumberOrText || !Number.isFinite(incomingValue)) {
     throw AppError.badRequest(`${unit} reading must be a number`);
   }
 

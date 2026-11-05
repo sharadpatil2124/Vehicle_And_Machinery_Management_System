@@ -1,9 +1,8 @@
 const { Site } = require('../models');
 const AppError = require('../utils/AppError');
-const { requireNumber } = require('../utils/validation');
+const { requireNumber, isValidDateOnly } = require('../utils/validation');
 
 const STORABLE_FUEL_TYPES = ['Diesel', 'Petrol'];
-const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 function round(value, places) {
@@ -24,10 +23,6 @@ function toDateOnly(date) {
 
 function todayDateOnly() {
   return toDateOnly(new Date());
-}
-
-function isValidDateOnly(value) {
-  return typeof value === 'string' && DATE_ONLY_PATTERN.test(value) && !Number.isNaN(new Date(value).getTime());
 }
 
 function requireBusinessDate(value, label) {

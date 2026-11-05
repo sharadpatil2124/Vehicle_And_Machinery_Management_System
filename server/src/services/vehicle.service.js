@@ -100,7 +100,7 @@ function readVehicleBaseInput(payload, { partial = false } = {}) {
     input.year =
       payload.year === undefined || payload.year === null || payload.year === ''
         ? null
-        : requireNumber(payload.year, 'Year', { min: 1900 });
+        : requireNumber(payload.year, 'Year', { min: 1900, max: 2100 });
   }
 
   return input;
@@ -175,7 +175,7 @@ function readMeterInputForUpdate(payload, vehicle, nextType) {
         ? requireNumber(payload.serviceIntervalHours, 'Service interval (hours)', { min: 1 })
         : Number(vehicle.serviceIntervalHours);
     const nextServiceHours =
-      payload.serviceIntervalHours !== undefined
+      nextIntervalHours !== Number(vehicle.serviceIntervalHours)
         ? nextCurrentHours + nextIntervalHours
         : Number(vehicle.nextServiceHours);
 
@@ -211,7 +211,7 @@ function readMeterInputForUpdate(payload, vehicle, nextType) {
       ? requireNumber(payload.serviceIntervalKM, 'Service interval (KM)', { min: 1 })
       : Number(vehicle.serviceIntervalKM);
   const nextServiceKM =
-    payload.serviceIntervalKM !== undefined ? nextCurrentKM + nextIntervalKM : Number(vehicle.nextServiceKM);
+    nextIntervalKM !== Number(vehicle.serviceIntervalKM) ? nextCurrentKM + nextIntervalKM : Number(vehicle.nextServiceKM);
 
   return {
     currentKM: nextCurrentKM,
@@ -327,16 +327,15 @@ async function createVehicle({ tenantId, auth, actingUserId, payload, files }) {
         transaction,
       });
 
-      savedKeys.push(
-        ...(await createDocumentsForNewAsset({
-          tenantId,
-          assetType: 'VEHICLE',
-          assetId: created.assetId,
-          actingUserId,
-          files,
-          transaction,
-        }))
-      );
+      await createDocumentsForNewAsset({
+        tenantId,
+        assetType: 'VEHICLE',
+        assetId: created.assetId,
+        actingUserId,
+        files,
+        savedKeys,
+        transaction,
+      });
 
       return created;
     });
@@ -362,8 +361,6 @@ async function updateVehicle({ tenantId, auth, actingUserId, id, payload }) {
     await assertChassisNumberAvailable({ value: baseInput.chassisNumber, excludeVehicleId: id });
   }
 
-  const nextType = baseInput.type ?? vehicle.type;
-  const meterInput = readMeterInputForUpdate(payload, vehicle, nextType);
   const siteInput = readCurrentSiteIdInput(payload, { partial: true });
   assertSiteChangeAllowed(auth, vehicle.currentSiteId, siteInput);
   // Only a new site must be assignable: an asset may stay at a site that was archived after it arrived.
@@ -373,11 +370,12 @@ async function updateVehicle({ tenantId, auth, actingUserId, id, payload }) {
   const compliance = parseComplianceField(payload.compliance);
 
   const updated = await sequelize.transaction(async (transaction) => {
-    // Re-read under a row lock so simultaneous saves see each other's site change.
+    // Re-read under a row lock so simultaneous saves see each other's site and meter changes.
     const current = await repo.findByPk(tenantId, vehicle.id, { transaction, lock: transaction.LOCK.UPDATE });
     const before = current.toJSON();
     const previousSiteId = current.currentSiteId;
     const nextSiteId = 'currentSiteId' in siteInput ? siteInput.currentSiteId : previousSiteId;
+    const meterInput = readMeterInputForUpdate(payload, current, baseInput.type ?? current.type);
 
     await current.update(
       {

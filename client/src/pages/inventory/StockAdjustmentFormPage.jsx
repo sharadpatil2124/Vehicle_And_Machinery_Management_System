@@ -1,24 +1,24 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { stockAdjustmentsApi, itemsApi, storageLocationsApi, sitesApi, stockApi, listAll } from '../../api/client';
+import { stockAdjustmentsApi, itemsApi, sitesApi, stockApi, listAll } from '../../api/client';
 import { Alert, Button, Card, Field, Input, Select } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
 import useItemIdsInStock from '../../hooks/useItemIdsInStock';
 import { todayDateOnly } from '../../config/fuel';
 
-const EMPTY_LINE = { itemId: '', storageLocationId: '', countedQuantity: '' };
+const EMPTY_LINE = { itemId: '', countedQuantity: '' };
 
-function AdjustmentLine({ line, index, items, locations, onChange, onRemove, canRemove }) {
+function AdjustmentLine({ line, index, items, siteId, onChange, onRemove, canRemove }) {
   const [currentQuantity, setCurrentQuantity] = useState(null);
 
   useEffect(() => {
-    if (!line.itemId || !line.storageLocationId) {
+    if (!line.itemId) {
       setCurrentQuantity(null);
       return undefined;
     }
     let cancelled = false;
     stockApi
-      .balances({ itemId: line.itemId, storageLocationId: line.storageLocationId, limit: 1 })
+      .balances({ itemId: line.itemId, siteId: siteId || undefined, limit: 1 })
       .then((response) => {
         if (!cancelled) setCurrentQuantity(response.data[0]?.quantityOnHand ?? 0);
       })
@@ -28,7 +28,7 @@ function AdjustmentLine({ line, index, items, locations, onChange, onRemove, can
     return () => {
       cancelled = true;
     };
-  }, [line.itemId, line.storageLocationId]);
+  }, [line.itemId, siteId]);
 
   function update(field) {
     return (event) => onChange(index, field, event.target.value);
@@ -36,7 +36,7 @@ function AdjustmentLine({ line, index, items, locations, onChange, onRemove, can
 
   return (
     <div className="rounded border border-steel-200 p-3">
-      <div className="grid gap-x-4 sm:grid-cols-3">
+      <div className="grid gap-x-4 sm:grid-cols-2">
         <Field label="Item" required>
           {({ id: fieldId, invalid, describedBy }) => (
             <Select id={fieldId} invalid={invalid} describedBy={describedBy} value={line.itemId} onChange={update('itemId')} required>
@@ -48,19 +48,6 @@ function AdjustmentLine({ line, index, items, locations, onChange, onRemove, can
                     {it.itemName}
                   </option>
                 ))}
-            </Select>
-          )}
-        </Field>
-
-        <Field label="Storage location" required>
-          {({ id: fieldId, invalid, describedBy }) => (
-            <Select id={fieldId} invalid={invalid} describedBy={describedBy} value={line.storageLocationId} onChange={update('storageLocationId')} required>
-              <option value="">Select a location</option>
-              {locations.map((loc) => (
-                <option key={loc.id} value={loc.id} data-added={loc.id}>
-                  {loc.locationName}
-                </option>
-              ))}
             </Select>
           )}
         </Field>
@@ -103,7 +90,6 @@ export default function StockAdjustmentFormPage() {
   const [form, setForm] = useState({ siteId: '', adjustmentDate: todayDateOnly(), reason: '' });
   const [lines, setLines] = useState([{ ...EMPTY_LINE }]);
   const [items, setItems] = useState([]);
-  const [storageLocations, setStorageLocations] = useState([]);
   const [sites, setSites] = useState([]);
   const [submitError, setSubmitError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -112,14 +98,8 @@ export default function StockAdjustmentFormPage() {
 
   useEffect(() => {
     listAll(itemsApi.list).then((r) => setItems(r.data)).catch(() => setItems([]));
-    listAll(storageLocationsApi.list).then((r) => setStorageLocations(r.data)).catch(() => setStorageLocations([]));
     if (isAdmin) listAll(sitesApi.list).then((r) => setSites(r.data)).catch(() => setSites([]));
   }, [isAdmin]);
-
-  const locationsAtSite = useMemo(
-    () => (isAdmin ? storageLocations.filter((l) => String(l.siteId) === form.siteId) : storageLocations),
-    [storageLocations, isAdmin, form.siteId]
-  );
 
   function updateForm(field) {
     return (event) => {
@@ -150,6 +130,13 @@ export default function StockAdjustmentFormPage() {
       return;
     }
 
+    // A blank must not count as 0: that would remove all of this item's stock at the site.
+    const uncounted = lines.findIndex((line) => line.itemId !== '' && String(line.countedQuantity).trim() === '');
+    if (uncounted >= 0) {
+      setSubmitError(`Item ${uncounted + 1}: enter the counted quantity. Enter 0 only if none were counted.`);
+      return;
+    }
+
     setSubmitting(true);
 
     const payload = {
@@ -158,7 +145,6 @@ export default function StockAdjustmentFormPage() {
       reason: form.reason || undefined,
       items: filledLines.map((line) => ({
         itemId: Number(line.itemId),
-        storageLocationId: Number(line.storageLocationId),
         countedQuantity: Number(line.countedQuantity),
       })),
     };
@@ -223,8 +209,6 @@ export default function StockAdjustmentFormPage() {
 
             {isAdmin && !form.siteId ? (
               <p className="text-sm text-steel-400">Select a site above to choose which items to count.</p>
-            ) : locationsAtSite.length === 0 ? (
-              <Alert tone="warning">No storage locations exist at this site yet.</Alert>
             ) : (
               <div className="flex flex-col gap-3">
                 {lines.map((line, index) => (
@@ -233,7 +217,7 @@ export default function StockAdjustmentFormPage() {
                     line={line}
                     index={index}
                     items={itemsInStock}
-                    locations={locationsAtSite}
+                    siteId={isAdmin ? form.siteId : ''}
                     onChange={updateLine}
                     onRemove={removeLine}
                     canRemove={lines.length > 1}

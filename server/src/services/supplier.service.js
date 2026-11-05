@@ -9,6 +9,7 @@ const { createTenantScopedRepository } = require('./tenantScopedRepository');
 const { archiveEntity, restoreEntity } = require('./archive.service');
 const { recordCreate, recordUpdate } = require('./audit.service');
 const { nextSequentialCode, isCodeCollision } = require('./codeGenerator');
+const { assertEditable } = require('./masterData');
 
 const repo = createTenantScopedRepository(Supplier);
 
@@ -108,14 +109,14 @@ async function createSupplier({ tenantId, actingUserId, payload }) {
 }
 
 async function updateSupplier({ tenantId, actingUserId, id, payload }) {
-  const supplier = await repo.findByPk(tenantId, id);
-  if (!supplier) throw AppError.notFound('Supplier not found');
-
-  const input = readSupplierInput(payload, { partial: true });
-
-  const before = supplier.toJSON();
-
   const updated = await sequelize.transaction(async (transaction) => {
+    const supplier = await repo.findByPk(tenantId, id, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!supplier) throw AppError.notFound('Supplier not found');
+    assertEditable(supplier, 'supplier');
+
+    const input = readSupplierInput(payload, { partial: true });
+
+    const before = supplier.toJSON();
     await supplier.update({ ...input, updatedBy: actingUserId }, { transaction });
 
     await recordUpdate(

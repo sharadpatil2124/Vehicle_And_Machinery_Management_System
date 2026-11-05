@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { stockAdjustmentsApi, itemsApi, storageLocationsApi, sitesApi, listAll } from '../../api/client';
+import { stockAdjustmentsApi } from '../../api/client';
 import { Alert, Badge, Card, Spinner, Table } from '../../components/ui';
 
 function Detail({ label, children }) {
@@ -17,7 +17,6 @@ export default function StockAdjustmentDetailPage() {
 
   const [adjustment, setAdjustment] = useState(null);
   const [loadError, setLoadError] = useState(null);
-  const [lookups, setLookups] = useState({ items: [], locations: [], sites: [] });
 
   useEffect(() => {
     stockAdjustmentsApi
@@ -25,12 +24,6 @@ export default function StockAdjustmentDetailPage() {
       .then((response) => setAdjustment(response.data))
       .catch((err) => setLoadError(err.message));
   }, [id]);
-
-  useEffect(() => {
-    Promise.all([listAll(itemsApi.list), listAll(storageLocationsApi.list), listAll(sitesApi.list)])
-      .then(([items, locations, sites]) => setLookups({ items: items.data, locations: locations.data, sites: sites.data }))
-      .catch(() => {});
-  }, []);
 
   if (loadError) {
     return (
@@ -45,13 +38,9 @@ export default function StockAdjustmentDetailPage() {
 
   if (!adjustment) return <Spinner label="Loading stock adjustment" />;
 
-  const itemName = (itemId) => lookups.items.find((i) => i.id === itemId)?.itemName ?? '—';
-  const locationName = (locationId) => lookups.locations.find((l) => l.id === locationId)?.locationName ?? '—';
-  const siteName = lookups.sites.find((s) => s.id === adjustment.siteId)?.name ?? '—';
 
   const columns = [
-    { key: 'itemId', label: 'Item', render: (row) => itemName(row.itemId) },
-    { key: 'storageLocationId', label: 'Storage location', render: (row) => locationName(row.storageLocationId) },
+    { key: 'itemId', label: 'Item', render: (row) => row.itemName ?? '—' },
     { key: 'systemQuantity', label: 'System had', render: (row) => row.systemQuantity.toLocaleString() },
     { key: 'countedQuantity', label: 'Counted', render: (row) => row.countedQuantity.toLocaleString() },
     {
@@ -77,7 +66,7 @@ export default function StockAdjustmentDetailPage() {
 
       <Card title="Adjustment details">
         <dl className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          <Detail label="Site">{siteName}</Detail>
+          <Detail label="Site">{adjustment.siteName ?? '—'}</Detail>
           <Detail label="Adjustment date">{adjustment.adjustmentDate}</Detail>
           <Detail label="Reason">{adjustment.reason}</Detail>
         </dl>

@@ -3,6 +3,7 @@ import { itemsApi, itemCategoriesApi, unitsOfMeasureApi, listAll } from '../../a
 import { Alert, Badge, Button, Field, Input, Modal, Pagination, Select, Spinner, Table } from '../../components/ui';
 import Can from '../../components/Can';
 import DeleteWordModal from '../../components/DeleteWordModal';
+import useLastValidPage from '../../hooks/useLastValidPage';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'Active (default)' },
@@ -11,6 +12,21 @@ const STATUS_OPTIONS = [
 
 function StatusBadge({ status }) {
   return <Badge tone={status === 'archived' ? 'neutral' : 'success'}>{status}</Badge>;
+}
+
+const choiceLabel = (name, status) => (status === 'archived' ? `${name} (archived)` : name);
+
+async function listActiveAndArchived(list) {
+  const [active, archived] = await Promise.all([listAll(list), listAll(list, { status: 'archived' })]);
+  return [...active.data, ...archived.data];
+}
+
+function validateItem(form) {
+  const errors = {};
+  if (!form.itemName.trim()) errors.itemName = 'Enter the item name.';
+  if (!form.categoryId) errors.categoryId = 'Select a category.';
+  if (!form.baseUomId) errors.baseUomId = 'Select a unit.';
+  return errors;
 }
 
 function ItemForm({ mode, initial, categories, units, onCancel, onSaved }) {
@@ -25,9 +41,14 @@ function ItemForm({ mode, initial, categories, units, onCancel, onSaved }) {
     maximumStockLevel: initial?.maximumStockLevel ?? '',
   });
   const [error, setError] = useState(null);
+  const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
-  const update = (field) => (event) => setForm((f) => ({ ...f, [field]: event.target.value }));
+  const update = (field) => (event) => {
+    const { value } = event.target;
+    setForm((f) => ({ ...f, [field]: value }));
+    setErrors((e) => ({ ...e, [field]: undefined }));
+  };
 
   function toOptionalNumber(value) {
     return value === '' ? null : Number(value);
@@ -36,6 +57,9 @@ function ItemForm({ mode, initial, categories, units, onCancel, onSaved }) {
   async function handleSubmit(event) {
     event.preventDefault();
     setError(null);
+    const found = validateItem(form);
+    setErrors(found);
+    if (Object.keys(found).length > 0) return;
     setSubmitting(true);
     try {
       const payload = {
@@ -58,15 +82,15 @@ function ItemForm({ mode, initial, categories, units, onCancel, onSaved }) {
     }
   }
 
-  const activeCategories = categories.filter((c) => c.status === 'active');
-  const activeUnits = units.filter((u) => u.status === 'active');
+  const categoryChoices = categories.filter((c) => c.status === 'active' || c.id === initial?.categoryId);
+  const unitChoices = units.filter((u) => u.status === 'active' || u.id === initial?.baseUomId);
 
   return (
     <form onSubmit={handleSubmit} noValidate>
       <Alert tone="error">{error}</Alert>
 
       <div className="grid gap-x-4 sm:grid-cols-2">
-        <Field label="Item name" required>
+        <Field label="Item name" required error={errors.itemName}>
           {({ id, invalid, describedBy }) => (
             <Input
               id={id}
@@ -80,7 +104,7 @@ function ItemForm({ mode, initial, categories, units, onCancel, onSaved }) {
           )}
         </Field>
 
-        <Field label="Category" required>
+        <Field label="Category" required error={errors.categoryId}>
           {({ id, invalid, describedBy }) => (
             <Select
               id={id}
@@ -91,16 +115,16 @@ function ItemForm({ mode, initial, categories, units, onCancel, onSaved }) {
               required
             >
               <option value="">Select a category</option>
-              {activeCategories.map((category) => (
+              {categoryChoices.map((category) => (
                 <option key={category.id} value={category.id} data-added={category.id}>
-                  {category.categoryName}
+                  {choiceLabel(category.categoryName, category.status)}
                 </option>
               ))}
             </Select>
           )}
         </Field>
 
-        <Field label="Base unit" required>
+        <Field label="Base unit" required error={errors.baseUomId}>
           {({ id, invalid, describedBy }) => (
             <Select
               id={id}
@@ -111,9 +135,9 @@ function ItemForm({ mode, initial, categories, units, onCancel, onSaved }) {
               required
             >
               <option value="">Select a unit</option>
-              {activeUnits.map((unit) => (
+              {unitChoices.map((unit) => (
                 <option key={unit.id} value={unit.id} data-added={unit.id}>
-                  {unit.uomName}
+                  {choiceLabel(unit.uomName, unit.status)}
                 </option>
               ))}
             </Select>
@@ -235,13 +259,11 @@ export default function ItemsPage() {
     return () => clearTimeout(timer);
   }, [filters, load]);
 
+  useLastValidPage(result, filters.page, setFilters);
+
   useEffect(() => {
-    listAll(itemCategoriesApi.list)
-      .then((response) => setCategories(response.data))
-      .catch(() => setCategories([]));
-    listAll(unitsOfMeasureApi.list)
-      .then((response) => setUnits(response.data))
-      .catch(() => setUnits([]));
+    listActiveAndArchived(itemCategoriesApi.list).then(setCategories).catch(() => setCategories([]));
+    listActiveAndArchived(unitsOfMeasureApi.list).then(setUnits).catch(() => setUnits([]));
   }, []);
 
   async function handleArchive() {
@@ -289,13 +311,15 @@ export default function ItemsPage() {
       render: (item) => (
         <div className="flex justify-end gap-3">
           <Can resource="ITEM" action="UPDATE">
-            <button
-              type="button"
-              className="font-semibold text-brand-600 hover:underline"
-              onClick={() => setFormState(item)}
-            >
-              Edit
-            </button>
+            {item.status === 'active' && (
+              <button
+                type="button"
+                className="font-semibold text-brand-600 hover:underline"
+                onClick={() => setFormState(item)}
+              >
+                Edit
+              </button>
+            )}
           </Can>
           <Can resource="ITEM" action="DELETE">
             {item.status === 'active' && (
@@ -402,7 +426,10 @@ export default function ItemsPage() {
         open={archiving !== null}
         title="Delete this item?"
         description={`${archiving?.itemName} will be archived and disappear from the item catalog.`}
-        onCancel={() => setArchiving(null)}
+        onCancel={() => {
+          setArchiving(null);
+          setDeleteError(null);
+        }}
         onConfirm={handleArchive}
         pending={deletePending}
         error={deleteError}

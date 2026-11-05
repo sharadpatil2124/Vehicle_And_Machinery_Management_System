@@ -3,9 +3,22 @@ const logger = require('../utils/logger');
 const env = require('../config/env');
 const { MAX_FILE_SIZE_BYTES, MAX_LOGO_SIZE_BYTES } = require('./upload');
 
+const VALUE_TOO_LARGE_ERRORS = { 1264: 'too large', 1406: 'too long' };
+
+function columnLabel(column) {
+  if (!column) return 'A value';
+  const words = column.replaceAll('_', ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 function translateDatabaseError(error) {
   if (error.name === 'SequelizeDatabaseError' && error.original?.sqlState === '45000') {
     return AppError.conflict(error.original.sqlMessage ?? 'That value is already in use');
+  }
+
+  if (error.name === 'SequelizeDatabaseError' && VALUE_TOO_LARGE_ERRORS[error.original?.errno]) {
+    const column = /column '([^']+)'/.exec(error.original.sqlMessage ?? '')?.[1];
+    return AppError.badRequest(`${columnLabel(column)} is ${VALUE_TOO_LARGE_ERRORS[error.original.errno]}`);
   }
 
   switch (error.name) {

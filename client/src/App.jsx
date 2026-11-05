@@ -43,6 +43,12 @@ import FuelIssuesPage from './pages/fuel/FuelIssuesPage';
 import FuelIssueFormPage from './pages/fuel/FuelIssueFormPage';
 import FuelReportsPage from './pages/fuel/FuelReportsPage';
 import FuelStationsPage from './pages/fuel/FuelStationsPage';
+import AdBlueOverviewPage from './pages/adblue/AdBlueOverviewPage';
+import AdBluePurchasesPage from './pages/adblue/AdBluePurchasesPage';
+import AdBluePurchaseFormPage from './pages/adblue/AdBluePurchaseFormPage';
+import AdBlueFillingsPage from './pages/adblue/AdBlueFillingsPage';
+import AdBlueFillingFormPage from './pages/adblue/AdBlueFillingFormPage';
+import AdBlueReportsPage from './pages/adblue/AdBlueReportsPage';
 import PreventiveMaintenancePage from './pages/maintenance/PreventiveMaintenancePage';
 import BreakdownMaintenancePage from './pages/maintenance/BreakdownMaintenancePage';
 import MaintenanceHistoryPage from './pages/maintenance/MaintenanceHistoryPage';
@@ -146,6 +152,16 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+
+        <Route path="/adblue" element={<Navigate to="/adblue/overview" replace />} />
+        <Route path="/adblue/overview" element={<AdBlueOverviewPage />} />
+        <Route path="/adblue/purchases" element={<AdBluePurchasesPage />} />
+        <Route path="/adblue/purchases/new" element={<AdBluePurchaseFormPage />} />
+        <Route path="/adblue/purchases/:id/edit" element={<AdBluePurchaseFormPage />} />
+        <Route path="/adblue/fillings" element={<AdBlueFillingsPage />} />
+        <Route path="/adblue/fillings/new" element={<AdBlueFillingFormPage />} />
+        <Route path="/adblue/fillings/:id/edit" element={<AdBlueFillingFormPage />} />
+        <Route path="/adblue/reports" element={<AdBlueReportsPage />} />
 
         <Route path="/tyres" element={<Navigate to="/tyres/stock" replace />} />
         <Route path="/tyres/stock" element={<TyreStockPage />} />

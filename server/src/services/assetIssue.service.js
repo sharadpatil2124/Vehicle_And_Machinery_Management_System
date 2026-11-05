@@ -7,16 +7,17 @@ const {
   IssueReversal,
   IssueReversalItem,
   Item,
-  StorageLocation,
 } = require("../models");
 const AppError = require("../utils/AppError");
 const { containsPattern } = require("../utils/queryOptions");
-const { machineAssetIdsMatchingRcpl } = require("./assetIdentifier.service");
+const { assetRefsMatchingNumber } = require("./assetIdentifier.service");
+const { assetKey, loadAssetDetails } = require("./assetDetails.service");
 const {
   requireText,
   optionalText,
   requireNumber,
   optionalNumber,
+  isValidDateTime,
 } = require("../utils/validation");
 const { parseListQuery, parseEnumFilter } = require("../utils/queryOptions");
 const { buildListResponse } = require("../utils/listResponse");
@@ -36,7 +37,11 @@ const ISSUE_NUMBER_PREFIX = "ISS-";
 const ISSUE_NUMBER_GENERATION_ATTEMPTS = 5;
 
 const INCLUDE_FULL = [
-  { model: AssetIssueItem, as: "items" },
+  {
+    model: AssetIssueItem,
+    as: "items",
+    include: [{ model: Item, as: "item", attributes: ["itemName"] }],
+  },
   {
     model: IssueReversal,
     as: "reversals",
@@ -46,7 +51,13 @@ const INCLUDE_FULL = [
 
 function toPublic(issue) {
   const json = issue.toPublicJSON();
-  if (issue.items) json.items = issue.items.map((line) => line.toPublicJSON());
+  // The item's name comes with the document, so it still reads correctly after the item is archived.
+  if (issue.items) {
+    json.items = issue.items.map((line) => ({
+      ...line.toPublicJSON(),
+      itemName: line.item?.itemName ?? null,
+    }));
+  }
   if (issue.reversals) {
     json.reversals = issue.reversals.map((reversal) => ({
       ...reversal.toPublicJSON(),
@@ -54,6 +65,16 @@ function toPublic(issue) {
     }));
   }
   return json;
+}
+
+function withAsset(json, assets) {
+  return {
+    ...json,
+    asset: assets.get(assetKey(json.assetType, json.assetId)) ?? {
+      assetType: json.assetType,
+      assetId: json.assetId,
+    },
+  };
 }
 
 async function generateIssueNumber(tenantId, { transaction } = {}) {
@@ -75,6 +96,14 @@ function meterTypeFor(assetType, asset) {
   return asset.isHoursBased ? "HOURS" : "KM";
 }
 
+function readIssueDateTime(value) {
+  if (value === undefined || value === null || value === "") return new Date();
+  if (!isValidDateTime(value)) {
+    throw AppError.badRequest("Issue date must be a valid date and time");
+  }
+  return new Date(value);
+}
+
 function readAssetIssueInput(payload) {
   const assetType = requireText(payload.assetType, "Asset type", {
     max: 20,
@@ -89,9 +118,7 @@ function readAssetIssueInput(payload) {
   return {
     assetType,
     assetId,
-    issueDateTime: payload.issueDateTime
-      ? new Date(payload.issueDateTime)
-      : new Date(),
+    issueDateTime: readIssueDateTime(payload.issueDateTime),
     assetMeterReading: optionalNumber(
       payload.assetMeterReading,
       "Meter reading",
@@ -108,11 +135,6 @@ function readAssetIssueItemInput(raw, index) {
   const label = `Item ${index + 1}`;
   return {
     itemId: requireNumber(raw?.itemId, `${label}: item`, { min: 1 }),
-    storageLocationId: requireNumber(
-      raw?.storageLocationId,
-      `${label}: storage location`,
-      { min: 1 },
-    ),
     issuedQuantity: requireNumber(
       raw?.issuedQuantity,
       `${label}: issued quantity`,
@@ -136,27 +158,6 @@ async function assertItemUsable(tenantId, itemId) {
   return item;
 }
 
-async function assertStorageLocationUsable(
-  tenantId,
-  storageLocationId,
-  siteId,
-) {
-  const location = await StorageLocation.findOne({
-    where: { tenantId, id: storageLocationId },
-  });
-  if (!location) throw AppError.badRequest("Storage location not found");
-  if (location.status !== "active")
-    throw AppError.badRequest(
-      "Storage location is archived and cannot be used",
-    );
-  if (Number(location.siteId) !== Number(siteId)) {
-    throw AppError.badRequest(
-      "Storage location does not belong to this asset's site",
-    );
-  }
-  return location;
-}
-
 async function listAssetIssues({ tenantId, auth, query }) {
   const { page, limit, offset, order } = parseListQuery(query, {
     sortableFields: SORTABLE_FIELDS,
@@ -176,10 +177,10 @@ async function listAssetIssues({ tenantId, auth, query }) {
 
   const search = typeof query.search === "string" ? query.search.trim() : "";
   if (search) {
-    const machineIds = await machineAssetIdsMatchingRcpl(tenantId, search);
-    where[Op.or] = [{ issueNumber: { [Op.like]: containsPattern(search) } }];
-    if (machineIds.length)
-      where[Op.or].push({ assetType: "MACHINERY", assetId: machineIds });
+    where[Op.or] = [
+      { issueNumber: { [Op.like]: containsPattern(search) } },
+      ...(await assetRefsMatchingNumber(tenantId, search)),
+    ];
   }
 
   if (query.include !== "items") {
@@ -189,7 +190,11 @@ async function listAssetIssues({ tenantId, auth, query }) {
       limit,
       offset,
     });
-    return buildListResponse(rows.map(toPublic), { page, limit, total: count });
+    const assets = await loadAssetDetails(tenantId, rows, auth);
+    return buildListResponse(
+      rows.map((issue) => withAsset(toPublic(issue), assets)),
+      { page, limit, total: count },
+    );
   }
 
   const { rows, count } = await repo.findAndCountAll(tenantId, {
@@ -206,26 +211,24 @@ async function listAssetIssues({ tenantId, auth, query }) {
       {
         model: AssetIssueItem,
         as: "items",
-        include: [
-          { model: Item, as: "item", attributes: ["itemName"] },
-          {
-            model: StorageLocation,
-            as: "storageLocation",
-            attributes: ["locationName"],
-          },
-        ],
+        include: [{ model: Item, as: "item", attributes: ["itemName"] }],
       },
     ],
   });
 
-  const data = rows.map((issue) => ({
-    ...issue.toPublicJSON(),
-    items: issue.items.map((line) => ({
-      ...line.toPublicJSON(),
-      itemName: line.item?.itemName ?? null,
-      locationName: line.storageLocation?.locationName ?? null,
-    })),
-  }));
+  const assets = await loadAssetDetails(tenantId, rows, auth);
+  const data = rows.map((issue) =>
+    withAsset(
+      {
+        ...issue.toPublicJSON(),
+        items: issue.items.map((line) => ({
+          ...line.toPublicJSON(),
+          itemName: line.item?.itemName ?? null,
+        })),
+      },
+      assets,
+    ),
+  );
 
   return buildListResponse(data, { page, limit, total: count });
 }
@@ -234,7 +237,8 @@ async function getAssetIssue({ tenantId, auth, id }) {
   const issue = await repo.findByPk(tenantId, id, { include: INCLUDE_FULL });
   if (!issue) throw AppError.notFound("Asset issue not found");
   assertSiteAllowed(auth, issue.siteId, "Asset issue not found");
-  return toPublic(issue);
+  const assets = await loadAssetDetails(tenantId, [issue], auth);
+  return withAsset(toPublic(issue), assets);
 }
 
 async function createAssetIssue({ tenantId, auth, actingUserId, payload }) {
@@ -258,10 +262,8 @@ async function createAssetIssue({ tenantId, auth, actingUserId, payload }) {
   const lines = [];
   for (const line of itemsInput) {
     const item = await assertItemUsable(tenantId, line.itemId);
-    await assertStorageLocationUsable(tenantId, line.storageLocationId, siteId);
     lines.push({
       itemId: line.itemId,
-      storageLocationId: line.storageLocationId,
       uomId: item.baseUomId,
       issuedQuantity: line.issuedQuantity,
       unitCost: 0,
@@ -312,7 +314,6 @@ async function createAssetIssue({ tenantId, auth, actingUserId, payload }) {
         tenantId,
         siteId,
         itemId: line.itemId,
-        storageLocationId: line.storageLocationId,
         uomId: line.uomId,
         transactionType: "ISSUE",
         direction: "OUT",

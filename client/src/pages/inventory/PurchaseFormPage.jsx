@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { purchasesApi, suppliersApi, itemsApi, storageLocationsApi, sitesApi, listAll } from '../../api/client';
+import { purchasesApi, suppliersApi, itemsApi, sitesApi, listAll } from '../../api/client';
 import { Alert, Button, Card, Field, Input, Select, Spinner } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
 import { todayDateOnly } from '../../config/fuel';
 
 const EMPTY_LINE = {
   itemId: '',
-  storageLocationId: '',
   purchasedQuantity: '',
   unitPrice: '',
   taxPercentage: '0',
@@ -25,7 +24,6 @@ function toFormValues(purchase) {
 function toLineValues(items) {
   return items.map((line) => ({
     itemId: line.itemId,
-    storageLocationId: line.storageLocationId,
     purchasedQuantity: line.purchasedQuantity,
     unitPrice: line.unitPrice,
     taxPercentage: line.taxPercentage,
@@ -48,7 +46,7 @@ function lineFigures(line) {
 }
 
 const LINE_GRID =
-  'grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-4 lg:grid-cols-[1.75rem_minmax(0,2.4fr)_minmax(0,1.7fr)_minmax(0,0.9fr)_minmax(0,1.1fr)_minmax(0,0.7fr)_minmax(0,1.2fr)_2rem] lg:items-center lg:gap-y-0';
+  'grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-4 lg:grid-cols-[1.75rem_minmax(0,3fr)_minmax(0,0.9fr)_minmax(0,1.1fr)_minmax(0,0.7fr)_minmax(0,1.2fr)_2rem] lg:items-center lg:gap-y-0';
 
 const cellLabel = 'mb-1 block text-xs font-semibold text-steel-600 lg:sr-only';
 
@@ -72,15 +70,12 @@ export default function PurchaseFormPage() {
   const [lines, setLines] = useState([{ ...EMPTY_LINE }]);
   const [suppliers, setSuppliers] = useState([]);
   const [items, setItems] = useState([]);
-  const [storageLocations, setStorageLocations] = useState([]);
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(isEdit);
   const [loadError, setLoadError] = useState(null);
   const [notEditable, setNotEditable] = useState(false);
   const [submitError, setSubmitError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-
-  const effectiveSiteId = isAdmin ? form.siteId : (user?.siteId ?? '');
 
   useEffect(() => {
     if (!isEdit) return;
@@ -99,26 +94,18 @@ export default function PurchaseFormPage() {
   }, [id, isEdit]);
 
   useEffect(() => {
-    listAll(suppliersApi.list)
-      .then((response) => setSuppliers(response.data))
+    Promise.all([listAll(suppliersApi.list), isEdit ? listAll(suppliersApi.list, { status: 'archived' }) : { data: [] }])
+      .then(([active, archived]) => setSuppliers([...active.data, ...archived.data]))
       .catch(() => setSuppliers([]));
     listAll(itemsApi.list)
       .then((response) => setItems(response.data))
       .catch(() => setItems([]));
-    listAll(storageLocationsApi.list)
-      .then((response) => setStorageLocations(response.data))
-      .catch(() => setStorageLocations([]));
     if (isAdmin) {
       listAll(sitesApi.list)
         .then((response) => setSites(response.data))
         .catch(() => setSites([]));
     }
-  }, [isAdmin]);
-
-  const locationsAtEffectiveSite = useMemo(
-    () => storageLocations.filter((l) => String(l.siteId) === String(effectiveSiteId)),
-    [storageLocations, effectiveSiteId]
-  );
+  }, [isAdmin, isEdit]);
 
   const purchaseTotal = useMemo(() => {
     const priced = lines.map(lineFigures).filter(Boolean);
@@ -155,11 +142,17 @@ export default function PurchaseFormPage() {
       return;
     }
 
+    // A blank must not count as ₹0: the stock would be valued at nothing.
+    const unpriced = lines.findIndex((line) => line.itemId !== '' && String(line.unitPrice).trim() === '');
+    if (unpriced >= 0) {
+      setSubmitError(`Item ${unpriced + 1}: enter the unit price. Enter 0 only if it was free.`);
+      return;
+    }
+
     setSubmitting(true);
 
     const itemsPayload = filledLines.map((line) => ({
       itemId: Number(line.itemId),
-      storageLocationId: Number(line.storageLocationId),
       purchasedQuantity: Number(line.purchasedQuantity),
       unitPrice: Number(line.unitPrice),
       taxPercentage: line.taxPercentage === '' ? 0 : Number(line.taxPercentage),
@@ -250,10 +243,10 @@ export default function PurchaseFormPage() {
                 <Select id={fieldId} invalid={invalid} describedBy={describedBy} value={form.supplierId} onChange={updateForm('supplierId')} required>
                   <option value="">Select a supplier</option>
                   {suppliers
-                    .filter((s) => s.status === 'active')
+                    .filter((s) => s.status === 'active' || String(s.id) === String(form.supplierId))
                     .map((s) => (
                       <option key={s.id} value={s.id} data-added={s.id}>
-                        {s.supplierName}
+                        {s.status === 'archived' ? `${s.supplierName} (archived)` : s.supplierName}
                       </option>
                     ))}
                 </Select>
@@ -276,10 +269,6 @@ export default function PurchaseFormPage() {
           <div className="mt-4 border-t border-steel-200 pt-4">
             <h2 className="mb-2 text-sm font-semibold text-steel-900">Items</h2>
 
-            {(!isAdmin || effectiveSiteId) && locationsAtEffectiveSite.length === 0 && (
-              <Alert tone="warning">No storage locations exist at this site yet — create one first.</Alert>
-            )}
-
             <div
               aria-hidden="true"
               className={`${LINE_GRID} hidden border-b border-steel-200 pb-2 text-xs font-semibold tracking-wide text-steel-500 uppercase lg:grid`}
@@ -287,9 +276,6 @@ export default function PurchaseFormPage() {
               <span>#</span>
               <span>
                 Item<span className="ml-0.5 text-danger-600">*</span>
-              </span>
-              <span>
-                Storage location<span className="ml-0.5 text-danger-600">*</span>
               </span>
               <span className="text-right">
                 Quantity<span className="ml-0.5 text-danger-600">*</span>
@@ -340,26 +326,6 @@ export default function PurchaseFormPage() {
                               {it.itemName}
                             </option>
                           ))}
-                      </Select>
-                    </div>
-
-                    <div className="col-span-2 min-w-0 lg:col-span-1">
-                      <CellLabel htmlFor={`${rowId}-location`} required>
-                        Storage location
-                      </CellLabel>
-                      <Select
-                        id={`${rowId}-location`}
-                        aria-label={`Storage location for item ${index + 1}`}
-                        value={line.storageLocationId}
-                        onChange={updateLine(index, 'storageLocationId')}
-                        required
-                      >
-                        <option value="">Select a location</option>
-                        {locationsAtEffectiveSite.map((loc) => (
-                          <option key={loc.id} value={loc.id} data-added={loc.id}>
-                            {loc.locationName}
-                          </option>
-                        ))}
                       </Select>
                     </div>
 

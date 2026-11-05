@@ -3,6 +3,7 @@ import { suppliersApi } from '../../api/client';
 import { Alert, Badge, Button, Field, Input, Modal, Pagination, Select, Spinner, Table } from '../../components/ui';
 import Can from '../../components/Can';
 import DeleteWordModal from '../../components/DeleteWordModal';
+import useLastValidPage from '../../hooks/useLastValidPage';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'Active (default)' },
@@ -207,6 +208,8 @@ export default function SuppliersPage() {
     return () => clearTimeout(timer);
   }, [filters, load]);
 
+  useLastValidPage(result, filters.page, setFilters);
+
   async function handleArchive() {
     setDeletePending(true);
     setDeleteError(null);
@@ -245,13 +248,15 @@ export default function SuppliersPage() {
       render: (s) => (
         <div className="flex justify-end gap-3">
           <Can resource="SUPPLIER" action="UPDATE">
-            <button
-              type="button"
-              className="font-semibold text-brand-600 hover:underline"
-              onClick={() => setFormState(s)}
-            >
-              Edit
-            </button>
+            {s.status === 'active' && (
+              <button
+                type="button"
+                className="font-semibold text-brand-600 hover:underline"
+                onClick={() => setFormState(s)}
+              >
+                Edit
+              </button>
+            )}
           </Can>
           <Can resource="SUPPLIER" action="DELETE">
             {s.status === 'active' && (
@@ -356,7 +361,10 @@ export default function SuppliersPage() {
         open={archiving !== null}
         title="Delete this supplier?"
         description={`${archiving?.supplierName} will be archived and disappear from the supplier list.`}
-        onCancel={() => setArchiving(null)}
+        onCancel={() => {
+          setArchiving(null);
+          setDeleteError(null);
+        }}
         onConfirm={handleArchive}
         pending={deletePending}
         error={deleteError}

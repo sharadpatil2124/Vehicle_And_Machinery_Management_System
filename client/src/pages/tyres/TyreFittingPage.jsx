@@ -1,40 +1,66 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { tyresApi } from '../../api/client';
+import { listAll, machineryApi, tyresApi, vehiclesApi } from '../../api/client';
 import { Alert, Badge, Button, Field, Input, Modal, Pagination, Select, Spinner, Table } from '../../components/ui';
 import Can from '../../components/Can';
-import DeleteWordModal from '../../components/DeleteWordModal';
 import { useAuth } from '../../context/AuthContext';
 import useSiteNames from '../../hooks/useSiteNames';
-import { REMOVAL_REASONS, formatCurrency, formatDateOnly, formatNumber, meterUnit, todayDateOnly } from '../../config/tyres';
+import useActiveTyres from '../../hooks/useActiveTyres';
+import { formatCurrency, formatDateOnly, formatNumber, formatRun, meterUnit, replacementNote, todayDateOnly } from '../../config/tyres';
+import { assetOptionLabel } from '../../config/fuel';
 
 function StatusBadge({ row }) {
-  if (row.isOnAsset) return <Badge tone="brand">On asset</Badge>;
+  if (row.isOnAsset) return <Badge tone="brand">Active</Badge>;
   return (
     <div className="flex flex-col items-start">
-      <Badge tone={row.removalOutcome === 'scrapped' ? 'danger' : 'neutral'}>{row.removalOutcome === 'scrapped' ? 'Scrapped' : 'Returned'}</Badge>
-      <span className="mt-0.5 text-xs text-steel-500">
-        {formatDateOnly(row.removedAt)} · {row.removalReasonLabel}
+      <Badge tone="neutral">{row.fitmentStatus === 'replaced' ? 'Replaced' : 'Off asset'}</Badge>
+      <span className="mt-0.5 text-xs text-steel-500 tabular-nums">
+        {formatDateOnly(row.removedAt)} at {formatRun(row.removeMeterReading, row.meterType)}
       </span>
     </div>
   );
 }
 
-function RemoveTyreModal({ row, onClose, onDone }) {
-  const open = row !== null;
-  const unit = meterUnit(row?.meterType);
-  const readingLabel = row?.meterType === 'HOURS' ? 'Current Hours' : 'Current KM';
-  const [form, setForm] = useState({ removedAt: todayDateOnly(), meterReading: '', reason: '', outcome: 'scrapped', notes: '' });
+function EditFittingModal({ row, onClose, onDone }) {
+  const [form, setForm] = useState({
+    assetType: row.assetType,
+    assetId: row.assetId,
+    tyreTypeId: String(row.tyreTypeId),
+    position: row.position,
+    serialNumber: row.serialNumber ?? '',
+    fittedAt: row.fittedAt,
+    meterReading: String(row.fitMeterReading),
+  });
+  const [assets, setAssets] = useState({ VEHICLE: [], MACHINERY: [] });
+  const [stock, setStock] = useState([]);
   const [errors, setErrors] = useState({});
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!row) return;
-    setForm({ removedAt: todayDateOnly(), meterReading: '', reason: '', outcome: 'scrapped', notes: '' });
-    setErrors({});
-    setError(null);
-  }, [row]);
+    let cancelled = false;
+    listAll(vehiclesApi.list, { sort: 'registrationNumber:asc' }).then((r) => !cancelled && setAssets((a) => ({ ...a, VEHICLE: r.data }))).catch(() => {});
+    listAll(machineryApi.list, { sort: 'rcpl:asc' }).then((r) => !cancelled && setAssets((a) => ({ ...a, MACHINERY: r.data }))).catch(() => {});
+    tyresApi
+      .stock({ siteId: row.siteId })
+      .then((r) => !cancelled && setStock(r.data.rows.filter((s) => s.siteId === row.siteId)))
+      .catch((err) => !cancelled && setError(err.message));
+    return () => {
+      cancelled = true;
+    };
+  }, [row.siteId]);
+
+  const isUsed = row.tyreCondition === 'used';
+  const isOriginalAsset = form.assetType === row.assetType && form.assetId === row.assetId;
+  const siteAssets = assets[form.assetType].filter((a) => a.currentSiteId === row.siteId);
+  const asset = assets[form.assetType].find((a) => a.assetId === form.assetId) ?? null;
+  const readingIsHours = isOriginalAsset ? row.meterType === 'HOURS' : form.assetType === 'MACHINERY' || Boolean(asset?.isHoursBased);
+  const readingLabel = readingIsHours ? 'Current Hours' : 'Current KM';
+  const assetNoun = form.assetType === 'VEHICLE' ? 'vehicle' : 'machine';
+  const typeChanged = form.tyreTypeId !== String(row.tyreTypeId);
+  const typeOptions = stock.filter((s) => s.tyreTypeId === row.tyreTypeId || (isUsed ? s.usedQuantity : s.newQuantity) > 0);
+  const activeTyres = useActiveTyres(form.assetType, form.assetId);
+  const occupant = activeTyres.find((f) => f.id !== row.id && f.position.toLowerCase() === form.position.trim().toLowerCase());
 
   const update = (field) => (event) => {
     setForm((f) => ({ ...f, [field]: event.target.value }));
@@ -45,15 +71,11 @@ function RemoveTyreModal({ row, onClose, onDone }) {
     event.preventDefault();
     const reading = Number(form.meterReading);
     const next = {
-      removedAt: !form.removedAt ? 'Choose a date.' : form.removedAt > todayDateOnly() ? "Date can't be in the future." : form.removedAt < row.fittedAt ? `Date can't be before the fitting date (${formatDateOnly(row.fittedAt)}).` : null,
-      meterReading:
-        form.meterReading === '' || !Number.isFinite(reading)
-          ? `Enter the ${readingLabel}.`
-          : reading < row.fitMeterReading
-            ? `${readingLabel} can't be lower than ${formatNumber(row.fitMeterReading)} ${unit}, the reading recorded when this tyre was fitted on ${formatDateOnly(row.fittedAt)}.`
-            : null,
-      reason: form.reason ? null : 'Choose a reason.',
-      notes: form.reason === 'OTHER' && !form.notes.trim() ? 'Add a short note explaining the reason.' : null,
+      assetId: form.assetId ? null : `Choose a ${assetNoun}.`,
+      tyreTypeId: form.tyreTypeId ? null : 'Choose a tyre type.',
+      position: form.position.trim() ? null : 'Enter a position.',
+      fittedAt: !form.fittedAt ? 'Choose the fitting date.' : form.fittedAt > todayDateOnly() ? "Date can't be in the future." : null,
+      meterReading: form.meterReading === '' || !Number.isFinite(reading) ? `Enter the ${readingLabel}.` : reading < 0 ? `${readingLabel} must be 0 or more.` : null,
     };
     setErrors(next);
     if (Object.values(next).some(Boolean)) return;
@@ -61,74 +83,98 @@ function RemoveTyreModal({ row, onClose, onDone }) {
     setSubmitting(true);
     setError(null);
     try {
-      await tyresApi.removeFitment(row.id, { removedAt: form.removedAt, meterReading: reading, reason: form.reason, outcome: form.outcome, notes: form.notes || null });
-      onDone(`Tyre removed from ${row.assetLabel} (${row.position}) and ${form.outcome === 'scrapped' ? 'scrapped' : 'returned to stock'}.`);
+      const response = await tyresApi.updateFitment(row.id, {
+        assetType: form.assetType,
+        assetId: form.assetId,
+        tyreTypeId: Number(form.tyreTypeId),
+        position: form.position.trim(),
+        serialNumber: form.serialNumber.trim() || null,
+        fittedAt: form.fittedAt,
+        meterReading: reading,
+      });
+      onDone(`Tyre fitting updated for ${response.data.assetLabel} (${response.data.position}).`);
     } catch (err) {
-      if (/can't be lower than/.test(err.message)) setErrors((e) => ({ ...e, meterReading: err.message }));
+      if (/can't be (lower|higher) than/.test(err.message)) setErrors((e) => ({ ...e, meterReading: err.message }));
+      else if (/^Fitting date/.test(err.message)) setErrors((e) => ({ ...e, fittedAt: err.message }));
       else setError(err.message);
-    } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={row ? `Remove tyre — ${row.position}, ${row.assetLabel}` : ''}>
-      {row && (
-        <form onSubmit={handleSubmit} noValidate>
-          <Alert tone="error">{error}</Alert>
-          <div className="mb-4 rounded border border-steel-200 bg-steel-50 px-3 py-2 text-sm text-steel-700">
-            {row.tyreTypeLabel} · {row.tyreSize} — fitted {formatDateOnly(row.fittedAt)} at {formatNumber(row.fitMeterReading)} {unit}
-          </div>
-          <div className="grid gap-x-3 sm:grid-cols-2">
-            <Field label="Removal date" required error={errors.removedAt}>
-              {({ id, invalid, describedBy }) => <Input id={id} type="date" invalid={invalid} describedBy={describedBy} value={form.removedAt} max={todayDateOnly()} onChange={update('removedAt')} />}
-            </Field>
-            <Field label={readingLabel} required error={errors.meterReading} hint={`Type the ${row.meterType === 'HOURS' ? 'hour meter' : 'odometer'} reading at the time of removal.`}>
-              {({ id, invalid, describedBy }) => <Input id={id} type="number" min="0" step="any" inputMode="decimal" invalid={invalid} describedBy={describedBy} value={form.meterReading} onChange={update('meterReading')} />}
-            </Field>
-          </div>
-          <Field label="Reason" required error={errors.reason}>
+    <Modal open onClose={onClose} wide title={`Edit tyre fitting — ${row.position}, ${row.assetLabel}`}>
+      <form onSubmit={handleSubmit} noValidate>
+        <Alert tone="error">{error}</Alert>
+        <div className="mb-4 rounded border border-steel-200 bg-steel-50 px-3 py-2 text-sm text-steel-700">
+          {row.siteName ?? 'Site'} · {isUsed ? 'Returned (used) tyre' : 'New tyre'} · cost {formatCurrency(row.unitCost)}
+        </div>
+        <div className="grid gap-x-3 sm:grid-cols-2">
+          <Field label="Asset type" required>
+            {({ id }) => (
+              <Select id={id} value={form.assetType} onChange={(e) => setForm((f) => ({ ...f, assetType: e.target.value, assetId: '' }))}>
+                <option value="VEHICLE">Vehicle</option>
+                <option value="MACHINERY">Machinery</option>
+              </Select>
+            )}
+          </Field>
+          <Field label={form.assetType === 'VEHICLE' ? 'Vehicle' : 'Machine'} required error={errors.assetId}>
             {({ id, invalid, describedBy }) => (
-              <Select id={id} invalid={invalid} describedBy={describedBy} value={form.reason} onChange={update('reason')}>
-                <option value="">Choose a reason…</option>
-                {REMOVAL_REASONS.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
+              <Select id={id} invalid={invalid} describedBy={describedBy} value={form.assetId} onChange={update('assetId')}>
+                <option value="">{`Choose a ${assetNoun}…`}</option>
+                {form.assetType === row.assetType && !siteAssets.some((a) => a.assetId === row.assetId) && (
+                  <option value={row.assetId} data-added={row.assetId}>
+                    {row.assetLabel} ({row.assetId})
+                  </option>
+                )}
+                {siteAssets.map((a) => (
+                  <option key={a.id} value={a.assetId} data-added={a.id}>
+                    {assetOptionLabel(form.assetType, a)}
                   </option>
                 ))}
               </Select>
             )}
           </Field>
-          <fieldset className="mb-4">
-            <legend className="mb-1.5 text-sm font-semibold text-steel-700">What happens to the tyre?</legend>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {[
-                ['scrapped', 'Scrap it', "Finished, can't be used again."],
-                ['returned', 'Return to stock', 'Kept as a used spare.'],
-              ].map(([value, title, text]) => (
-                <label key={value} className={`flex cursor-pointer gap-2 rounded border px-3 py-2 text-sm ${form.outcome === value ? 'border-brand-600 bg-brand-50' : 'border-steel-200'}`}>
-                  <input type="radio" name="outcome" value={value} checked={form.outcome === value} onChange={update('outcome')} className="mt-0.5" />
-                  <span>
-                    <span className="block font-semibold text-steel-900">{title}</span>
-                    <span className="text-steel-500">{text}</span>
-                  </span>
-                </label>
+        </div>
+        <Field label="Tyre type" required error={errors.tyreTypeId} hint={typeChanged ? 'This tyre goes back to stock and one of the chosen type is taken instead. The cost is updated to match.' : undefined}>
+          {({ id, invalid, describedBy }) => (
+            <Select id={id} invalid={invalid} describedBy={describedBy} value={form.tyreTypeId} onChange={update('tyreTypeId')}>
+              <option value="">Choose a tyre type…</option>
+              {!typeOptions.some((s) => s.tyreTypeId === row.tyreTypeId) && (
+                <option value={row.tyreTypeId} data-added={row.tyreTypeId}>
+                  {row.tyreTypeLabel} · {row.tyreSize}
+                </option>
+              )}
+              {typeOptions.map((s) => (
+                <option key={s.tyreTypeId} value={s.tyreTypeId} data-added={s.tyreTypeId}>
+                  {s.tyreTypeLabel} · {s.tyreSize} — {isUsed ? s.usedQuantity : s.newQuantity} in stock
+                </option>
               ))}
-            </div>
-          </fieldset>
-          <Field label="Note" required={form.reason === 'OTHER'} error={errors.notes}>
-            {({ id, invalid, describedBy }) => <Input id={id} invalid={invalid} describedBy={describedBy} value={form.notes} maxLength={1000} onChange={update('notes')} placeholder="e.g. Sidewall cut, not repairable" />}
+            </Select>
+          )}
+        </Field>
+        <div className="grid gap-x-3 sm:grid-cols-2">
+          <Field label="Position" required error={errors.position} hint={occupant ? replacementNote(occupant, form.meterReading) : undefined}>
+            {({ id, invalid, describedBy }) => <Input id={id} invalid={invalid} describedBy={describedBy} value={form.position} maxLength={50} onChange={update('position')} placeholder="e.g. Front left" />}
           </Field>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="secondary" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" loading={submitting}>
-              Remove tyre
-            </Button>
-          </div>
-        </form>
-      )}
+          <Field label="Serial number">
+            {({ id }) => <Input id={id} value={form.serialNumber} maxLength={64} onChange={update('serialNumber')} placeholder="Optional" />}
+          </Field>
+          <Field label="Fitting date" required error={errors.fittedAt}>
+            {({ id, invalid, describedBy }) => <Input id={id} type="date" invalid={invalid} describedBy={describedBy} value={form.fittedAt} max={todayDateOnly()} onChange={update('fittedAt')} />}
+          </Field>
+          <Field label={readingLabel} required error={errors.meterReading} hint={`The ${readingIsHours ? 'hour meter' : 'odometer'} reading at the time of fitting.`}>
+            {({ id, invalid, describedBy }) => <Input id={id} type="number" min="0" step="any" inputMode="decimal" invalid={invalid} describedBy={describedBy} value={form.meterReading} onChange={update('meterReading')} />}
+          </Field>
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" loading={submitting}>
+            Save changes
+          </Button>
+        </div>
+      </form>
     </Modal>
   );
 }
@@ -139,14 +185,11 @@ export default function TyreFittingPage() {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
   const siteNames = useSiteNames();
-  const [filters, setFilters] = useState({ search: '', assetType: '', siteId: '', status: 'on', page: 1, sort: 'fittedAt:desc' });
+  const [filters, setFilters] = useState({ search: '', assetType: '', siteId: '', page: 1, sort: 'fittedAt:desc' });
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(location.state?.message ?? null);
-  const [removing, setRemoving] = useState(null);
-  const [undoing, setUndoing] = useState(null);
-  const [undoPending, setUndoPending] = useState(false);
-  const [undoError, setUndoError] = useState(null);
+  const [editing, setEditing] = useState(null);
 
   useEffect(() => {
     if (location.state?.message) navigate(location.pathname, { replace: true, state: null });
@@ -159,7 +202,6 @@ export default function TyreFittingPage() {
         search: active.search || undefined,
         assetType: active.assetType || undefined,
         siteId: active.siteId || undefined,
-        status: active.status || undefined,
         page: active.page,
         sort: active.sort,
       });
@@ -181,21 +223,6 @@ export default function TyreFittingPage() {
       const [currentField, currentDirection] = f.sort.split(':');
       return { ...f, sort: `${field}:${currentField === field && currentDirection === 'desc' ? 'asc' : 'desc'}` };
     });
-  }
-
-  async function handleUndo() {
-    setUndoPending(true);
-    setUndoError(null);
-    try {
-      await tyresApi.undoFitting(undoing.id, 'DELETE');
-      setNotice(`Fitting undone — the ${undoing.position} tyre is back in stock.`);
-      setUndoing(null);
-      load(filters);
-    } catch (err) {
-      setUndoError(err.message);
-    } finally {
-      setUndoPending(false);
-    }
   }
 
   const [sortField, sortDirection] = filters.sort.split(':');
@@ -229,6 +256,7 @@ export default function TyreFittingPage() {
         </div>
       ),
     },
+    { key: 'siteName', label: 'Site', render: (r) => r.siteName ?? '—' },
     { key: 'position', label: 'Position' },
     {
       key: 'fittedAt',
@@ -243,6 +271,7 @@ export default function TyreFittingPage() {
         </div>
       ),
     },
+    { key: 'run', label: 'Run', align: 'right', render: (r) => <span className="tabular-nums">{formatRun(r.run, r.meterType)}</span> },
     { key: 'unitCost', label: 'Cost', align: 'right', render: (r) => <span className="tabular-nums">{formatCurrency(r.unitCost)}</span> },
     { key: 'status', label: 'Status', render: (r) => <StatusBadge row={r} /> },
     {
@@ -252,21 +281,9 @@ export default function TyreFittingPage() {
         r.isOnAsset ? (
           <div className="flex items-center justify-end gap-3">
             <Can resource="TYRE" action="UPDATE">
-              <Button size="sm" variant="secondary" onClick={() => setRemoving(r)}>
-                Remove
+              <Button size="sm" variant="secondary" onClick={() => setEditing(r)}>
+                Edit
               </Button>
-            </Can>
-            <Can resource="TYRE" action="DELETE">
-              <button
-                type="button"
-                className="text-xs font-semibold text-danger-600 hover:underline"
-                onClick={() => {
-                  setUndoError(null);
-                  setUndoing(r);
-                }}
-              >
-                Undo
-              </button>
             </Can>
           </div>
         ) : null,
@@ -290,7 +307,7 @@ export default function TyreFittingPage() {
       <Alert tone="success">{notice}</Alert>
       <Alert tone="error">{error}</Alert>
 
-      <div className={`mb-4 grid gap-3 sm:grid-cols-2 ${isAdmin ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
+      <div className={`mb-4 grid gap-3 sm:grid-cols-2 ${isAdmin ? 'lg:grid-cols-3' : ''}`}>
         <Input placeholder="Search asset, tyre or position..." value={filters.search} onChange={(e) => updateFilter('search', e.target.value)} />
         <Select aria-label="Asset type" value={filters.assetType} onChange={(e) => updateFilter('assetType', e.target.value)}>
           <option value="">Vehicles &amp; machinery</option>
@@ -307,13 +324,6 @@ export default function TyreFittingPage() {
             ))}
           </Select>
         )}
-        <Select aria-label="Status" value={filters.status} onChange={(e) => updateFilter('status', e.target.value)}>
-          <option value="on">On asset now</option>
-          <option value="removed">Removed</option>
-          <option value="scrapped">Scrapped</option>
-          <option value="returned">Returned to stock</option>
-          <option value="">All fittings</option>
-        </Select>
       </div>
 
       <div className="rounded border border-steel-200 bg-surface">
@@ -327,32 +337,25 @@ export default function TyreFittingPage() {
               getRowKey={(r) => r.id}
               sort={{ field: sortField, direction: sortDirection }}
               onSort={handleSort}
-              emptyMessage={filters.search || filters.assetType || filters.siteId || filters.status !== 'on' ? 'No tyre fittings match these filters.' : 'No tyres fitted yet. Click "Fit tyres" to start.'}
+              emptyMessage={filters.search || filters.assetType || filters.siteId ? 'No tyre fittings match these filters.' : 'No tyres fitted yet. Click "Fit tyres" to start.'}
             />
             <Pagination page={result.pagination.page} pages={result.pagination.pages} total={result.pagination.total} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />
           </>
         )}
       </div>
 
-      <RemoveTyreModal
-        row={removing}
-        onClose={() => setRemoving(null)}
-        onDone={(message) => {
-          setRemoving(null);
-          setNotice(message);
-          load(filters);
-        }}
-      />
-      <DeleteWordModal
-        open={undoing !== null}
-        title="Undo this fitting?"
-        description={undoing ? `Use this only for a fitting entered by mistake. The ${undoing.position} tyre on ${undoing.assetLabel} goes back to stock and this record is deleted.` : ''}
-        onCancel={() => setUndoing(null)}
-        onConfirm={handleUndo}
-        pending={undoPending}
-        error={undoError}
-        confirmLabel="Undo fitting"
-      />
+      {editing && (
+        <EditFittingModal
+          key={editing.id}
+          row={editing}
+          onClose={() => setEditing(null)}
+          onDone={(message) => {
+            setEditing(null);
+            setNotice(message);
+            load(filters);
+          }}
+        />
+      )}
     </div>
   );
 }

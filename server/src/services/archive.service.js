@@ -42,7 +42,7 @@ async function archiveEntity({
   });
 }
 
-async function restoreEntity({ model, entityType, tenantId, id, performedBy }) {
+async function restoreEntity({ model, entityType, tenantId, id, performedBy, dependencyCheck }) {
   return sequelize.transaction(async (transaction) => {
     const record = await model.findOne({ where: { id, tenantId }, transaction, lock: transaction.LOCK.UPDATE });
     if (!record) {
@@ -50,6 +50,10 @@ async function restoreEntity({ model, entityType, tenantId, id, performedBy }) {
     }
     if (record.status !== 'archived') {
       throw AppError.conflict(`${entityType} is not archived`);
+    }
+
+    if (dependencyCheck) {
+      await dependencyCheck(record, { transaction });
     }
 
     await record.update(

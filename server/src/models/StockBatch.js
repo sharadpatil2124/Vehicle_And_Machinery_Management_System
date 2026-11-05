@@ -38,11 +38,6 @@ StockBatch.init(
       allowNull: false,
       references: { model: 'items', key: 'id' },
     },
-    storageLocationId: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: false,
-      references: { model: 'storage_locations', key: 'id' },
-    },
     unitCost: {
       type: DataTypes.DECIMAL(14, 4),
       allowNull: false,

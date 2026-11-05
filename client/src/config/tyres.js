@@ -1,12 +1,5 @@
 const currencyFormatter = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' });
 
-export const REMOVAL_REASONS = [
-  { value: 'WORN_OUT', label: 'Worn out' },
-  { value: 'PUNCTURE', label: 'Puncture' },
-  { value: 'DAMAGED', label: 'Damaged / burst' },
-  { value: 'OTHER', label: 'Other' },
-];
-
 export const POSITION_SUGGESTIONS = ['Front left', 'Front right', 'Rear left', 'Rear right', 'Spare'];
 
 function isBlank(value) {
@@ -28,7 +21,14 @@ export function meterUnit(meterType) {
 }
 
 export function formatRun(value, meterType) {
-  return `${formatNumber(value ?? 0, 0)} ${meterUnit(meterType)}`;
+  return `${formatNumber(value ?? 0)} ${meterUnit(meterType)}`;
+}
+
+export function replacementNote(active, readingText) {
+  const fitted = `Replaces ${active.tyreTypeLabel} · ${active.tyreSize}, fitted ${formatDateOnly(active.fittedAt)} at ${formatRun(active.fitMeterReading, active.meterType)}.`;
+  const reading = Number(readingText);
+  if (readingText === '' || !Number.isFinite(reading)) return fitted;
+  return `${fitted} It will show as Replaced at ${formatRun(reading, active.meterType)} after a run of ${formatRun(Math.max(0, reading - active.fitMeterReading), active.meterType)}.`;
 }
 
 export function todayDateOnly() {

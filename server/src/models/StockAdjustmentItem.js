@@ -7,7 +7,6 @@ class StockAdjustmentItem extends Model {
       id: this.id,
       adjustmentId: this.adjustmentId,
       itemId: this.itemId,
-      storageLocationId: this.storageLocationId,
       uomId: this.uomId,
       systemQuantity: Number(this.systemQuantity),
       countedQuantity: Number(this.countedQuantity),
@@ -40,11 +39,6 @@ StockAdjustmentItem.init(
       type: DataTypes.INTEGER.UNSIGNED,
       allowNull: false,
       references: { model: 'items', key: 'id' },
-    },
-    storageLocationId: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: false,
-      references: { model: 'storage_locations', key: 'id' },
     },
     uomId: {
       type: DataTypes.INTEGER.UNSIGNED,

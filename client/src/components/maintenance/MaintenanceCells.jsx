@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Badge } from '../ui';
 import Can from '../Can';
+import { useAuth } from '../../context/AuthContext';
 import { MAINTENANCE_TYPE, STAGE, elapsedMinutes, formatDuration } from '../../config/maintenance';
 
 export function assetDetailPath(assetType, assetRecordId) {
@@ -67,7 +68,11 @@ export function downtimeText(record, now) {
 }
 
 export function RowActions({ record, onAction }) {
+  const { role, user } = useAuth();
+
   if (record.status === 'archived') return <Badge tone="neutral">Deleted</Badge>;
+  // Part of an asset's history from before it came to this supervisor's site: readable, not theirs to change.
+  if (role === 'supervisor' && record.siteId !== user?.siteId) return <span className="text-xs text-steel-500">View only</span>;
 
   return (
     <div className="flex items-center gap-3">
@@ -84,6 +89,11 @@ export function RowActions({ record, onAction }) {
         )}
         <button type="button" className="font-semibold text-steel-600 hover:underline" onClick={() => onAction('edit', record)}>
           Edit
+        </button>
+      </Can>
+      <Can resource="MAINTENANCE" action="UPDATE_COST">
+        <button type="button" className="font-semibold text-steel-600 hover:underline" onClick={() => onAction('cost', record)}>
+          Edit cost
         </button>
       </Can>
       <Can resource="MAINTENANCE" action="DELETE">

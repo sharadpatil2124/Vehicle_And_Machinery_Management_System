@@ -2,7 +2,7 @@ const { QueryTypes } = require('sequelize');
 
 const { sequelize, ComplianceDocument, Machinery } = require('../models');
 const AppError = require('../utils/AppError');
-const { optionalText } = require('../utils/validation');
+const { optionalText, requireDateOnly } = require('../utils/validation');
 const { parseListQuery, parseEnumFilter, containsPattern } = require('../utils/queryOptions');
 const { buildListResponse } = require('../utils/listResponse');
 const { resolveAsset, ASSET_TYPES } = require('./asset.service');
@@ -11,8 +11,6 @@ const { supervisorSiteId } = require('./siteAccess');
 const { toDateOnly } = require('./fuelCommon');
 
 const { DOC_TYPES, ROAD_TAX_TYPES, EXPIRY_WARNING_DAYS } = ComplianceDocument;
-
-const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 const EXPIRY_FILTERS = Object.freeze({
   ATTENTION: 'cd.expiry_date <= :warnUntil',
@@ -45,13 +43,6 @@ function assertDocType(docType) {
   if (!DOC_TYPES.includes(docType)) {
     throw AppError.badRequest(`Document type must be one of: ${DOC_TYPES.join(', ')}`);
   }
-}
-
-function requireDateOnly(value, label) {
-  if (typeof value !== 'string' || !DATE_ONLY_PATTERN.test(value) || Number.isNaN(new Date(value).getTime())) {
-    throw AppError.badRequest(`${label} must be a valid date (YYYY-MM-DD)`);
-  }
-  return value;
 }
 
 function readComplianceInput(docType, payload) {
@@ -101,7 +92,7 @@ const DOC_TYPE_PAYLOAD_KEYS = {
 
 function isDocEntered(docType, raw) {
   if (!raw) return false;
-  if (raw.documentNumber) return true;
+  if (String(raw.documentNumber ?? '').trim()) return true;
   if (docType === 'ROAD_TAX') return Boolean(raw.roadTaxType);
   if (docType === 'NATIONAL_PERMIT') return Boolean(raw.expiryDate);
   return Boolean(raw.startDate) || Boolean(raw.expiryDate);
@@ -165,12 +156,14 @@ async function listComplianceDocuments({ tenantId, auth, assetType, assetId }) {
 
 async function upsertComplianceDocument({ tenantId, auth, assetType, assetId, docType, actingUserId, payload }) {
   assertDocType(docType);
-  await resolveAsset(tenantId, assetType, assetId, { auth });
-
-  const input = readComplianceInput(docType, payload);
-  const existing = await ComplianceDocument.findOne({ where: { tenantId, assetType, assetId, docType } });
 
   const saved = await sequelize.transaction(async (transaction) => {
+    // Locking the asset first makes simultaneous saves take turns, here and on the asset forms.
+    await resolveAsset(tenantId, assetType, assetId, { auth, transaction, lock: transaction.LOCK.UPDATE });
+
+    const input = readComplianceInput(docType, payload);
+    const existing = await ComplianceDocument.findOne({ where: { tenantId, assetType, assetId, docType }, transaction });
+
     if (existing) {
       const before = existing.toJSON();
       await existing.update({ ...input, updatedBy: actingUserId }, { transaction });

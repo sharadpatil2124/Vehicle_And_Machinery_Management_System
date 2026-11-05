@@ -13,7 +13,6 @@ class PurchaseItem extends Model {
       id: this.id,
       purchaseId: this.purchaseId,
       itemId: this.itemId,
-      storageLocationId: this.storageLocationId,
       uomId: this.uomId,
       purchasedQuantity: Number(this.purchasedQuantity),
       receivedQuantity: Number(this.receivedQuantity),
@@ -50,11 +49,6 @@ PurchaseItem.init(
       type: DataTypes.INTEGER.UNSIGNED,
       allowNull: false,
       references: { model: 'items', key: 'id' },
-    },
-    storageLocationId: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: false,
-      references: { model: 'storage_locations', key: 'id' },
     },
     uomId: {
       type: DataTypes.INTEGER.UNSIGNED,

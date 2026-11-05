@@ -30,6 +30,8 @@ router.put('/:id', requirePermission('MAINTENANCE', 'UPDATE'), maintenanceContro
 
 router.post('/:id/stage', requirePermission('MAINTENANCE', 'UPDATE'), maintenanceController.changeStage);
 
+router.put('/:id/cost', requirePermission('MAINTENANCE', 'UPDATE_COST'), maintenanceController.correctCost);
+
 router.delete('/:id', requirePermission('MAINTENANCE', 'DELETE'), maintenanceController.remove);
 
 module.exports = router;

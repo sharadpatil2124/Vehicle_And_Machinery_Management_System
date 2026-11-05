@@ -4,8 +4,7 @@ const { TyreFitment, TyrePurchase, TyrePurchaseItem, TyreStock, TyreType } = req
 const AppError = require('../utils/AppError');
 const { parseEnumFilter } = require('../utils/queryOptions');
 const { optionalDateFilter, roundMoney, siteNamesById } = require('./fuelCommon');
-const { siteFilter, assetsByKey, assetSummary } = require('./tyreCommon');
-const { REASON_LABELS } = require('./tyreFitment.service');
+const { siteFilter, assetsByKey, assetSummary, runOf } = require('./tyreCommon');
 
 function readRange(query) {
   const dateFrom = optionalDateFilter(query.dateFrom, 'From date');
@@ -55,10 +54,10 @@ async function assetReport({ tenantId, auth, query }) {
       fitMeterReading: Number(f.fitMeterReading),
       removedAt: f.removedAt,
       removeMeterReading: f.removeMeterReading == null ? null : Number(f.removeMeterReading),
-      removalReasonLabel: f.removalReason ? REASON_LABELS[f.removalReason] : null,
-      removalOutcome: f.removalOutcome,
+      fitmentStatus: f.fitmentStatus(),
       isOnAsset: f.removedAt == null,
       meterType: f.meterType,
+      run: runOf(f, asset),
       cost,
     });
   }
@@ -70,8 +69,9 @@ async function assetReport({ tenantId, auth, query }) {
         ...g,
         tyreCount: g.tyres.length,
         onAssetCount: g.tyres.filter((x) => x.isOnAsset).length,
-        scrappedCount: g.tyres.filter((x) => x.removalOutcome === 'scrapped').length,
-        returnedCount: g.tyres.filter((x) => x.removalOutcome === 'returned').length,
+        replacedCount: g.tyres.filter((x) => x.fitmentStatus === 'replaced').length,
+        offAssetCount: g.tyres.filter((x) => x.fitmentStatus === 'off').length,
+        tyreRun: roundMoney(g.tyres.filter((x) => x.meterType === g.meterType).reduce((t, x) => t + x.run, 0)),
         tyreCost,
       };
     })
@@ -83,8 +83,8 @@ async function assetReport({ tenantId, auth, query }) {
     totals: {
       tyresFitted: all.length,
       onAssets: all.filter((x) => x.isOnAsset).length,
-      scrapped: all.filter((x) => x.removalOutcome === 'scrapped').length,
-      returned: all.filter((x) => x.removalOutcome === 'returned').length,
+      replaced: all.filter((x) => x.fitmentStatus === 'replaced').length,
+      offAsset: all.filter((x) => x.fitmentStatus === 'off').length,
       tyreCost: roundMoney(all.reduce((t, x) => t + x.cost, 0)),
     },
     rows,

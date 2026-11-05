@@ -11,7 +11,6 @@ const itemCategoryRoutes = require('./itemCategory.routes');
 const unitOfMeasureRoutes = require('./unitOfMeasure.routes');
 const itemRoutes = require('./item.routes');
 const supplierRoutes = require('./supplier.routes');
-const storageLocationRoutes = require('./storageLocation.routes');
 const purchaseRoutes = require('./purchase.routes');
 const stockRoutes = require('./stock.routes');
 const assetIssueRoutes = require('./assetIssue.routes');
@@ -23,6 +22,7 @@ const fuelStationRoutes = require('./fuelStation.routes');
 const fuelCollectionRoutes = require('./fuelCollection.routes');
 const siteFuelStockRoutes = require('./siteFuelStock.routes');
 const fuelReportRoutes = require('./fuelReport.routes');
+const adblueRoutes = require('./adblue.routes');
 const tyreRoutes = require('./tyre.routes');
 const maintenanceRoutes = require('./maintenance.routes');
 const dashboardRoutes = require('./dashboard.routes');
@@ -54,7 +54,6 @@ router.use('/item-categories', itemCategoryRoutes);
 router.use('/units-of-measure', unitOfMeasureRoutes);
 router.use('/items', itemRoutes);
 router.use('/suppliers', supplierRoutes);
-router.use('/storage-locations', storageLocationRoutes);
 
 router.use('/purchases', purchaseRoutes);
 router.use('/stock', stockRoutes);
@@ -70,6 +69,8 @@ router.use('/fuel-stations', fuelStationRoutes);
 router.use('/fuel-collections', fuelCollectionRoutes);
 router.use('/site-fuel-stock', siteFuelStockRoutes);
 router.use('/fuel-reports', fuelReportRoutes);
+
+router.use('/adblue', adblueRoutes);
 
 router.use('/tyres', tyreRoutes);
 

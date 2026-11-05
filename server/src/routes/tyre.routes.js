@@ -34,9 +34,7 @@ router.get('/fitments', requirePermission('TYRE', 'READ'), tyreController.listFi
 
 router.post('/fitments', requirePermission('TYRE', 'CREATE'), tyreController.fit);
 
-router.post('/fitments/:id/remove', requirePermission('TYRE', 'UPDATE'), tyreController.removeFromAsset);
-
-router.delete('/fitments/:id', requirePermission('TYRE', 'DELETE'), tyreController.undoFitting);
+router.put('/fitments/:id', requirePermission('TYRE', 'UPDATE'), tyreController.updateFitment);
 
 router.get('/reports/assets', requirePermission('REPORTS', 'VIEW'), tyreController.assetReport);
 

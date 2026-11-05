@@ -56,14 +56,9 @@ async function fit(req, res) {
   res.status(201).json({ data, message: `${data.length} ${data.length === 1 ? 'tyre' : 'tyres'} fitted` });
 }
 
-async function removeFromAsset(req, res) {
-  const data = await tyreFitmentService.removeTyre({ ...ctx(req), id: req.params.id, payload: req.body ?? {} });
-  res.status(200).json({ data, message: 'Tyre removed' });
-}
-
-async function undoFitting(req, res) {
-  const data = await tyreFitmentService.undoFitting({ ...ctx(req), id: req.params.id, confirmation: req.body?.confirmation });
-  res.status(200).json({ data, message: 'Fitting undone — the tyre is back in stock' });
+async function updateFitment(req, res) {
+  const data = await tyreFitmentService.updateFitment({ ...ctx(req), id: req.params.id, payload: req.body ?? {} });
+  res.status(200).json({ data, message: 'Tyre fitting updated' });
 }
 
 async function assetReport(req, res) {
@@ -102,8 +97,7 @@ module.exports = {
   stock,
   listFitments,
   fit,
-  removeFromAsset,
-  undoFitting,
+  updateFitment,
   assetReport,
   assetTyres,
   costReport,

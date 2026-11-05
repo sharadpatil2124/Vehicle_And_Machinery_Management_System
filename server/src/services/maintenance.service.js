@@ -1,14 +1,15 @@
 const { Op, Transaction } = require('sequelize');
 
-const { sequelize, Maintenance, Vehicle, Machinery } = require('../models');
+const { sequelize, Maintenance, Site, Vehicle, Machinery } = require('../models');
+const { hasPermission } = require('../config/permissions');
 const { machineAssetIdsMatchingRcpl, vehicleAssetIdsMatchingRegistration } = require('./assetIdentifier.service');
 const AppError = require('../utils/AppError');
-const { requireText, optionalText, optionalNumber } = require('../utils/validation');
+const { requireText, optionalText, optionalNumber, isValidDateTime, requireIdFilter } = require('../utils/validation');
 const { assertMeterNotDecreasing } = require('../utils/meter');
 const { parseListQuery, parseEnumFilter, containsPattern } = require('../utils/queryOptions');
 const { buildListResponse } = require('../utils/listResponse');
 const { createTenantScopedRepository } = require('./tenantScopedRepository');
-const { recordArchive, recordCreate, recordUpdate } = require('./audit.service');
+const { recordArchive, recordAudit, recordCreate, recordUpdate } = require('./audit.service');
 const { scopeToSite, assertSiteAllowed, supervisorSiteId } = require('./siteAccess');
 const { resolveAsset, ASSET_TYPES } = require('./asset.service');
 const { roundMoney, optionalDateFilter } = require('./fuelCommon');
@@ -55,10 +56,10 @@ function readTimestamp(value, label, { required = false } = {}) {
     if (required) throw AppError.badRequest(`${label} is required`);
     return null;
   }
-  const date = typeof value === 'string' ? new Date(value) : null;
-  if (!date || Number.isNaN(date.getTime())) {
+  if (!isValidDateTime(value)) {
     throw AppError.badRequest(`${label} must be a valid date and time`);
   }
+  const date = new Date(value);
   if (date.getTime() > Date.now() + CLOCK_SKEW_MS) {
     throw AppError.badRequest(`${label} cannot be in the future`);
   }
@@ -81,6 +82,15 @@ function readCosts(payload, existing = {}) {
     throw AppError.badRequest('Total cost cannot be less than the labour cost');
   }
   return costs;
+}
+
+function assertCostChangeAllowed(auth, costs, record, { firstEntryAllowed = false } = {}) {
+  if (hasPermission(auth.role, 'MAINTENANCE', 'UPDATE_COST')) return;
+  for (const [field, value] of Object.entries(costs)) {
+    const saved = toNumber(record[field]);
+    if (value === saved || (firstEntryAllowed && saved === null)) continue;
+    throw AppError.forbidden('Only an Admin can change maintenance costs');
+  }
 }
 
 function assertTimeline({ reportedAt, startedAt, completedAt }) {
@@ -110,7 +120,9 @@ async function withLabels(tenantId, records) {
   const vehicleIds = idsOf(ASSET_TYPES.VEHICLE);
   const machineIds = idsOf(ASSET_TYPES.MACHINERY);
 
-  const [vehicles, machines] = await Promise.all([
+  const siteIds = [...new Set(records.map((r) => r.siteId).filter(Boolean))];
+
+  const [vehicles, machines, sites] = await Promise.all([
     vehicleIds.length
       ? Vehicle.findAll({ where: { tenantId, assetId: vehicleIds }, attributes: ['id', 'assetId', 'registrationNumber'] })
       : [],
@@ -120,7 +132,9 @@ async function withLabels(tenantId, records) {
           attributes: ['id', 'assetId', 'name', 'rcpl'],
         })
       : [],
+    siteIds.length ? Site.findAll({ where: { tenantId, id: siteIds }, attributes: ['id', 'name'] }) : [],
   ]);
+  const siteNames = new Map(sites.map((site) => [site.id, site.name]));
 
   const labels = new Map();
   for (const v of vehicles) labels.set(labelKey(ASSET_TYPES.VEHICLE, v.assetId), { label: assetLabel(ASSET_TYPES.VEHICLE, v), recordId: v.id });
@@ -128,13 +142,27 @@ async function withLabels(tenantId, records) {
 
   return records.map((record) => {
     const found = labels.get(labelKey(record.assetType, record.assetId));
-    return { ...record.toPublicJSON(), assetLabel: found?.label ?? null, assetRecordId: found?.recordId ?? null };
+    return {
+      ...record.toPublicJSON(),
+      assetLabel: found?.label ?? null,
+      assetRecordId: found?.recordId ?? null,
+      siteName: siteNames.get(record.siteId) ?? null,
+    };
   });
 }
 
 function startOfLocalDay(dateOnly) {
   const [year, month, day] = dateOnly.split('-').map(Number);
   return new Date(year, month - 1, day);
+}
+
+// A supervisor can read an asset's whole history once it is at their site, including records from its earlier sites.
+async function isAssetAtOwnSite(tenantId, auth, assetType, assetId) {
+  const siteId = supervisorSiteId(auth);
+  if (siteId === null || !assetType || !assetId) return false;
+  const model = assetType === ASSET_TYPES.VEHICLE ? Vehicle : Machinery;
+  const asset = await model.findOne({ where: { tenantId, assetId: String(assetId), currentSiteId: siteId }, attributes: ['id'] });
+  return Boolean(asset);
 }
 
 async function listMaintenance({ tenantId, auth, query }) {
@@ -144,7 +172,8 @@ async function listMaintenance({ tenantId, auth, query }) {
   });
 
   const status = parseEnumFilter(query.status, Maintenance.STATUSES, 'Status') ?? 'active';
-  const where = scopeToSite({ status }, auth, 'siteId');
+  const assetType = parseEnumFilter(query.assetType, Maintenance.ASSET_TYPES, 'Asset type');
+  const where = (await isAssetAtOwnSite(tenantId, auth, assetType, query.assetId)) ? { status } : scopeToSite({ status }, auth, 'siteId');
 
   const type = parseEnumFilter(query.type, Maintenance.TYPES, 'Maintenance type');
   if (type) where.type = type;
@@ -152,10 +181,9 @@ async function listMaintenance({ tenantId, auth, query }) {
   if (stage) where.stage = stage;
   else if (query.open === 'true') where.stage = { [Op.ne]: 'resolved' };
 
-  const assetType = parseEnumFilter(query.assetType, Maintenance.ASSET_TYPES, 'Asset type');
   if (assetType) where.assetType = assetType;
   if (query.assetId) where.assetId = String(query.assetId);
-  if (query.siteId && supervisorSiteId(auth) === null) where.siteId = Number(query.siteId);
+  if (query.siteId && supervisorSiteId(auth) === null) where.siteId = requireIdFilter(query.siteId, 'Site');
 
   const dateFrom = optionalDateFilter(query.dateFrom, 'From date');
   const dateTo = optionalDateFilter(query.dateTo, 'To date');
@@ -372,13 +400,15 @@ async function createMaintenance({ tenantId, auth, actingUserId, payload }) {
   };
 
   const asset = await resolveAsset(tenantId, assetType, assetId, { auth });
-  if (asset.status !== 'active') {
-    throw AppError.badRequest('This asset is archived — maintenance cannot be recorded against it');
-  }
-  const { meterType } = meterFields(assetType, asset);
 
   const created = await sequelize.transaction(async (transaction) => {
-    await lockAsset(asset, transaction);
+    // Checked on the locked row, so a job can't be left at the old site by a move happening at the same moment.
+    const locked = await lockAsset(asset, transaction);
+    assertSiteAllowed(auth, locked.currentSiteId, 'Asset not found');
+    if (locked.status !== 'active') {
+      throw AppError.badRequest('This asset is archived — maintenance cannot be recorded against it');
+    }
+    const { meterType } = meterFields(assetType, locked);
 
     const open = await Maintenance.findOne({ where: openWhere(tenantId, assetType, assetId, type), transaction });
     if (open) {
@@ -398,7 +428,7 @@ async function createMaintenance({ tenantId, auth, actingUserId, payload }) {
         type,
         stage: 'reported',
         meterType,
-        siteId: asset.currentSiteId ?? null,
+        siteId: locked.currentSiteId ?? null,
         createdBy: actingUserId,
         updatedBy: actingUserId,
       },
@@ -417,59 +447,61 @@ async function createMaintenance({ tenantId, auth, actingUserId, payload }) {
 }
 
 async function updateMaintenance({ tenantId, auth, actingUserId, id, payload }) {
-  const record = await findVisible(tenantId, auth, id);
-  if (record.status !== 'active') {
-    throw AppError.conflict('A deleted maintenance record cannot be edited');
-  }
-  if (payload.stage !== undefined && payload.stage !== record.stage) {
-    throw AppError.badRequest('The stage can only be changed by starting or resolving the work');
-  }
-
-  const changes = readCosts(payload, record);
-  if (payload.description !== undefined) {
-    changes.description = requireText(payload.description, 'Description', { max: 2000 });
-  }
-  if (payload.performedBy !== undefined) {
-    changes.performedBy = optionalText(payload.performedBy, 'Performed by', { max: 150 });
-  }
-  if (payload.meterReading !== undefined) {
-    const meterReading = readMoney(payload.meterReading, 'Meter reading');
-    const locksMeter = record.type === 'preventive' && record.stage === 'resolved';
-    if (locksMeter && meterReading !== toNumber(record.meterReading)) {
-      throw AppError.badRequest(
-        "The meter reading of completed preventive maintenance can't be changed — it has already updated the asset's service schedule"
-      );
-    }
-    changes.meterReading = meterReading;
-  }
-
-  if (payload.reportedAt !== undefined) {
-    changes.reportedAt = readTimestamp(payload.reportedAt, 'Reported at', { required: true });
-  }
-  if (payload.startedAt !== undefined) {
-    if (record.stage === 'reported') {
-      throw AppError.badRequest("Work hasn't started yet — start the work to record its start time");
-    }
-    changes.startedAt = readTimestamp(payload.startedAt, 'Started at', { required: true });
-  }
-  if (payload.completedAt !== undefined) {
-    if (record.stage !== 'resolved') {
-      throw AppError.badRequest("This maintenance isn't resolved yet — resolve it to record its completion time");
-    }
-    changes.completedAt = readTimestamp(payload.completedAt, 'Completed at', { required: true });
-  }
-
-  const timeline = {
-    reportedAt: changes.reportedAt ?? record.reportedAt,
-    startedAt: changes.startedAt ?? record.startedAt,
-    completedAt: changes.completedAt ?? record.completedAt,
-  };
-  assertTimeline(timeline);
-  if (record.stage === 'resolved') {
-    changes.downtimeMinutes = breakdownDowntime(record.type, timeline.reportedAt, timeline.completedAt);
-  }
-
   await sequelize.transaction(async (transaction) => {
+    // Locked so an edit and a move of the asset to another site take turns.
+    const record = await findVisible(tenantId, auth, id, { transaction, lock: transaction.LOCK.UPDATE });
+    if (record.status !== 'active') {
+      throw AppError.conflict('A deleted maintenance record cannot be edited');
+    }
+    if (payload.stage !== undefined && payload.stage !== record.stage) {
+      throw AppError.badRequest('The stage can only be changed by starting or resolving the work');
+    }
+
+    const changes = readCosts(payload, record);
+    assertCostChangeAllowed(auth, changes, record);
+    if (payload.description !== undefined) {
+      changes.description = requireText(payload.description, 'Description', { max: 2000 });
+    }
+    if (payload.performedBy !== undefined) {
+      changes.performedBy = optionalText(payload.performedBy, 'Performed by', { max: 150 });
+    }
+    if (payload.meterReading !== undefined) {
+      const meterReading = readMoney(payload.meterReading, 'Meter reading');
+      const locksMeter = record.type === 'preventive' && record.stage === 'resolved';
+      if (locksMeter && meterReading !== toNumber(record.meterReading)) {
+        throw AppError.badRequest(
+          "The meter reading of completed preventive maintenance can't be changed — it has already updated the asset's service schedule"
+        );
+      }
+      changes.meterReading = meterReading;
+    }
+
+    if (payload.reportedAt !== undefined) {
+      changes.reportedAt = readTimestamp(payload.reportedAt, 'Reported at', { required: true });
+    }
+    if (payload.startedAt !== undefined) {
+      if (record.stage === 'reported') {
+        throw AppError.badRequest("Work hasn't started yet — start the work to record its start time");
+      }
+      changes.startedAt = readTimestamp(payload.startedAt, 'Started at', { required: true });
+    }
+    if (payload.completedAt !== undefined) {
+      if (record.stage !== 'resolved') {
+        throw AppError.badRequest("This maintenance isn't resolved yet — resolve it to record its completion time");
+      }
+      changes.completedAt = readTimestamp(payload.completedAt, 'Completed at', { required: true });
+    }
+
+    const timeline = {
+      reportedAt: changes.reportedAt ?? record.reportedAt,
+      startedAt: changes.startedAt ?? record.startedAt,
+      completedAt: changes.completedAt ?? record.completedAt,
+    };
+    assertTimeline(timeline);
+    if (record.stage === 'resolved') {
+      changes.downtimeMinutes = breakdownDowntime(record.type, timeline.reportedAt, timeline.completedAt);
+    }
+
     const before = record.toJSON();
     await record.update({ ...changes, updatedBy: actingUserId }, { transaction });
     await recordUpdate(
@@ -478,7 +510,7 @@ async function updateMaintenance({ tenantId, auth, actingUserId, id, payload }) 
     );
   });
 
-  return getMaintenance({ tenantId, auth, id: record.id });
+  return getMaintenance({ tenantId, auth, id });
 }
 
 async function applyPreventiveCompletion({ tenantId, record, meterReading, actingUserId, transaction }) {
@@ -520,10 +552,12 @@ async function changeStage({ tenantId, auth, actingUserId, id, payload }) {
   }
   const at = readTimestamp(payload.at, target === 'resolved' ? 'Completed at' : 'Started at') ?? new Date();
 
-  await findVisible(tenantId, auth, id);
+  const job = await findVisible(tenantId, auth, id);
 
   await sequelize.transaction(async (transaction) => {
-    const record = await Maintenance.findOne({ where: { tenantId, id }, lock: Transaction.LOCK.UPDATE, transaction });
+    // Asset first, then the job: the same order as moving an asset, so the two can't deadlock.
+    await resolveAsset(tenantId, job.assetType, job.assetId, { transaction, lock: transaction.LOCK.UPDATE });
+    const record = await findVisible(tenantId, auth, id, { transaction, lock: transaction.LOCK.UPDATE });
     if (record.status !== 'active') {
       throw AppError.conflict('A deleted maintenance record cannot change stage');
     }
@@ -537,7 +571,9 @@ async function changeStage({ tenantId, auth, actingUserId, id, payload }) {
       );
     }
 
-    const changes = { stage: target, ...readCosts(payload, record) };
+    const costs = readCosts(payload, record);
+    assertCostChangeAllowed(auth, costs, record, { firstEntryAllowed: true });
+    const changes = { stage: target, ...costs };
     if (payload.performedBy !== undefined) {
       changes.performedBy = optionalText(payload.performedBy, 'Performed by', { max: 150 });
     }
@@ -565,6 +601,33 @@ async function changeStage({ tenantId, auth, actingUserId, id, payload }) {
     await record.update({ ...changes, updatedBy: actingUserId }, { transaction });
     await recordUpdate(
       { tenantId, entityType: 'Maintenance', entityId: record.id, performedBy: actingUserId, before, after: record },
+      { transaction }
+    );
+  });
+
+  return getMaintenance({ tenantId, auth, id });
+}
+
+// A correction changes the two cost fields and nothing else: not the stage, times, meter reading or the asset.
+async function correctMaintenanceCost({ tenantId, auth, actingUserId, id, payload }) {
+  if (payload.labourCost === undefined && payload.totalCost === undefined) {
+    throw AppError.badRequest('Enter the labour cost or the total cost');
+  }
+
+  await sequelize.transaction(async (transaction) => {
+    const record = await findVisible(tenantId, auth, id, { transaction, lock: transaction.LOCK.UPDATE });
+    if (record.status !== 'active') {
+      throw AppError.conflict('A deleted maintenance record cannot be edited');
+    }
+
+    const costs = readCosts(payload, record);
+    const before = { labourCost: toNumber(record.labourCost), totalCost: toNumber(record.totalCost) };
+    const after = { ...before, ...costs };
+    if (after.labourCost === before.labourCost && after.totalCost === before.totalCost) return;
+
+    await record.update({ ...costs, updatedBy: actingUserId }, { transaction });
+    await recordAudit(
+      { tenantId, entityType: 'Maintenance', entityId: record.id, action: 'COST_CORRECTED', before, after, performedBy: actingUserId },
       { transaction }
     );
   });
@@ -602,5 +665,6 @@ module.exports = {
   createMaintenance,
   updateMaintenance,
   changeStage,
+  correctMaintenanceCost,
   deleteMaintenance,
 };

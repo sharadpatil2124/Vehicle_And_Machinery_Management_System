@@ -1,6 +1,8 @@
 const AppError = require('./AppError');
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const DATE_TIME_PATTERN = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?(Z|[+-]\d{2}:\d{2})?)?$/;
 
 const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_LENGTH = 200;
@@ -41,7 +43,7 @@ function isBlankString(value) {
   return typeof value === 'string' && value.trim() === '';
 }
 
-function requireNumber(value, label, { min } = {}) {
+function requireNumber(value, label, { min, max } = {}) {
   const number = Number(value);
   const isNumberOrText = typeof value === 'number' || (typeof value === 'string' && !isBlankString(value));
   if (!isNumberOrText || !Number.isFinite(number)) {
@@ -49,6 +51,9 @@ function requireNumber(value, label, { min } = {}) {
   }
   if (min !== undefined && number < min) {
     throw AppError.badRequest(`${label} must be ${min} or greater`);
+  }
+  if (max !== undefined && number > max) {
+    throw AppError.badRequest(`${label} must be ${max} or less`);
   }
   return number;
 }
@@ -80,6 +85,32 @@ function optionalPhone(value, label = 'Phone') {
   return phone;
 }
 
+// new Date('2026-02-30') quietly rolls over to 2 March, so the date must also survive the round trip.
+function isValidDateOnly(value) {
+  if (typeof value !== 'string' || !DATE_ONLY_PATTERN.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
+}
+
+// ISO only (date, or date and time). new Date() alone would also read "5" as a date in 2001.
+function isValidDateTime(value) {
+  if (typeof value !== 'string' || !DATE_TIME_PATTERN.test(value)) return false;
+  return isValidDateOnly(value.slice(0, 10)) && !Number.isNaN(new Date(value).getTime());
+}
+
+function requireDateOnly(value, label) {
+  if (!isValidDateOnly(value)) {
+    throw AppError.badRequest(`${label} must be a valid date (YYYY-MM-DD)`);
+  }
+  return value;
+}
+
+function requireIdFilter(value, label) {
+  const id = requireNumber(value, label, { min: 1 });
+  if (!Number.isInteger(id)) throw AppError.badRequest(`${label} must be a number`);
+  return id;
+}
+
 function optionalEmail(value) {
   if (value === undefined || value === null || value === '') return null;
   return requireEmail(value);
@@ -95,4 +126,8 @@ module.exports = {
   optionalNumber,
   optionalEmail,
   optionalPhone,
+  isValidDateOnly,
+  isValidDateTime,
+  requireDateOnly,
+  requireIdFilter,
 };

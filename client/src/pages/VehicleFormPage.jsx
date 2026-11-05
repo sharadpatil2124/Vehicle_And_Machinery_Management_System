@@ -54,6 +54,7 @@ export default function VehicleFormPage() {
   const isHeavy = form.type === HOURS_BASED_VEHICLE_TYPE;
   const [compliance, setCompliance] = useState(EMPTY_COMPLIANCE);
   const [siteOptions, setSiteOptions] = useState([]);
+  const [archivedSite, setArchivedSite] = useState(null);
   const [documentFiles, setDocumentFiles] = useState({});
   const [showMissingDocs, setShowMissingDocs] = useState(false);
   const [loading, setLoading] = useState(isEdit);
@@ -67,6 +68,13 @@ export default function VehicleFormPage() {
       .get(id)
       .then(async (response) => {
         setForm(toFormValues(response.data));
+        // The site list holds active sites only, so a site archived since the vehicle arrived needs adding.
+        if (response.data.currentSiteId) {
+          sitesApi
+            .get(response.data.currentSiteId)
+            .then((site) => setArchivedSite(site.data.status === 'archived' ? site.data : null))
+            .catch(() => {});
+        }
         const complianceResponse = await complianceApi.list('VEHICLE', response.data.assetId);
         setCompliance(complianceSlotsToFormValue(complianceResponse.data));
       })
@@ -90,6 +98,15 @@ export default function VehicleFormPage() {
 
     const complianceErrors = getComplianceDateErrors(compliance);
     if (Object.values(complianceErrors).some(Boolean)) {
+      return;
+    }
+
+    const blankMeter = (isHeavy
+      ? [['currentHours', 'Current hours'], ['serviceIntervalHours', 'Service interval (hours)']]
+      : [['currentKM', 'Current KM'], ['serviceIntervalKM', 'Service interval (KM)']]
+    ).find(([field]) => String(form[field]).trim() === '');
+    if (blankMeter) {
+      setSubmitError(`${blankMeter[1]} is required.`);
       return;
     }
 
@@ -275,6 +292,11 @@ export default function VehicleFormPage() {
                   disabled={!canChooseSite}
                 >
                   <option value="">Unassigned</option>
+                  {archivedSite && (
+                    <option value={archivedSite.id} data-added={archivedSite.id}>
+                      {archivedSite.name} (archived)
+                    </option>
+                  )}
                   {siteOptions.map((site) => (
                     <option key={site.id} value={site.id} data-added={site.id}>
                       {site.name}

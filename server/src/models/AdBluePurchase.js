@@ -1,15 +1,18 @@
 const { DataTypes, Model } = require('sequelize');
 const { sequelize } = require('../config/database');
 
-const STORAGE_LOCATION_STATUSES = ['active', 'archived'];
+const STATUSES = ['active', 'archived'];
 
-class StorageLocation extends Model {
+class AdBluePurchase extends Model {
   toPublicJSON() {
     return {
       id: this.id,
       siteId: this.siteId,
-      locationCode: this.locationCode,
-      locationName: this.locationName,
+      supplierName: this.supplierName,
+      purchaseDate: this.purchaseDate,
+      quantity: Number(this.quantity),
+      ratePerLitre: Number(this.ratePerLitre),
+      totalCost: Number(this.totalCost),
       status: this.status,
       archivedAt: this.archivedAt,
       createdBy: this.createdBy,
@@ -20,7 +23,7 @@ class StorageLocation extends Model {
   }
 }
 
-StorageLocation.init(
+AdBluePurchase.init(
   {
     id: {
       type: DataTypes.INTEGER.UNSIGNED,
@@ -37,16 +40,28 @@ StorageLocation.init(
       allowNull: false,
       references: { model: 'sites', key: 'id' },
     },
-    locationCode: {
-      type: DataTypes.STRING(64),
+    supplierName: {
+      type: DataTypes.STRING(255),
       allowNull: false,
     },
-    locationName: {
-      type: DataTypes.STRING(150),
+    purchaseDate: {
+      type: DataTypes.DATEONLY,
+      allowNull: false,
+    },
+    quantity: {
+      type: DataTypes.DECIMAL(12, 3),
+      allowNull: false,
+    },
+    ratePerLitre: {
+      type: DataTypes.DECIMAL(14, 4),
+      allowNull: false,
+    },
+    totalCost: {
+      type: DataTypes.DECIMAL(14, 2),
       allowNull: false,
     },
     status: {
-      type: DataTypes.ENUM(...STORAGE_LOCATION_STATUSES),
+      type: DataTypes.ENUM(...STATUSES),
       allowNull: false,
       defaultValue: 'active',
     },
@@ -72,11 +87,11 @@ StorageLocation.init(
   },
   {
     sequelize,
-    modelName: 'StorageLocation',
-    tableName: 'storage_locations',
+    modelName: 'AdBluePurchase',
+    tableName: 'adblue_purchases',
   }
 );
 
-StorageLocation.STATUSES = STORAGE_LOCATION_STATUSES;
+AdBluePurchase.STATUSES = STATUSES;
 
-module.exports = StorageLocation;
+module.exports = AdBluePurchase;

@@ -127,6 +127,21 @@ export default function Sidebar({ open, onNavigate }) {
           </Can>
         </NavSection>
 
+        <NavSection title="AdBlue" paths={['/adblue']}>
+          <NavLink to="/adblue/overview" className={linkClasses} onClick={onNavigate}>
+            Overview
+          </NavLink>
+          <NavLink to="/adblue/purchases" className={linkClasses} onClick={onNavigate}>
+            Purchases
+          </NavLink>
+          <NavLink to="/adblue/fillings" className={linkClasses} onClick={onNavigate}>
+            Filling Records
+          </NavLink>
+          <NavLink to="/adblue/reports" className={linkClasses} onClick={onNavigate}>
+            Reports
+          </NavLink>
+        </NavSection>
+
         <NavSection title="Tyres" paths={['/tyres']}>
           <NavLink to="/tyres/stock" className={linkClasses} onClick={onNavigate}>
             Tyre Stock

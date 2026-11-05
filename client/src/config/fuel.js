@@ -80,6 +80,11 @@ export function machineryLabel(machine) {
   return [machine.rcpl, machine.name].filter(Boolean).join(' · ') || machine.assetId;
 }
 
+export function assetOptionLabel(assetType, asset) {
+  if (assetType === 'VEHICLE') return `${asset.registrationNumber} (${asset.assetId}) · ${asset.type}`;
+  return `${machineryLabel(asset)} (${asset.assetId})`;
+}
+
 export function assetDisplayName(assetType, asset) {
   if (!asset) return '';
   if (assetType === 'VEHICLE') return asset.registrationNumber;

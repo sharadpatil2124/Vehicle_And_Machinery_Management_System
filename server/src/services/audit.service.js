@@ -28,7 +28,21 @@ function snapshot(instance) {
   return clean;
 }
 
-function diffSnapshots(before, after) {
+// Saving always touches these, so on their own they mean nothing changed.
+const BOOKKEEPING_FIELDS = ['updatedAt', 'updatedBy'];
+
+function decimalFieldsOf(instance) {
+  const attributes = instance?.constructor?.getAttributes?.() ?? {};
+  return new Set(Object.keys(attributes).filter((field) => attributes[field].type?.key === 'DECIMAL'));
+}
+
+// The database returns decimals as text ("1000.00") and services write numbers (1000). Text columns stay exact.
+function isSameValue(before, after, isDecimal) {
+  if (isDecimal && before != null && after != null) return Number(before) === Number(after);
+  return JSON.stringify(before) === JSON.stringify(after);
+}
+
+function diffSnapshots(before, after, decimalFields = new Set()) {
   const changedBefore = {};
   const changedAfter = {};
   const keys = new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})]);
@@ -36,7 +50,7 @@ function diffSnapshots(before, after) {
   for (const key of keys) {
     const beforeValue = before?.[key];
     const afterValue = after?.[key];
-    if (JSON.stringify(beforeValue) !== JSON.stringify(afterValue)) {
+    if (!isSameValue(beforeValue, afterValue, decimalFields.has(key))) {
       changedBefore[key] = beforeValue;
       changedAfter[key] = afterValue;
     }
@@ -56,8 +70,8 @@ function recordUpdate(
   { tenantId, entityType, entityId, performedBy, before, after },
   { transaction } = {}
 ) {
-  const diff = diffSnapshots(snapshot(before), snapshot(after));
-  if (Object.keys(diff.after).length === 0) return null;
+  const diff = diffSnapshots(snapshot(before), snapshot(after), decimalFieldsOf(after));
+  if (Object.keys(diff.after).every((field) => BOOKKEEPING_FIELDS.includes(field))) return null;
 
   return recordAudit(
     {

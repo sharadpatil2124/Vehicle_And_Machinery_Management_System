@@ -1,12 +1,41 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { fuelTransactionsApi } from '../../api/client';
+import { fuelTransactionsApi, listAll } from '../../api/client';
 import { Alert, Badge, Button, Input, Pagination, Select, Spinner, Table } from '../../components/ui';
 import Can from '../../components/Can';
 import DeleteWordModal from '../../components/DeleteWordModal';
+import PrintReportButton from '../../components/PrintReport';
 import { useAuth } from '../../context/AuthContext';
 import useSiteNames from '../../hooks/useSiteNames';
 import { SOURCE_LABEL, formatCurrency, formatDateOnly, formatLitres, formatNumber, formatTimeOnly, meterUnitLabel } from '../../config/fuel';
+
+function listParams(active, assetFilter) {
+  return {
+    search: active.search || undefined,
+    assetType: assetFilter?.assetType || active.assetType || undefined,
+    assetId: assetFilter?.assetId,
+    source: active.source || undefined,
+    siteId: active.siteId || undefined,
+    dateFrom: active.dateFrom || undefined,
+    dateTo: active.dateTo || undefined,
+    status: active.status || undefined,
+    sort: active.sort,
+  };
+}
+
+function appliedFilters(active, assetFilter, siteNames) {
+  const applied = [];
+  if (assetFilter) applied.push({ label: 'Asset', value: assetFilter.assetId });
+  if (active.search.trim()) applied.push({ label: 'Search', value: active.search.trim() });
+  const assetType = assetFilter?.assetType || active.assetType;
+  if (assetType) applied.push({ label: 'Asset type', value: assetType === 'VEHICLE' ? 'Vehicles' : 'Machinery' });
+  if (active.source) applied.push({ label: 'Source', value: SOURCE_LABEL[active.source] ?? active.source });
+  if (active.siteId) applied.push({ label: 'Site', value: siteNames[active.siteId] ?? active.siteId });
+  if (active.dateFrom) applied.push({ label: 'From', value: formatDateOnly(active.dateFrom) });
+  if (active.dateTo) applied.push({ label: 'To', value: formatDateOnly(active.dateTo) });
+  if (active.status === 'archived') applied.push({ label: 'Records', value: 'Deleted entries' });
+  return applied;
+}
 
 export default function FuelIssuesPage() {
   const location = useLocation();
@@ -44,18 +73,7 @@ export default function FuelIssuesPage() {
     async (activeFilters) => {
       setError(null);
       try {
-        const response = await fuelTransactionsApi.list({
-          search: activeFilters.search || undefined,
-          assetType: assetFilter?.assetType || activeFilters.assetType || undefined,
-          assetId: assetFilter?.assetId,
-          source: activeFilters.source || undefined,
-          siteId: activeFilters.siteId || undefined,
-          dateFrom: activeFilters.dateFrom || undefined,
-          dateTo: activeFilters.dateTo || undefined,
-          status: activeFilters.status || undefined,
-          page: activeFilters.page,
-          sort: activeFilters.sort,
-        });
+        const response = await fuelTransactionsApi.list({ ...listParams(activeFilters, assetFilter), page: activeFilters.page });
         setResult(response);
       } catch (err) {
         setError(err.message);
@@ -185,6 +203,46 @@ export default function FuelIssuesPage() {
     ? `/fuel/issues/new?assetType=${encodeURIComponent(assetFilter.assetType)}&assetId=${encodeURIComponent(assetFilter.assetId)}`
     : '/fuel/issues/new';
 
+  async function buildPrintReport() {
+    const { data } = await listAll(fuelTransactionsApi.list, listParams(filters, assetFilter));
+    const total = (pick) => data.reduce((sum, r) => sum + (Number(pick(r)) || 0), 0);
+
+    return {
+      title: 'Fuel Issues',
+      filters: [
+        ...appliedFilters(filters, assetFilter, siteNames),
+        {
+          label: 'Sorted by',
+          value: `${columns.find((c) => c.key === sortField).label}, ${sortDirection === 'asc' ? 'ascending' : 'descending'}`,
+        },
+      ],
+      summary: [
+        { label: 'Entries', value: formatNumber(data.length) },
+        { label: 'Total litres', value: formatLitres(total((r) => r.quantity)) },
+        { label: 'Total cost', value: formatCurrency(total((r) => r.amount)) },
+      ],
+      sections: [
+        {
+          title: 'Fuel issues',
+          rows: data,
+          getRowKey: (r) => r.id,
+          emptyMessage: 'No fuel issues match these filters.',
+          columns: [
+            { key: 'txnDate', label: 'Date & time', render: (r) => [formatDateOnly(r.txnDate), r.txnTime ? formatTimeOnly(r.txnTime) : null] },
+            { key: 'asset', label: 'Asset', render: (r) => [r.assetLabel ?? r.assetId, `${r.assetId} · ${r.assetType === 'VEHICLE' ? 'Vehicle' : 'Machinery'}`] },
+            { key: 'source', label: 'Source', render: (r) => [SOURCE_LABEL[r.source] ?? r.source, r.fuelStationName] },
+            { key: 'siteId', label: 'Site', render: (r) => siteNames[r.siteId] ?? '—' },
+            { key: 'fuelType', label: 'Fuel', render: (r) => r.fuelType ?? '—' },
+            { key: 'quantity', label: 'Litres', align: 'right', render: (r) => formatLitres(r.quantity) },
+            { key: 'pricePerLitre', label: 'Cost / L', align: 'right', render: (r) => formatCurrency(r.pricePerLitre) },
+            { key: 'amount', label: 'Cost', align: 'right', render: (r) => formatCurrency(r.amount) },
+            { key: 'meterReading', label: 'Meter', align: 'right', render: (r) => `${formatNumber(r.meterReading)} ${meterUnitLabel(r.meterType)}` },
+          ],
+        },
+      ],
+    };
+  }
+
   return (
     <div>
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -192,11 +250,14 @@ export default function FuelIssuesPage() {
           <h1 className="text-xl font-semibold text-steel-900">Fuel Issues</h1>
           <p className="mt-1 text-steel-500">Fuel filled into each vehicle and machine — from site stock or directly at a pump.</p>
         </div>
-        <Can resource="FUEL" action="CREATE">
-          <Button as={Link} to={newEntryPath}>
-            Issue fuel
-          </Button>
-        </Can>
+        <div className="flex flex-wrap items-center gap-2">
+          <PrintReportButton buildReport={buildPrintReport} onError={setError} />
+          <Can resource="FUEL" action="CREATE">
+            <Button as={Link} to={newEntryPath}>
+              Issue fuel
+            </Button>
+          </Can>
+        </div>
       </div>
 
       <Alert tone="success">{notice}</Alert>

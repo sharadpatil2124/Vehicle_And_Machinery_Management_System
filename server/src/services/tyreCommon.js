@@ -2,13 +2,14 @@ const { Transaction } = require('sequelize');
 
 const { Site, TyreStock, Vehicle, Machinery } = require('../models');
 const AppError = require('../utils/AppError');
+const { requireIdFilter } = require('../utils/validation');
 const { supervisorSiteId } = require('./siteAccess');
 const { roundMoney } = require('./fuelCommon');
 
 function siteFilter(auth, query) {
   const own = supervisorSiteId(auth);
   if (own !== null) return own;
-  return query.siteId ? Number(query.siteId) : null;
+  return query.siteId ? requireIdFilter(query.siteId, 'Site') : null;
 }
 
 function meterTypeFor(assetType, asset) {

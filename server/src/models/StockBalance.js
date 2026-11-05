@@ -7,7 +7,6 @@ class StockBalance extends Model {
       id: this.id,
       siteId: this.siteId,
       itemId: this.itemId,
-      storageLocationId: this.storageLocationId,
       quantityOnHand: Number(this.quantityOnHand),
       reservedQuantity: Number(this.reservedQuantity),
       availableQuantity: Number(this.availableQuantity),
@@ -39,11 +38,6 @@ StockBalance.init(
       type: DataTypes.INTEGER.UNSIGNED,
       allowNull: false,
       references: { model: 'items', key: 'id' },
-    },
-    storageLocationId: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: false,
-      references: { model: 'storage_locations', key: 'id' },
     },
     quantityOnHand: {
       type: DataTypes.DECIMAL(14, 3),

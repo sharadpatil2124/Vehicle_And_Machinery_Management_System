@@ -5,6 +5,7 @@ const { optionalText, requireNumber } = require('../utils/validation');
 const { recordCreate } = require('./audit.service');
 const { assertSiteAllowed } = require('./siteAccess');
 const { postInventoryTransaction } = require('./inventoryTransaction.service');
+const { assertItemsCanTakeStock } = require('./masterData');
 
 const REVERSAL_NUMBER_PREFIX = 'REV-';
 const REVERSAL_NUMBER_GENERATION_ATTEMPTS = 5;
@@ -48,34 +49,47 @@ function readReversalItemsInput(rawItems) {
 }
 
 async function createIssueReversal({ tenantId, auth, actingUserId, assetIssueId, payload }) {
-  const issue = await AssetIssue.findOne({
-    where: { tenantId, id: requireNumber(assetIssueId, 'Asset issue', { min: 1 }) },
-  });
-  if (!issue) throw AppError.notFound('Asset issue not found');
-  assertSiteAllowed(auth, issue.siteId, 'Asset issue not found');
-
-  const input = readReversalInput(payload);
-  const itemsInput = readReversalItemsInput(payload.items);
-
-  const lines = [];
-  for (const line of itemsInput) {
-    const issueItem = await AssetIssueItem.findOne({
-      where: { tenantId, id: line.assetIssueItemId, assetIssueId: issue.id },
+  const reversal = await sequelize.transaction(async (transaction) => {
+    // Checked under the row lock, so reversals of one issue take turns and can't return more than was issued.
+    const issue = await AssetIssue.findOne({
+      where: { tenantId, id: requireNumber(assetIssueId, 'Asset issue', { min: 1 }) },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
     });
-    if (!issueItem) throw AppError.badRequest('That item was not part of this issue');
+    if (!issue) throw AppError.notFound('Asset issue not found');
+    assertSiteAllowed(auth, issue.siteId, 'Asset issue not found');
 
-    const alreadyReversed = Number(issueItem.reversedQuantity);
-    const remaining = Number(issueItem.issuedQuantity) - alreadyReversed;
-    if (line.reversedQuantity > remaining) {
-      throw AppError.badRequest(
-        `Cannot reverse ${line.reversedQuantity} — only ${remaining} of this line is left to reverse`
-      );
+    const input = readReversalInput(payload);
+    const itemsInput = readReversalItemsInput(payload.items);
+
+    const lines = [];
+    const lineIdsSeen = new Set();
+    for (const [index, line] of itemsInput.entries()) {
+      if (lineIdsSeen.has(line.assetIssueItemId)) {
+        throw AppError.badRequest(`Item ${index + 1}: this line is already on this reversal`);
+      }
+      lineIdsSeen.add(line.assetIssueItemId);
+
+      const issueItem = await AssetIssueItem.findOne({
+        where: { tenantId, id: line.assetIssueItemId, assetIssueId: issue.id },
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+      if (!issueItem) throw AppError.badRequest('That item was not part of this issue');
+
+      const alreadyReversed = Number(issueItem.reversedQuantity);
+      const remaining = Number(issueItem.issuedQuantity) - alreadyReversed;
+      if (line.reversedQuantity > remaining) {
+        throw AppError.badRequest(
+          `Cannot reverse ${line.reversedQuantity} — only ${remaining} of this line is left to reverse`
+        );
+      }
+
+      lines.push({ issueItem, reversedQuantity: line.reversedQuantity });
     }
 
-    lines.push({ issueItem, reversedQuantity: line.reversedQuantity });
-  }
+    await assertItemsCanTakeStock(tenantId, lines.map(({ issueItem }) => issueItem.itemId), transaction);
 
-  const reversal = await sequelize.transaction(async (transaction) => {
     let created;
     for (let attempt = 1; attempt <= REVERSAL_NUMBER_GENERATION_ATTEMPTS; attempt += 1) {
       const reversalNumber = await generateReversalNumber(tenantId, { transaction });
@@ -108,7 +122,6 @@ async function createIssueReversal({ tenantId, auth, actingUserId, assetIssueId,
         tenantId,
         siteId: issue.siteId,
         itemId: issueItem.itemId,
-        storageLocationId: issueItem.storageLocationId,
         uomId: issueItem.uomId,
         transactionType: 'ISSUE_REVERSAL',
         direction: 'IN',

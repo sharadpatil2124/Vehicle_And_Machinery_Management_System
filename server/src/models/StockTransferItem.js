@@ -7,8 +7,6 @@ class StockTransferItem extends Model {
       id: this.id,
       stockTransferId: this.stockTransferId,
       itemId: this.itemId,
-      fromStorageLocationId: this.fromStorageLocationId,
-      toStorageLocationId: this.toStorageLocationId,
       uomId: this.uomId,
       quantity: Number(this.quantity),
       unitCost: Number(this.unitCost),
@@ -42,16 +40,6 @@ StockTransferItem.init(
       type: DataTypes.INTEGER.UNSIGNED,
       allowNull: false,
       references: { model: 'items', key: 'id' },
-    },
-    fromStorageLocationId: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: false,
-      references: { model: 'storage_locations', key: 'id' },
-    },
-    toStorageLocationId: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: false,
-      references: { model: 'storage_locations', key: 'id' },
     },
     uomId: {
       type: DataTypes.INTEGER.UNSIGNED,

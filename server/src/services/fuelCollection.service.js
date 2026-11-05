@@ -2,7 +2,7 @@ const { Op, Transaction } = require('sequelize');
 
 const { sequelize, FuelCollection, FuelCollectionContainer, FuelStation, Vehicle, Site } = require('../models');
 const AppError = require('../utils/AppError');
-const { requireText, optionalText, requireNumber, optionalNumber } = require('../utils/validation');
+const { requireText, optionalText, requireNumber, optionalNumber, requireIdFilter } = require('../utils/validation');
 const { parseListQuery, parseEnumFilter, containsPattern } = require('../utils/queryOptions');
 const { buildListResponse } = require('../utils/listResponse');
 const { createTenantScopedRepository } = require('./tenantScopedRepository');
@@ -120,7 +120,7 @@ async function listFuelCollections({ tenantId, auth, query }) {
   if (status) where.status = status;
   const fuelType = parseEnumFilter(query.fuelType, FuelCollection.FUEL_TYPES, 'Fuel type');
   if (fuelType) where.fuelType = fuelType;
-  if (query.fuelStationId) where.fuelStationId = Number(query.fuelStationId);
+  if (query.fuelStationId) where.fuelStationId = requireIdFilter(query.fuelStationId, 'Fuel station');
 
   if (query.carrierAssetId) {
     const carrier = await Vehicle.findOne({ where: { tenantId, assetId: String(query.carrierAssetId) }, attributes: ['id'] });

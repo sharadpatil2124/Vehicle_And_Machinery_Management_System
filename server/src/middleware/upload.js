@@ -14,13 +14,16 @@ function fileFilter(_req, file, callback) {
   callback(null, true);
 }
 
+// Browsers send file names as UTF-8; multer would otherwise read them as Latin-1.
 const singleDocumentUpload = multer({
+  defParamCharset: 'utf8',
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_FILE_SIZE_BYTES, files: 1 },
   fileFilter,
 });
 
 const assetCreationUpload = multer({
+  defParamCharset: 'utf8',
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_FILE_SIZE_BYTES, files: AssetDocument.DOC_TYPES.length },
   fileFilter,
@@ -31,6 +34,7 @@ const MAX_LOGO_SIZE_BYTES = 2 * 1024 * 1024;
 const LOGO_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 
 const logoUpload = multer({
+  defParamCharset: 'utf8',
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_LOGO_SIZE_BYTES, files: 1 },
   fileFilter(_req, file, callback) {

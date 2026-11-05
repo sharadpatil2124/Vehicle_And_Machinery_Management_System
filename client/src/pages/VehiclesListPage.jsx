@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { vehiclesApi } from '../api/client';
 import { Alert, Badge, Button, Input, Pagination, Select, Spinner, Table } from '../components/ui';
 import Can from '../components/Can';
+import { useAuth } from '../context/AuthContext';
 import useSiteNames from '../hooks/useSiteNames';
 
 const STATUS_OPTIONS = [
@@ -16,9 +17,12 @@ function ServiceDueBadge({ vehicle }) {
 }
 
 export default function VehiclesListPage() {
+  const { role } = useAuth();
+  const isAdmin = role === 'admin';
   const [filters, setFilters] = useState({
     search: '',
     status: '',
+    siteId: '',
     page: 1,
     sort: 'createdAt:desc',
   });
@@ -33,11 +37,12 @@ export default function VehiclesListPage() {
       const response = await vehiclesApi.list({
         search: activeFilters.search || undefined,
         status: activeFilters.status || undefined,
+        siteId: activeFilters.siteId || undefined,
         page: activeFilters.page,
         sort: activeFilters.sort,
       });
       setResult(response);
-      if (!activeFilters.search) setOverallTotal(response.pagination.total);
+      if (!activeFilters.search && !activeFilters.siteId) setOverallTotal(response.pagination.total);
     } catch (err) {
       setError(err.message);
     }
@@ -123,7 +128,7 @@ export default function VehiclesListPage() {
 
       {error && <Alert tone="error">{error}</Alert>}
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-2">
+      <div className={`mb-4 grid gap-3 sm:grid-cols-2 ${isAdmin ? 'lg:grid-cols-3' : ''}`}>
         <Input
           placeholder="Search asset ID, registration, model..."
           value={filters.search}
@@ -136,6 +141,16 @@ export default function VehiclesListPage() {
             </option>
           ))}
         </Select>
+        {isAdmin && (
+          <Select aria-label="Site" value={filters.siteId} onChange={(e) => updateFilter('siteId', e.target.value)}>
+            <option value="">All sites</option>
+            {Object.entries(siteNames).map(([siteId, name]) => (
+              <option key={siteId} value={siteId} data-added={siteId}>
+                {name}
+              </option>
+            ))}
+          </Select>
+        )}
       </div>
 
       <div className="rounded border border-steel-200 bg-surface">

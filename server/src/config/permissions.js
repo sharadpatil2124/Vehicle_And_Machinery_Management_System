@@ -18,10 +18,12 @@ const standardModule = Object.freeze({
 const PERMISSIONS = Object.freeze({
   VEHICLE: standardModule,
   MACHINERY: standardModule,
-  MAINTENANCE: standardModule,
+  // Correcting a saved cost is the Admin's. A Supervisor enters it once, when finishing the work.
+  MAINTENANCE: Object.freeze({ ...standardModule, UPDATE_COST: ADMIN_ONLY }),
   SERVICE: standardModule,
   TYRE: standardModule,
   FUEL: standardModule,
+  ADBLUE: standardModule,
   COMPLIANCE: standardModule,
 
   SITE: Object.freeze({
@@ -40,7 +42,6 @@ const PERMISSIONS = Object.freeze({
   UOM: Object.freeze({ ...standardModule, CREATE: ADMIN_ONLY, UPDATE: ADMIN_ONLY }),
   ITEM: Object.freeze({ ...standardModule, CREATE: ADMIN_ONLY, UPDATE: ADMIN_ONLY }),
   SUPPLIER: Object.freeze({ ...standardModule, CREATE: ADMIN_ONLY, UPDATE: ADMIN_ONLY }),
-  STORAGE_LOCATION: Object.freeze({ ...standardModule, CREATE: ADMIN_ONLY, UPDATE: ADMIN_ONLY }),
 
   PURCHASE: Object.freeze({ CREATE: BOTH, READ: BOTH, UPDATE: BOTH, RECEIVE: BOTH }),
 

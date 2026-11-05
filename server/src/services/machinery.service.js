@@ -96,7 +96,7 @@ function readMachineryInput(payload, { partial = false } = {}) {
     input.year =
       payload.year === undefined || payload.year === null || payload.year === ''
         ? null
-        : requireNumber(payload.year, 'Year', { min: 1900 });
+        : requireNumber(payload.year, 'Year', { min: 1900, max: 2100 });
   }
   if (!partial || payload.currentHours !== undefined) {
     input.currentHours = requireNumber(payload.currentHours, 'Current hours', { min: 0 });
@@ -220,16 +220,15 @@ async function createMachine({ tenantId, auth, actingUserId, payload, files }) {
         transaction,
       });
 
-      savedKeys.push(
-        ...(await createDocumentsForNewAsset({
-          tenantId,
-          assetType: 'MACHINERY',
-          assetId: created.assetId,
-          actingUserId,
-          files,
-          transaction,
-        }))
-      );
+      await createDocumentsForNewAsset({
+        tenantId,
+        assetType: 'MACHINERY',
+        assetId: created.assetId,
+        actingUserId,
+        files,
+        savedKeys,
+        transaction,
+      });
 
       return created;
     });
@@ -267,28 +266,27 @@ async function updateMachine({ tenantId, auth, actingUserId, id, payload }) {
   if (siteInput.currentSiteId != null && siteInput.currentSiteId !== machine.currentSiteId) {
     await assertSiteAssignable(tenantId, siteInput.currentSiteId);
   }
-  const compliance = payload.compliance ?? {};
-
-  const nextCurrentHours =
-    input.currentHours !== undefined
-      ? assertMeterNotDecreasing(machine.currentHours, input.currentHours, 'Hours')
-      : Number(machine.currentHours);
-  const nextIntervalHours =
-    input.serviceIntervalHours !== undefined
-      ? input.serviceIntervalHours
-      : Number(machine.serviceIntervalHours);
-
-  const nextServiceHours =
-    input.serviceIntervalHours !== undefined
-      ? nextCurrentHours + nextIntervalHours
-      : Number(machine.nextServiceHours);
+  const compliance = parseComplianceField(payload.compliance);
 
   const updated = await sequelize.transaction(async (transaction) => {
-    // Re-read under a row lock so simultaneous saves see each other's site change.
+    // Re-read under a row lock so simultaneous saves see each other's site and meter changes.
     const current = await repo.findByPk(tenantId, machine.id, { transaction, lock: transaction.LOCK.UPDATE });
     const before = current.toJSON();
     const previousSiteId = current.currentSiteId;
     const nextSiteId = 'currentSiteId' in siteInput ? siteInput.currentSiteId : previousSiteId;
+
+    const nextCurrentHours =
+      input.currentHours !== undefined
+        ? assertMeterNotDecreasing(current.currentHours, input.currentHours, 'Hours')
+        : Number(current.currentHours);
+    const nextIntervalHours =
+      input.serviceIntervalHours !== undefined
+        ? input.serviceIntervalHours
+        : Number(current.serviceIntervalHours);
+    const nextServiceHours =
+      nextIntervalHours !== Number(current.serviceIntervalHours)
+        ? nextCurrentHours + nextIntervalHours
+        : Number(current.nextServiceHours);
 
     await current.update(
       {

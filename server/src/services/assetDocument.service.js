@@ -1,3 +1,5 @@
+const path = require('node:path');
+
 const { sequelize, AssetDocument, User } = require('../models');
 const AppError = require('../utils/AppError');
 const { resolveAsset } = require('./asset.service');
@@ -5,6 +7,16 @@ const { recordCreate, recordUpdate } = require('./audit.service');
 const storage = require('./storage.service');
 
 const { DOC_TYPES } = AssetDocument;
+
+const MAX_FILENAME_LENGTH = 255;
+
+// The original name is only a label for the download, so an over-long one is shortened, keeping its extension.
+function shortenedFilename(filename) {
+  const characters = [...filename];
+  if (characters.length <= MAX_FILENAME_LENGTH) return filename;
+  const extension = [...path.extname(filename)];
+  return [...characters.slice(0, MAX_FILENAME_LENGTH - extension.length), ...extension].join('');
+}
 
 function getMandatoryDocTypes(assetType) {
   return assetType === 'VEHICLE' ? ['RC'] : [];
@@ -59,7 +71,7 @@ async function uploadDocument({ tenantId, auth, assetType, assetId, docType, act
 
         await existing.update(
           {
-            originalFilename: file.originalname,
+            originalFilename: shortenedFilename(file.originalname),
             storedFilename: key,
             mimeType: file.mimetype,
             fileSize: file.size,
@@ -93,7 +105,7 @@ async function uploadDocument({ tenantId, auth, assetType, assetId, docType, act
           assetType,
           assetId,
           docType,
-          originalFilename: file.originalname,
+          originalFilename: shortenedFilename(file.originalname),
           storedFilename: key,
           mimeType: file.mimetype,
           fileSize: file.size,
@@ -129,16 +141,15 @@ async function getDocumentForDownload({ tenantId, auth, assetType, assetId, docT
   return doc;
 }
 
-async function createDocumentsForNewAsset({ tenantId, assetType, assetId, actingUserId, files, transaction }) {
-  const savedKeys = [];
-
+// savedKeys is the caller's list, filled as each file is written, so the caller can clean up after a failure part-way.
+async function createDocumentsForNewAsset({ tenantId, assetType, assetId, actingUserId, files, savedKeys, transaction }) {
   for (const docType of DOC_TYPES) {
     const file = files?.[docType];
     if (!file) continue;
 
     const key = storage.buildKey(tenantId, assetType, assetId, docType, file.originalname);
-    await storage.saveFile(key, file.buffer);
     savedKeys.push(key);
+    await storage.saveFile(key, file.buffer);
 
     const document = await AssetDocument.create(
       {
@@ -146,7 +157,7 @@ async function createDocumentsForNewAsset({ tenantId, assetType, assetId, acting
         assetType,
         assetId,
         docType,
-        originalFilename: file.originalname,
+        originalFilename: shortenedFilename(file.originalname),
         storedFilename: key,
         mimeType: file.mimetype,
         fileSize: file.size,
@@ -160,8 +171,6 @@ async function createDocumentsForNewAsset({ tenantId, assetType, assetId, acting
       { transaction }
     );
   }
-
-  return savedKeys;
 }
 
 module.exports = {

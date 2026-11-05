@@ -13,7 +13,6 @@ const ItemCategory = require('./ItemCategory');
 const UnitOfMeasure = require('./UnitOfMeasure');
 const Item = require('./Item');
 const Supplier = require('./Supplier');
-const StorageLocation = require('./StorageLocation');
 const Purchase = require('./Purchase');
 const PurchaseItem = require('./PurchaseItem');
 const InventoryTransaction = require('./InventoryTransaction');
@@ -40,6 +39,8 @@ const TyrePurchaseItem = require('./TyrePurchaseItem');
 const TyreStock = require('./TyreStock');
 const TyreFitment = require('./TyreFitment');
 const Maintenance = require('./Maintenance');
+const AdBluePurchase = require('./AdBluePurchase');
+const AdBlueFilling = require('./AdBlueFilling');
 const { ASSET_TYPES, registerAssetModel } = require('../services/asset.service');
 
 Tenant.hasMany(User, { foreignKey: 'tenantId', as: 'users' });
@@ -114,13 +115,6 @@ Supplier.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
 Supplier.belongsTo(User, { foreignKey: 'updatedBy', as: 'updater' });
 Supplier.belongsTo(User, { foreignKey: 'archivedBy', as: 'archiver' });
 
-Tenant.hasMany(StorageLocation, { foreignKey: 'tenantId', as: 'storageLocations' });
-StorageLocation.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
-Site.hasMany(StorageLocation, { foreignKey: 'siteId', as: 'storageLocations' });
-StorageLocation.belongsTo(Site, { foreignKey: 'siteId', as: 'site' });
-StorageLocation.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
-StorageLocation.belongsTo(User, { foreignKey: 'updatedBy', as: 'updater' });
-StorageLocation.belongsTo(User, { foreignKey: 'archivedBy', as: 'archiver' });
 
 Tenant.hasMany(Purchase, { foreignKey: 'tenantId', as: 'purchases' });
 Purchase.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
@@ -133,7 +127,6 @@ Purchase.belongsTo(User, { foreignKey: 'updatedBy', as: 'updater' });
 Purchase.hasMany(PurchaseItem, { foreignKey: 'purchaseId', as: 'items' });
 PurchaseItem.belongsTo(Purchase, { foreignKey: 'purchaseId', as: 'purchase' });
 PurchaseItem.belongsTo(Item, { foreignKey: 'itemId', as: 'item' });
-PurchaseItem.belongsTo(StorageLocation, { foreignKey: 'storageLocationId', as: 'storageLocation' });
 PurchaseItem.belongsTo(UnitOfMeasure, { foreignKey: 'uomId', as: 'uom' });
 
 Tenant.hasMany(InventoryTransaction, { foreignKey: 'tenantId', as: 'inventoryTransactions' });
@@ -141,7 +134,6 @@ InventoryTransaction.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' })
 Site.hasMany(InventoryTransaction, { foreignKey: 'siteId', as: 'inventoryTransactions' });
 InventoryTransaction.belongsTo(Site, { foreignKey: 'siteId', as: 'site' });
 InventoryTransaction.belongsTo(Item, { foreignKey: 'itemId', as: 'item' });
-InventoryTransaction.belongsTo(StorageLocation, { foreignKey: 'storageLocationId', as: 'storageLocation' });
 InventoryTransaction.belongsTo(UnitOfMeasure, { foreignKey: 'uomId', as: 'uom' });
 InventoryTransaction.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
 InventoryTransaction.belongsTo(InventoryTransaction, {
@@ -154,7 +146,6 @@ StockBalance.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
 Site.hasMany(StockBalance, { foreignKey: 'siteId', as: 'stockBalances' });
 StockBalance.belongsTo(Site, { foreignKey: 'siteId', as: 'site' });
 StockBalance.belongsTo(Item, { foreignKey: 'itemId', as: 'item' });
-StockBalance.belongsTo(StorageLocation, { foreignKey: 'storageLocationId', as: 'storageLocation' });
 
 Tenant.hasMany(StockBatch, { foreignKey: 'tenantId', as: 'stockBatches' });
 StockBatch.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
@@ -173,7 +164,6 @@ AssetIssue.belongsTo(User, { foreignKey: 'issuedByUserId', as: 'issuedByUser' })
 AssetIssue.hasMany(AssetIssueItem, { foreignKey: 'assetIssueId', as: 'items' });
 AssetIssueItem.belongsTo(AssetIssue, { foreignKey: 'assetIssueId', as: 'assetIssue' });
 AssetIssueItem.belongsTo(Item, { foreignKey: 'itemId', as: 'item' });
-AssetIssueItem.belongsTo(StorageLocation, { foreignKey: 'storageLocationId', as: 'storageLocation' });
 AssetIssueItem.belongsTo(UnitOfMeasure, { foreignKey: 'uomId', as: 'uom' });
 AssetIssueItem.belongsTo(InventoryTransaction, {
   foreignKey: 'inventoryTransactionId',
@@ -201,7 +191,6 @@ StockAdjustment.belongsTo(User, { foreignKey: 'requestedBy', as: 'requester' });
 StockAdjustment.hasMany(StockAdjustmentItem, { foreignKey: 'adjustmentId', as: 'items' });
 StockAdjustmentItem.belongsTo(StockAdjustment, { foreignKey: 'adjustmentId', as: 'adjustment' });
 StockAdjustmentItem.belongsTo(Item, { foreignKey: 'itemId', as: 'item' });
-StockAdjustmentItem.belongsTo(StorageLocation, { foreignKey: 'storageLocationId', as: 'storageLocation' });
 StockAdjustmentItem.belongsTo(UnitOfMeasure, { foreignKey: 'uomId', as: 'uom' });
 StockAdjustmentItem.belongsTo(InventoryTransaction, {
   foreignKey: 'inventoryTransactionId',
@@ -220,8 +209,6 @@ StockTransfer.belongsTo(User, { foreignKey: 'receivedBy', as: 'receiver' });
 StockTransfer.hasMany(StockTransferItem, { foreignKey: 'stockTransferId', as: 'items' });
 StockTransferItem.belongsTo(StockTransfer, { foreignKey: 'stockTransferId', as: 'stockTransfer' });
 StockTransferItem.belongsTo(Item, { foreignKey: 'itemId', as: 'item' });
-StockTransferItem.belongsTo(StorageLocation, { foreignKey: 'fromStorageLocationId', as: 'fromStorageLocation' });
-StockTransferItem.belongsTo(StorageLocation, { foreignKey: 'toStorageLocationId', as: 'toStorageLocation' });
 StockTransferItem.belongsTo(UnitOfMeasure, { foreignKey: 'uomId', as: 'uom' });
 StockTransferItem.belongsTo(InventoryTransaction, {
   foreignKey: 'transferOutTransactionId',
@@ -268,6 +255,11 @@ Tenant.hasMany(Maintenance, { foreignKey: 'tenantId', as: 'maintenance' });
 Maintenance.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
 Maintenance.belongsTo(Site, { foreignKey: 'siteId', as: 'site' });
 
+Tenant.hasMany(AdBluePurchase, { foreignKey: 'tenantId', as: 'adBluePurchases' });
+AdBluePurchase.belongsTo(Site, { foreignKey: 'siteId', as: 'site' });
+Tenant.hasMany(AdBlueFilling, { foreignKey: 'tenantId', as: 'adBlueFillings' });
+AdBlueFilling.belongsTo(Site, { foreignKey: 'siteId', as: 'site' });
+
 module.exports = {
   sequelize,
   Tenant,
@@ -284,7 +276,6 @@ module.exports = {
   UnitOfMeasure,
   Item,
   Supplier,
-  StorageLocation,
   Purchase,
   PurchaseItem,
   InventoryTransaction,
@@ -311,4 +302,6 @@ module.exports = {
   TyreStock,
   TyreFitment,
   Maintenance,
+  AdBluePurchase,
+  AdBlueFilling,
 };

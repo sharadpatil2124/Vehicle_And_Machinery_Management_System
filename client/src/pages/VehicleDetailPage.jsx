@@ -121,6 +121,13 @@ export default function VehicleDetailPage() {
             >
               Compliance
             </Button>
+            <Button
+              as={Link}
+              to={`/maintenance/history?assetType=VEHICLE&assetId=${encodeURIComponent(vehicle.assetId)}`}
+              variant="secondary"
+            >
+              Maintenance history
+            </Button>
             <Can resource="VEHICLE" action="UPDATE">
               <Button as={Link} to={`/vehicles/${vehicle.id}/edit`} variant="secondary">
                 Edit

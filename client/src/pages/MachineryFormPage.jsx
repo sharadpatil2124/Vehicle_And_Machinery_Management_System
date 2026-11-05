@@ -53,6 +53,7 @@ export default function MachineryFormPage() {
   const [compliance, setCompliance] = useState(EMPTY_COMPLIANCE);
   const [documentFiles, setDocumentFiles] = useState({});
   const [siteOptions, setSiteOptions] = useState([]);
+  const [archivedSite, setArchivedSite] = useState(null);
   const [loading, setLoading] = useState(isEdit);
   const [loadError, setLoadError] = useState(null);
   const [submitError, setSubmitError] = useState(null);
@@ -66,6 +67,13 @@ export default function MachineryFormPage() {
       .get(id)
       .then(async (response) => {
         setForm(toFormValues(response.data));
+        // The site list holds active sites only, so a site archived since the machine arrived needs adding.
+        if (response.data.currentSiteId) {
+          sitesApi
+            .get(response.data.currentSiteId)
+            .then((site) => setArchivedSite(site.data.status === 'archived' ? site.data : null))
+            .catch(() => {});
+        }
         latestRcpl.current = response.data.rcpl ?? '';
         setOriginalServiceIntervalHours(response.data.serviceIntervalHours);
         const complianceResponse = await complianceApi.list('MACHINERY', response.data.assetId);
@@ -116,6 +124,14 @@ export default function MachineryFormPage() {
 
     const complianceErrors = getComplianceDateErrors(compliance);
     if (Object.values(complianceErrors).some(Boolean)) {
+      return;
+    }
+
+    const blankMeter = [['currentHours', 'Current hours'], ['serviceIntervalHours', 'Service interval (hours)']].find(
+      ([field]) => String(form[field]).trim() === ''
+    );
+    if (blankMeter) {
+      setSubmitError(`${blankMeter[1]} is required.`);
       return;
     }
 
@@ -297,6 +313,11 @@ export default function MachineryFormPage() {
                   disabled={!canChooseSite}
                 >
                   <option value="">Unassigned</option>
+                  {archivedSite && (
+                    <option value={archivedSite.id} data-added={archivedSite.id}>
+                      {archivedSite.name} (archived)
+                    </option>
+                  )}
                   {siteOptions.map((site) => (
                     <option key={site.id} value={site.id} data-added={site.id}>
                       {site.name}

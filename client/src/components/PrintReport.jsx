@@ -9,6 +9,15 @@ function fileDate(date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+function PrintCell({ value }) {
+  if (!Array.isArray(value)) return value;
+  return value.filter(Boolean).map((line, index) => (
+    <span key={index} className={index ? 'block text-neutral-600' : 'block'}>
+      {line}
+    </span>
+  ));
+}
+
 function PrintDocument({ report, onDone }) {
   const { user, organization } = useAuth();
   const { logoUrl } = useBranding();
@@ -100,7 +109,7 @@ function PrintDocument({ report, onDone }) {
                   <tr key={section.getRowKey(row)} className="break-inside-avoid border-b border-neutral-300">
                     {section.columns.map((column) => (
                       <td key={column.key} className={`px-1.5 py-1 align-top ${column.align === 'right' ? 'text-right tabular-nums' : ''}`}>
-                        {column.render(row)}
+                        <PrintCell value={column.render(row)} />
                       </td>
                     ))}
                   </tr>

@@ -9,6 +9,7 @@ const { createTenantScopedRepository } = require('./tenantScopedRepository');
 const { archiveEntity, restoreEntity } = require('./archive.service');
 const { recordCreate, recordUpdate } = require('./audit.service');
 const { nextSequentialCode, isCodeCollision } = require('./codeGenerator');
+const { assertEditable, assertNameAvailable } = require('./masterData');
 
 const repo = createTenantScopedRepository(UnitOfMeasure);
 
@@ -17,6 +18,8 @@ const DEFAULT_SORT = 'uomName:asc';
 
 const UOM_CODE_PREFIX = 'UOM-';
 const UOM_CODE_GENERATION_ATTEMPTS = 5;
+
+const NAME_RULE = { model: UnitOfMeasure, field: 'uomName', codePrefix: UOM_CODE_PREFIX, label: 'A unit' };
 
 function toPublic(uom) {
   return uom.toPublicJSON();
@@ -61,6 +64,8 @@ async function createUnitOfMeasure({ tenantId, actingUserId, payload }) {
   const input = readUnitOfMeasureInput(payload);
 
   const uom = await sequelize.transaction(async (transaction) => {
+    await assertNameAvailable(NAME_RULE, { tenantId, name: input.uomName, transaction });
+
     let created;
 
     for (let attempt = 1; attempt <= UOM_CODE_GENERATION_ATTEMPTS; attempt += 1) {
@@ -90,14 +95,17 @@ async function createUnitOfMeasure({ tenantId, actingUserId, payload }) {
 }
 
 async function updateUnitOfMeasure({ tenantId, actingUserId, id, payload }) {
-  const uom = await repo.findByPk(tenantId, id);
-  if (!uom) throw AppError.notFound('Unit of measure not found');
-
-  const input = readUnitOfMeasureInput(payload, { partial: true });
-
-  const before = uom.toJSON();
-
   const updated = await sequelize.transaction(async (transaction) => {
+    const uom = await repo.findByPk(tenantId, id, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!uom) throw AppError.notFound('Unit of measure not found');
+    assertEditable(uom, 'unit');
+
+    const input = readUnitOfMeasureInput(payload, { partial: true });
+    if (input.uomName !== undefined && input.uomName !== uom.uomName) {
+      await assertNameAvailable(NAME_RULE, { tenantId, name: input.uomName, excludeId: uom.id, transaction });
+    }
+
+    const before = uom.toJSON();
     await uom.update({ ...input, updatedBy: actingUserId }, { transaction });
 
     await recordUpdate(
@@ -142,6 +150,8 @@ async function restoreUnitOfMeasure({ tenantId, actingUserId, id }) {
     tenantId,
     id,
     performedBy: actingUserId,
+    dependencyCheck: (uom, { transaction }) =>
+      assertNameAvailable(NAME_RULE, { tenantId, name: uom.uomName, excludeId: uom.id, transaction }),
   });
 
   return toPublic(restored);

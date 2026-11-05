@@ -172,7 +172,6 @@ async function postInventoryTransaction({
   tenantId,
   siteId,
   itemId,
-  storageLocationId,
   uomId,
   transactionType,
   direction,
@@ -194,8 +193,11 @@ async function postInventoryTransaction({
     throw new Error('postInventoryTransaction: quantity must be a positive number');
   }
 
+  // Reserving the number first makes every posting in an organization lock in one order: number, then stock.
+  let transactionNumber = await generateTransactionNumber(tenantId, { transaction });
+
   let balance = await StockBalance.findOne({
-    where: { tenantId, siteId, itemId, storageLocationId },
+    where: { tenantId, siteId, itemId },
     transaction,
     lock: Transaction.LOCK.UPDATE,
   });
@@ -211,7 +213,7 @@ async function postInventoryTransaction({
     throw AppError.conflict('This would take stock below zero — not enough quantity on hand.');
   }
 
-  const key = { siteId, itemId, storageLocationId };
+  const key = { siteId, itemId };
   await alignBatchesWithBalance({ tenantId, key, quantityOnHand: existingQuantity, averageCost: existingAverageCost, transaction });
   let pieces;
 
@@ -252,21 +254,20 @@ async function postInventoryTransaction({
     await balance.update(balanceFields, { transaction });
   } else {
     balance = await StockBalance.create(
-      { tenantId, siteId, itemId, storageLocationId, reservedQuantity: 0, ...balanceFields },
+      { tenantId, siteId, itemId, reservedQuantity: 0, ...balanceFields },
       { transaction }
     );
   }
 
   let created;
   for (let attempt = 1; attempt <= TRANSACTION_NUMBER_GENERATION_ATTEMPTS; attempt += 1) {
-    const transactionNumber = await generateTransactionNumber(tenantId, { transaction });
+    if (attempt > 1) transactionNumber = await generateTransactionNumber(tenantId, { transaction });
     try {
       created = await InventoryTransaction.create(
         {
           tenantId,
           siteId,
           itemId,
-          storageLocationId,
           transactionNumber,
           transactionType,
           quantity,

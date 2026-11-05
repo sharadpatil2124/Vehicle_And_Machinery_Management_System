@@ -49,7 +49,6 @@ export default function InventoryHistoryCard({ assetType, assetId }) {
     },
     { key: 'issueNumber', label: 'Issue', render: (r) => (r.first ? r.issue.issueNumber : '') },
     { key: 'itemName', label: 'Item', render: (r) => r.line.itemName ?? '—' },
-    { key: 'locationName', label: 'Storage location', render: (r) => r.line.locationName ?? '—' },
     { key: 'issuedQuantity', label: 'Issued', render: (r) => <span className="tabular-nums">{formatQuantity(r.line.issuedQuantity)}</span> },
     {
       key: 'reversedQuantity',

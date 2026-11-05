@@ -173,7 +173,7 @@ async function cancelTyrePurchase({ tenantId, auth, actingUserId, id, confirmati
       const stock = await lockStock(tenantId, purchase.siteId, tyreTypeId, transaction);
       if (Number(stock.newQuantity) < entry.quantity) {
         throw AppError.conflict(
-          "Some tyres from this purchase have already been fitted, so it can't be cancelled. Remove those fittings first, or keep the purchase."
+          "Some tyres from this purchase have already been fitted, so it can't be cancelled."
         );
       }
       const newQuantity = Number(stock.newQuantity) - entry.quantity;

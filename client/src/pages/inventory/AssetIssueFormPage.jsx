@@ -1,16 +1,31 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { assetIssuesApi, vehiclesApi, machineryApi, itemsApi, storageLocationsApi, listAll } from '../../api/client';
+import { assetIssuesApi, vehiclesApi, machineryApi, itemsApi, stockApi, listAll } from '../../api/client';
 import { Alert, Button, Card, Field, Input, Select, Spinner } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
 import useSiteNames from '../../hooks/useSiteNames';
-import useItemIdsInStock from '../../hooks/useItemIdsInStock';
-import { machineryLabel } from '../../config/fuel';
+import { formatCurrency, machineryLabel } from '../../config/fuel';
 
-const EMPTY_LINE = { itemId: '', storageLocationId: '', issuedQuantity: '' };
+const EMPTY_LINE = { itemId: '', issuedQuantity: '' };
 
 const LINE_GRID =
-  'grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-[1.5rem_minmax(0,2.2fr)_minmax(0,1.6fr)_minmax(0,1fr)_5rem] sm:items-center sm:gap-y-0';
+  'grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-[1.5rem_minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_5rem] sm:items-center sm:gap-y-0';
+
+// Value of issuing `quantity` from this stock: oldest batches go first, the same way the server prices the issue.
+// Returns null when the quantity is empty or more than what is in stock.
+function issueValue(balance, quantity) {
+  if (!balance || !(quantity > 0)) return null;
+  let left = quantity;
+  let total = 0;
+  for (const batch of balance.batches ?? []) {
+    if (left <= 0) break;
+    const take = Math.min(batch.remainingQuantity, left);
+    total += take * batch.unitCost;
+    left -= take;
+  }
+  if (left > 1e-9) return null;
+  return Math.round((total + Number.EPSILON) * 100) / 100;
+}
 
 function CellLabel({ htmlFor, required = false, children }) {
   return (
@@ -44,16 +59,35 @@ export default function AssetIssueFormPage() {
   const [vehicles, setVehicles] = useState(null);
   const [machinery, setMachinery] = useState(null);
   const [items, setItems] = useState([]);
-  const [storageLocations, setStorageLocations] = useState([]);
   const [submitError, setSubmitError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const itemIdsInStock = useItemIdsInStock(form.siteId);
+  const [balances, setBalances] = useState([]);
+
+  useEffect(() => {
+    if (!form.siteId) {
+      setBalances([]);
+      return undefined;
+    }
+    let cancelled = false;
+    listAll(stockApi.balances, { siteId: form.siteId })
+      .then((r) => {
+        if (!cancelled) setBalances(r.data.filter((b) => b.availableQuantity > 0));
+      })
+      .catch(() => {
+        if (!cancelled) setBalances([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [form.siteId]);
+
+  const balanceByItemId = useMemo(() => new Map(balances.map((b) => [b.itemId, b])), [balances]);
+  const itemIdsInStock = useMemo(() => new Set(balances.map((b) => b.itemId)), [balances]);
 
   useEffect(() => {
     listAll(vehiclesApi.list).then((r) => setVehicles(r.data)).catch(() => setVehicles([]));
     listAll(machineryApi.list, { sort: 'rcpl:asc' }).then((r) => setMachinery(r.data)).catch(() => setMachinery([]));
     listAll(itemsApi.list).then((r) => setItems(r.data)).catch(() => setItems([]));
-    listAll(storageLocationsApi.list).then((r) => setStorageLocations(r.data)).catch(() => setStorageLocations([]));
   }, []);
 
   const assetOptions = useMemo(() => {
@@ -65,11 +99,6 @@ export default function AssetIssueFormPage() {
   const selectedAsset = useMemo(
     () => (assetOptions ?? []).find((a) => a.assetId === form.assetId) ?? null,
     [assetOptions, form.assetId]
-  );
-
-  const locationsAtAssetSite = useMemo(
-    () => storageLocations.filter((l) => l.siteId === selectedAsset?.currentSiteId),
-    [storageLocations, selectedAsset]
   );
 
   function updateForm(field) {
@@ -117,7 +146,6 @@ export default function AssetIssueFormPage() {
       purpose: form.purpose || undefined,
       items: filledLines.map((line) => ({
         itemId: Number(line.itemId),
-        storageLocationId: Number(line.storageLocationId),
         issuedQuantity: Number(line.issuedQuantity),
       })),
     };
@@ -241,8 +269,6 @@ export default function AssetIssueFormPage() {
 
             {!selectedAsset ? (
               <p className="text-sm text-steel-400">Select an asset above to choose which items to issue.</p>
-            ) : locationsAtAssetSite.length === 0 ? (
-              <Alert tone="warning">No storage locations exist at this asset's site yet.</Alert>
             ) : (
               <div>
                 <div
@@ -253,12 +279,10 @@ export default function AssetIssueFormPage() {
                   <span>
                     Item<span className="ml-0.5 text-danger-600">*</span>
                   </span>
-                  <span>
-                    Storage location<span className="ml-0.5 text-danger-600">*</span>
-                  </span>
                   <span className="text-right">
                     Issued quantity<span className="ml-0.5 text-danger-600">*</span>
                   </span>
+                  <span className="text-right">Total value</span>
                   <span />
                 </div>
 
@@ -289,26 +313,6 @@ export default function AssetIssueFormPage() {
                         </div>
 
                         <div className="min-w-0">
-                          <CellLabel htmlFor={`${rowId}-location`} required>
-                            Storage location
-                          </CellLabel>
-                          <Select
-                            id={`${rowId}-location`}
-                            aria-label={`Storage location for item ${index + 1}`}
-                            value={line.storageLocationId}
-                            onChange={updateLine(index, 'storageLocationId')}
-                            required
-                          >
-                            <option value="">Select a location</option>
-                            {locationsAtAssetSite.map((loc) => (
-                              <option key={loc.id} value={loc.id} data-added={loc.id}>
-                                {loc.locationName}
-                              </option>
-                            ))}
-                          </Select>
-                        </div>
-
-                        <div className="min-w-0">
                           <CellLabel htmlFor={`${rowId}-quantity`} required>
                             Issued quantity
                           </CellLabel>
@@ -324,6 +328,19 @@ export default function AssetIssueFormPage() {
                             onChange={updateLine(index, 'issuedQuantity')}
                             required
                           />
+                        </div>
+
+                        <div className="min-w-0 text-right sm:self-center">
+                          <span className="mb-1 block text-xs font-semibold text-steel-600 sm:sr-only">Total value</span>
+                          {(() => {
+                            const quantity = Number(line.issuedQuantity);
+                            if (line.itemId === '' || !(quantity > 0)) return <span className="text-steel-400">—</span>;
+                            const value = issueValue(balanceByItemId.get(Number(line.itemId)), quantity);
+                            if (value === null) {
+                              return <span className="text-sm font-semibold text-danger-600">Exceeds stock</span>;
+                            }
+                            return <span className="font-semibold text-steel-900 tabular-nums">{formatCurrency(value)}</span>;
+                          })()}
                         </div>
 
                         <div className="col-start-2 row-start-1 text-right sm:col-start-auto sm:row-start-auto">

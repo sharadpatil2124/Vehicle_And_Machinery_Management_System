@@ -1,4 +1,4 @@
-const { Op } = require('sequelize');
+const { Op, col, fn, where: sqlWhere } = require('sequelize');
 const { Vehicle, Machinery } = require('../models');
 const AppError = require('../utils/AppError');
 const { containsPattern } = require('../utils/queryOptions');
@@ -73,6 +73,27 @@ async function vehicleAssetIdsMatchingRegistration(tenantId, search) {
   return vehicles.map((v) => v.assetId);
 }
 
+// A number may be typed with or without its spaces and hyphens: MH-12 AG-6615 or mh12ag6615.
+function compactNumberMatches(column, compact) {
+  return sqlWhere(fn('REPLACE', fn('REPLACE', col(column), ' ', ''), '-', ''), { [Op.like]: containsPattern(compact) });
+}
+
+// The assets with this RCPL or Registration Number, as conditions on a record's assetType and assetId.
+async function assetRefsMatchingNumber(tenantId, search) {
+  const compact = search.replace(/[\s-]+/g, '');
+  if (!compact) return [];
+
+  const [machines, vehicles] = await Promise.all([
+    Machinery.findAll({ where: { tenantId, [Op.and]: [compactNumberMatches('rcpl', compact)] }, attributes: ['assetId'] }),
+    Vehicle.findAll({ where: { tenantId, [Op.and]: [compactNumberMatches('registration_number', compact)] }, attributes: ['assetId'] }),
+  ]);
+
+  const refs = [];
+  if (machines.length) refs.push({ assetType: 'MACHINERY', assetId: machines.map((m) => m.assetId) });
+  if (vehicles.length) refs.push({ assetType: 'VEHICLE', assetId: vehicles.map((v) => v.assetId) });
+  return refs;
+}
+
 module.exports = {
   assertChassisNumberAvailable,
   assertRegistrationNumberAvailable,
@@ -82,4 +103,5 @@ module.exports = {
   RCPL_TAKEN_MESSAGE,
   machineAssetIdsMatchingRcpl,
   vehicleAssetIdsMatchingRegistration,
+  assetRefsMatchingNumber,
 };

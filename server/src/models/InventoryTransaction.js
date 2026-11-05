@@ -17,7 +17,6 @@ class InventoryTransaction extends Model {
       id: this.id,
       siteId: this.siteId,
       itemId: this.itemId,
-      storageLocationId: this.storageLocationId,
       transactionNumber: this.transactionNumber,
       transactionType: this.transactionType,
       quantity: Number(this.quantity),
@@ -57,11 +56,6 @@ InventoryTransaction.init(
       type: DataTypes.INTEGER.UNSIGNED,
       allowNull: false,
       references: { model: 'items', key: 'id' },
-    },
-    storageLocationId: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: false,
-      references: { model: 'storage_locations', key: 'id' },
     },
     transactionNumber: {
       type: DataTypes.STRING(64),

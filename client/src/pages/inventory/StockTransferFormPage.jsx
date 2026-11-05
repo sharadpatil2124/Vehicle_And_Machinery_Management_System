@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { stockTransfersApi, itemsApi, storageLocationsApi, sitesApi, listAll } from '../../api/client';
+import { stockTransfersApi, itemsApi, sitesApi, listAll } from '../../api/client';
 import { Alert, Button, Card, Field, Input, Select } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
 import useItemIdsInStock from '../../hooks/useItemIdsInStock';
 import { todayDateOnly } from '../../config/fuel';
 
-const EMPTY_LINE = { itemId: '', fromStorageLocationId: '', toStorageLocationId: '', quantity: '' };
+const EMPTY_LINE = { itemId: '', quantity: '' };
 
 export default function StockTransferFormPage() {
   const navigate = useNavigate();
@@ -16,7 +16,6 @@ export default function StockTransferFormPage() {
   const [form, setForm] = useState({ fromSiteId: '', toSiteId: '', transferDate: todayDateOnly(), remarks: '' });
   const [lines, setLines] = useState([{ ...EMPTY_LINE }]);
   const [items, setItems] = useState([]);
-  const [storageLocations, setStorageLocations] = useState([]);
   const [sites, setSites] = useState([]);
   const [submitError, setSubmitError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -26,18 +25,8 @@ export default function StockTransferFormPage() {
 
   useEffect(() => {
     listAll(itemsApi.list).then((r) => setItems(r.data)).catch(() => setItems([]));
-    listAll(storageLocationsApi.list).then((r) => setStorageLocations(r.data)).catch(() => setStorageLocations([]));
     listAll(sitesApi.list).then((r) => setSites(r.data)).catch(() => setSites([]));
   }, []);
-
-  const fromLocations = useMemo(
-    () => storageLocations.filter((l) => String(l.siteId) === effectiveFromSiteId),
-    [storageLocations, effectiveFromSiteId]
-  );
-  const toLocations = useMemo(
-    () => storageLocations.filter((l) => String(l.siteId) === form.toSiteId),
-    [storageLocations, form.toSiteId]
-  );
 
   function updateForm(field) {
     return (event) => {
@@ -82,8 +71,6 @@ export default function StockTransferFormPage() {
       remarks: form.remarks || undefined,
       items: filledLines.map((line) => ({
         itemId: Number(line.itemId),
-        fromStorageLocationId: Number(line.fromStorageLocationId),
-        toStorageLocationId: Number(line.toStorageLocationId),
         quantity: Number(line.quantity),
       })),
     };
@@ -169,13 +156,11 @@ export default function StockTransferFormPage() {
 
             {!canAddItems ? (
               <p className="text-sm text-steel-400">Select both sites above to choose which items to move.</p>
-            ) : fromLocations.length === 0 || toLocations.length === 0 ? (
-              <Alert tone="warning">One of these sites has no storage locations yet.</Alert>
             ) : (
               <div className="flex flex-col gap-3">
                 {lines.map((line, index) => (
                   <div key={index} className="rounded border border-steel-200 p-3">
-                    <div className="grid gap-x-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="grid gap-x-3 sm:grid-cols-2">
                       <Field label="Item" required>
                         {({ id: fieldId, invalid, describedBy }) => (
                           <Select id={fieldId} invalid={invalid} describedBy={describedBy} value={line.itemId} onChange={updateLine(index, 'itemId')} required>
@@ -207,45 +192,6 @@ export default function StockTransferFormPage() {
                         )}
                       </Field>
 
-                      <Field label="From storage location" required>
-                        {({ id: fieldId, invalid, describedBy }) => (
-                          <Select
-                            id={fieldId}
-                            invalid={invalid}
-                            describedBy={describedBy}
-                            value={line.fromStorageLocationId}
-                            onChange={updateLine(index, 'fromStorageLocationId')}
-                            required
-                          >
-                            <option value="">Select a location</option>
-                            {fromLocations.map((loc) => (
-                              <option key={loc.id} value={loc.id} data-added={loc.id}>
-                                {loc.locationName}
-                              </option>
-                            ))}
-                          </Select>
-                        )}
-                      </Field>
-
-                      <Field label="To storage location" required>
-                        {({ id: fieldId, invalid, describedBy }) => (
-                          <Select
-                            id={fieldId}
-                            invalid={invalid}
-                            describedBy={describedBy}
-                            value={line.toStorageLocationId}
-                            onChange={updateLine(index, 'toStorageLocationId')}
-                            required
-                          >
-                            <option value="">Select a location</option>
-                            {toLocations.map((loc) => (
-                              <option key={loc.id} value={loc.id} data-added={loc.id}>
-                                {loc.locationName}
-                              </option>
-                            ))}
-                          </Select>
-                        )}
-                      </Field>
                     </div>
 
                     {lines.length > 1 && (

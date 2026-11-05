@@ -7,7 +7,6 @@ class AssetIssueItem extends Model {
       id: this.id,
       assetIssueId: this.assetIssueId,
       itemId: this.itemId,
-      storageLocationId: this.storageLocationId,
       uomId: this.uomId,
       issuedQuantity: Number(this.issuedQuantity),
       reversedQuantity: Number(this.reversedQuantity),
@@ -41,11 +40,6 @@ AssetIssueItem.init(
       type: DataTypes.INTEGER.UNSIGNED,
       allowNull: false,
       references: { model: 'items', key: 'id' },
-    },
-    storageLocationId: {
-      type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: false,
-      references: { model: 'storage_locations', key: 'id' },
     },
     uomId: {
       type: DataTypes.INTEGER.UNSIGNED,

@@ -11,10 +11,11 @@ const standardModule = { CREATE: BOTH, READ: BOTH, UPDATE: BOTH, DELETE: ADMIN_O
 export const PERMISSIONS = Object.freeze({
   VEHICLE: standardModule,
   MACHINERY: standardModule,
-  MAINTENANCE: standardModule,
+  MAINTENANCE: { ...standardModule, UPDATE_COST: ADMIN_ONLY },
   SERVICE: standardModule,
   TYRE: standardModule,
   FUEL: standardModule,
+  ADBLUE: standardModule,
   COMPLIANCE: standardModule,
   SITE: { ...standardModule, CREATE: ADMIN_ONLY, UPDATE: ADMIN_ONLY, ASSIGN: ADMIN_ONLY },
   DOCUMENT: { CREATE: BOTH, READ: BOTH },
@@ -23,7 +24,6 @@ export const PERMISSIONS = Object.freeze({
   UOM: { ...standardModule, CREATE: ADMIN_ONLY, UPDATE: ADMIN_ONLY },
   ITEM: { ...standardModule, CREATE: ADMIN_ONLY, UPDATE: ADMIN_ONLY },
   SUPPLIER: { ...standardModule, CREATE: ADMIN_ONLY, UPDATE: ADMIN_ONLY },
-  STORAGE_LOCATION: { ...standardModule, CREATE: ADMIN_ONLY, UPDATE: ADMIN_ONLY },
 
   PURCHASE: { CREATE: BOTH, READ: BOTH, UPDATE: BOTH, RECEIVE: BOTH },
   STOCK: { READ: BOTH },

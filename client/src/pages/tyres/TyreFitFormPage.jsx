@@ -4,13 +4,9 @@ import { machineryApi, sitesApi, tyresApi, vehiclesApi, listAll } from '../../ap
 import { Alert, Button, Card, Field, Input, Select } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
 import useSiteNames from '../../hooks/useSiteNames';
-import { POSITION_SUGGESTIONS, formatCurrency, todayDateOnly } from '../../config/tyres';
-import { machineryLabel } from '../../config/fuel';
-
-function assetLabel(assetType, a) {
-  if (assetType === 'VEHICLE') return `${a.registrationNumber} (${a.assetId}) · ${a.type}`;
-  return `${machineryLabel(a)} (${a.assetId})`;
-}
+import useActiveTyres from '../../hooks/useActiveTyres';
+import { POSITION_SUGGESTIONS, formatCurrency, replacementNote, todayDateOnly } from '../../config/tyres';
+import { assetOptionLabel, machineryLabel } from '../../config/fuel';
 
 export default function TyreFitFormPage() {
   const navigate = useNavigate();
@@ -41,6 +37,8 @@ export default function TyreFitFormPage() {
   const assetNoun = assetType === 'VEHICLE' ? 'vehicle' : 'machine';
   const readingIsHours = assetType === 'MACHINERY' || Boolean(asset?.isHoursBased);
   const readingLabel = readingIsHours ? 'Current Hours' : 'Current KM';
+  const activeTyres = useActiveTyres(assetType, asset?.assetId);
+  const activeAt = (position) => activeTyres.find((f) => f.position.toLowerCase() === position.trim().toLowerCase());
 
   useEffect(() => {
     setStock(null);
@@ -91,8 +89,12 @@ export default function TyreFitFormPage() {
             ? `${readingLabel} must be 0 or more.`
             : null,
     };
+    const seen = new Set();
     tyres.forEach((t, i) => {
-      if (!t.position.trim()) next[`position${i}`] = 'Enter a position.';
+      const key = t.position.trim().toLowerCase();
+      if (!key) next[`position${i}`] = 'Enter a position.';
+      else if (seen.has(key)) next[`position${i}`] = 'This position is already listed above.';
+      seen.add(key);
     });
     setErrors(next);
     if (Object.values(next).some(Boolean)) return;
@@ -111,7 +113,9 @@ export default function TyreFitFormPage() {
         tyres: tyres.map((t) => ({ position: t.position.trim(), serialNumber: t.serialNumber.trim() || null })),
       });
       const label = assetType === 'VEHICLE' ? asset.registrationNumber : machineryLabel(asset);
-      navigate('/tyres/fitting', { state: { message: `${response.data.length} ${response.data.length === 1 ? 'tyre' : 'tyres'} fitted to ${label}.` } });
+      const replaced = response.data.filter((f) => f.replacedFitmentId).length;
+      const replacedText = replaced ? ` ${replaced} previous ${replaced === 1 ? 'tyre' : 'tyres'} marked Replaced.` : '';
+      navigate('/tyres/fitting', { state: { message: `${response.data.length} ${response.data.length === 1 ? 'tyre' : 'tyres'} fitted to ${label}.${replacedText}` } });
     } catch (err) {
       if (/can't be lower than/.test(err.message)) setErrors((e) => ({ ...e, meterReading: err.message }));
       else if (/^Fitting date/.test(err.message)) setErrors((e) => ({ ...e, fittedAt: err.message }));
@@ -203,7 +207,7 @@ export default function TyreFitFormPage() {
                     </option>
                     {siteAssets.map((a) => (
                       <option key={a.id} value={a.assetId} data-added={a.id}>
-                        {assetLabel(assetType, a)}
+                        {assetOptionLabel(assetType, a)}
                       </option>
                     ))}
                   </Select>
@@ -300,6 +304,7 @@ export default function TyreFitFormPage() {
                     <div>
                       <Input aria-label={`Tyre ${i + 1} position`} placeholder="Position, e.g. Front left" value={t.position} maxLength={50} invalid={Boolean(errors[`position${i}`])} onChange={(e) => updateTyre(i, 'position', e.target.value)} />
                       {errors[`position${i}`] && <p className="mt-1 text-xs font-medium text-danger-600">{errors[`position${i}`]}</p>}
+                      {activeAt(t.position) && <p className="mt-1 text-xs text-steel-500">{replacementNote(activeAt(t.position), form.meterReading)}</p>}
                     </div>
                     <Input aria-label={`Tyre ${i + 1} serial number`} placeholder="Serial number (optional)" value={t.serialNumber} maxLength={64} onChange={(e) => updateTyre(i, 'serialNumber', e.target.value)} />
                   </div>

@@ -4,10 +4,13 @@ const { sequelize } = require('../config/database');
 const ASSET_TYPES = ['VEHICLE', 'MACHINERY'];
 const CONDITIONS = ['new', 'used'];
 const METER_TYPES = ['KM', 'HOURS'];
-const REMOVAL_REASONS = ['WORN_OUT', 'PUNCTURE', 'DAMAGED', 'OTHER'];
-const REMOVAL_OUTCOMES = ['scrapped', 'returned'];
 
 class TyreFitment extends Model {
+  fitmentStatus() {
+    if (this.removedAt == null) return 'active';
+    return this.replacedByFitmentId == null ? 'off' : 'replaced';
+  }
+
   toPublicJSON() {
     return {
       id: this.id,
@@ -24,9 +27,9 @@ class TyreFitment extends Model {
       fitMeterReading: Number(this.fitMeterReading),
       removedAt: this.removedAt,
       removeMeterReading: this.removeMeterReading == null ? null : Number(this.removeMeterReading),
-      removalReason: this.removalReason,
-      removalOutcome: this.removalOutcome,
       removeNotes: this.removeNotes,
+      replacedByFitmentId: this.replacedByFitmentId,
+      fitmentStatus: this.fitmentStatus(),
       isOnAsset: this.removedAt == null,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
@@ -51,10 +54,9 @@ TyreFitment.init(
     fitMeterReading: { type: DataTypes.DECIMAL(12, 2), allowNull: false },
     removedAt: { type: DataTypes.DATEONLY, allowNull: true },
     removeMeterReading: { type: DataTypes.DECIMAL(12, 2), allowNull: true },
-    removalReason: { type: DataTypes.ENUM(...REMOVAL_REASONS), allowNull: true },
-    removalOutcome: { type: DataTypes.ENUM(...REMOVAL_OUTCOMES), allowNull: true },
     removeNotes: { type: DataTypes.STRING(1000), allowNull: true },
     removedBy: { type: DataTypes.INTEGER.UNSIGNED, allowNull: true, references: { model: 'users', key: 'id' } },
+    replacedByFitmentId: { type: DataTypes.INTEGER.UNSIGNED, allowNull: true, references: { model: 'tyre_fitments', key: 'id' } },
     createdBy: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, references: { model: 'users', key: 'id' } },
     updatedBy: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, references: { model: 'users', key: 'id' } },
   },
@@ -64,7 +66,5 @@ TyreFitment.init(
 TyreFitment.ASSET_TYPES = ASSET_TYPES;
 TyreFitment.CONDITIONS = CONDITIONS;
 TyreFitment.METER_TYPES = METER_TYPES;
-TyreFitment.REMOVAL_REASONS = REMOVAL_REASONS;
-TyreFitment.REMOVAL_OUTCOMES = REMOVAL_OUTCOMES;
 
 module.exports = TyreFitment;

@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { purchasesApi, assetIssuesApi, stockTransfersApi, stockAdjustmentsApi } from '../../api/client';
+import { purchasesApi, assetIssuesApi, stockTransfersApi, stockAdjustmentsApi, listAll } from '../../api/client';
 import { Alert, Badge, Button, Input, Pagination, Select, Spinner, Table } from '../../components/ui';
 import Can from '../../components/Can';
+import PrintReportButton from '../../components/PrintReport';
 import { useAuth } from '../../context/AuthContext';
 import { hasPermission } from '../../config/permissions';
 import useSiteNames from '../../hooks/useSiteNames';
+import { assetDescription, assetNumber } from '../../config/assetDetails';
 
 const PAGE_SIZE = 20;
-const MAX_FETCH = 100;
 
 const TYPE_OPTIONS = [
   { value: '', label: 'All types' },
@@ -52,7 +53,8 @@ function toRows(purchases, issues, transfers, adjustments) {
       createdAt: i.createdAt,
       reference: i.issueNumber,
       siteId: i.siteId,
-      details: `${i.assetId}${i.issuedToPerson ? ` — ${i.issuedToPerson}` : ''}`,
+      asset: assetNumber(i.assetType, i.assetId, i.asset),
+      details: `${assetDescription(i.assetType, i.assetId, i.asset)}${i.issuedToPerson ? ` — ${i.issuedToPerson}` : ''}`,
       status: i.status,
       detailPath: `/inventory/asset-issues/${i.id}`,
     })),
@@ -84,6 +86,36 @@ function toRows(purchases, issues, transfers, adjustments) {
   ];
 }
 
+async function fetchMovements(active, canSeeTransfers, fetchList) {
+  const params = { search: active.search || undefined };
+
+  const wantPurchases = active.type === '' || active.type === 'PURCHASE';
+  const wantIssues = active.type === '' || active.type === 'ISSUE';
+  const wantTransfers = canSeeTransfers && (active.type === '' || active.type === 'TRANSFER');
+  const wantAdjustments = active.type === '' || active.type === 'ADJUSTMENT';
+
+  const [purchases, issues, transfers, adjustments] = await Promise.all([
+    wantPurchases ? fetchList(purchasesApi.list, params) : Promise.resolve({ data: [] }),
+    wantIssues ? fetchList(assetIssuesApi.list, params) : Promise.resolve({ data: [] }),
+    wantTransfers ? fetchList(stockTransfersApi.list, params) : Promise.resolve({ data: [] }),
+    wantAdjustments ? fetchList(stockAdjustmentsApi.list, params) : Promise.resolve({ data: [] }),
+  ]);
+
+  const merged = toRows(purchases.data, issues.data, transfers.data, adjustments.data);
+  merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  return merged;
+}
+
+function siteLabel(row, siteNames) {
+  return row.type === 'TRANSFER' ? `${row.fromSiteName ?? '—'} → ${row.toSiteName ?? '—'}` : (siteNames[row.siteId] ?? '—');
+}
+
+function statusLabel(status) {
+  if (!status) return '—';
+  const text = status.replaceAll('_', ' ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 export default function StockMovementsPage() {
   const location = useLocation();
   const [filters, setFilters] = useState({ search: '', type: location.state?.type ?? '', page: 1 });
@@ -97,23 +129,7 @@ export default function StockMovementsPage() {
   const load = useCallback(async (activeFilters) => {
     setError(null);
     try {
-      const params = { search: activeFilters.search || undefined, limit: MAX_FETCH };
-
-      const wantPurchases = activeFilters.type === '' || activeFilters.type === 'PURCHASE';
-      const wantIssues = activeFilters.type === '' || activeFilters.type === 'ISSUE';
-      const wantTransfers = canSeeTransfers && (activeFilters.type === '' || activeFilters.type === 'TRANSFER');
-      const wantAdjustments = activeFilters.type === '' || activeFilters.type === 'ADJUSTMENT';
-
-      const [purchases, issues, transfers, adjustments] = await Promise.all([
-        wantPurchases ? purchasesApi.list(params) : Promise.resolve({ data: [] }),
-        wantIssues ? assetIssuesApi.list(params) : Promise.resolve({ data: [] }),
-        wantTransfers ? stockTransfersApi.list(params) : Promise.resolve({ data: [] }),
-        wantAdjustments ? stockAdjustmentsApi.list(params) : Promise.resolve({ data: [] }),
-      ]);
-
-      const merged = toRows(purchases.data, issues.data, transfers.data, adjustments.data);
-      merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      setRows(merged);
+      setRows(await fetchMovements(activeFilters, canSeeTransfers, listAll));
     } catch (err) {
       setError(err.message);
     }
@@ -139,12 +155,10 @@ export default function StockMovementsPage() {
     {
       key: 'site',
       label: 'Site',
-      render: (r) =>
-        r.type === 'TRANSFER'
-          ? `${r.fromSiteName ?? '—'} → ${r.toSiteName ?? '—'}`
-          : (siteNames[r.siteId] ?? '—'),
+      render: (r) => siteLabel(r, siteNames),
     },
-    { key: 'details', label: 'Details', render: (r) => r.details || <span className="text-steel-400">—</span> },
+    { key: 'asset', label: 'Asset', render: (r) => r.asset ?? <span className="text-steel-400">—</span> },
+    { key: 'details', label: 'Details', wrap: true, render: (r) => r.details || <span className="text-steel-400">—</span> },
     { key: 'status', label: 'Status', render: (r) => <StatusBadge status={r.status} /> },
     {
       key: 'actions',
@@ -157,6 +171,36 @@ export default function StockMovementsPage() {
     },
   ];
 
+  async function buildPrintReport() {
+    const data = await fetchMovements(filters, canSeeTransfers, listAll);
+    const applied = [];
+    if (filters.search.trim()) applied.push({ label: 'Search', value: filters.search.trim() });
+    if (filters.type) applied.push({ label: 'Type', value: TYPE_OPTIONS.find((o) => o.value === filters.type).label });
+
+    return {
+      title: 'Stock Movements',
+      filters: applied,
+      summary: [{ label: 'Movements', value: data.length.toLocaleString('en-IN') }],
+      sections: [
+        {
+          title: 'Stock movements',
+          rows: data,
+          getRowKey: (r) => r.key,
+          emptyMessage: 'No stock movements match these filters.',
+          columns: [
+            { key: 'type', label: 'Type', render: (r) => TYPE_LABEL[r.type] },
+            { key: 'reference', label: 'Reference', render: (r) => r.reference },
+            { key: 'date', label: 'Date', render: (r) => new Date(r.date).toLocaleDateString() },
+            { key: 'site', label: 'Site', render: (r) => siteLabel(r, siteNames) },
+            { key: 'asset', label: 'Asset', render: (r) => r.asset ?? '—' },
+            { key: 'details', label: 'Details', render: (r) => r.details || '—' },
+            { key: 'status', label: 'Status', render: (r) => statusLabel(r.status) },
+          ],
+        },
+      ],
+    };
+  }
+
   return (
     <div>
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
@@ -165,6 +209,7 @@ export default function StockMovementsPage() {
           <p className="mt-1 text-steel-500">Everything that's happened to stock: bought in, issued out, moved, or corrected.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <PrintReportButton buildReport={buildPrintReport} onError={setError} />
           <Can resource="PURCHASE" action="CREATE">
             <Button as={Link} to="/inventory/purchases/new" variant="secondary">
               + Purchase
@@ -192,7 +237,7 @@ export default function StockMovementsPage() {
 
       <div className="mb-4 grid gap-3 sm:grid-cols-3 sm:max-w-2xl">
         <Input
-          placeholder="Search by reference # or machine RCPL..."
+          placeholder="Reference, Reg. no. or RCPL..."
           value={filters.search}
           onChange={(e) => updateFilter('search', e.target.value)}
         />

@@ -4,9 +4,9 @@ const { StockBatch, StockBalance, InventoryTransaction } = require('../models');
 
 const roundMoney = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
 
-async function previewOldestFirstCost({ tenantId, siteId, itemId, storageLocationId, quantity }) {
+async function previewOldestFirstCost({ tenantId, siteId, itemId, quantity }) {
   const batches = await StockBatch.findAll({
-    where: { tenantId, siteId, itemId, storageLocationId, remainingQuantity: { [Op.gt]: 0 } },
+    where: { tenantId, siteId, itemId, remainingQuantity: { [Op.gt]: 0 } },
     order: [['receivedAt', 'ASC'], ['id', 'ASC']],
   });
 
@@ -20,7 +20,7 @@ async function previewOldestFirstCost({ tenantId, siteId, itemId, storageLocatio
   }
 
   if (left > 0) {
-    const balance = await StockBalance.findOne({ where: { tenantId, siteId, itemId, storageLocationId } });
+    const balance = await StockBalance.findOne({ where: { tenantId, siteId, itemId } });
     totalCost += left * (balance ? Number(balance.averageUnitCost) : 0);
   }
 
@@ -28,11 +28,11 @@ async function previewOldestFirstCost({ tenantId, siteId, itemId, storageLocatio
   return { totalCost: total, unitCost: quantity > 0 ? roundMoney(total / quantity) : 0 };
 }
 
-async function latestUnitCost({ tenantId, siteId, itemId, storageLocationId }) {
+async function latestUnitCost({ tenantId, siteId, itemId }) {
   const order = [['receivedAt', 'DESC'], ['id', 'DESC']];
 
-  const atLocation = await StockBatch.findOne({ where: { tenantId, siteId, itemId, storageLocationId }, order });
-  if (atLocation) return Number(atLocation.unitCost);
+  const atSite = await StockBatch.findOne({ where: { tenantId, siteId, itemId }, order });
+  if (atSite) return Number(atSite.unitCost);
 
   const anywhere = await StockBatch.findOne({ where: { tenantId, itemId }, order });
   if (anywhere) return Number(anywhere.unitCost);
@@ -46,8 +46,8 @@ async function latestUnitCost({ tenantId, siteId, itemId, storageLocationId }) {
   return 0;
 }
 
-function keyOf({ siteId, itemId, storageLocationId }) {
-  return `${siteId}:${itemId}:${storageLocationId}`;
+function keyOf({ siteId, itemId }) {
+  return `${siteId}:${itemId}`;
 }
 
 async function costSummaryForBalances(tenantId, balances) {
@@ -57,7 +57,7 @@ async function costSummaryForBalances(tenantId, balances) {
   const batches = await StockBatch.findAll({
     where: {
       tenantId,
-      [Op.or]: balances.map((b) => ({ siteId: b.siteId, itemId: b.itemId, storageLocationId: b.storageLocationId })),
+      [Op.or]: balances.map((b) => ({ siteId: b.siteId, itemId: b.itemId })),
     },
     order: [['receivedAt', 'ASC'], ['id', 'ASC']],
   });

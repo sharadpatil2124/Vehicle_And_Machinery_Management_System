@@ -6,7 +6,7 @@ import ReportTable, { ReportPagination, ReportSearch } from '../../components/Re
 import usePagedRows from '../../hooks/usePagedRows';
 import { useAuth } from '../../context/AuthContext';
 import useSiteNames from '../../hooks/useSiteNames';
-import { assetPath, formatCurrency, formatDateOnly, formatNumber, todayDateOnly } from '../../config/tyres';
+import { assetPath, formatCurrency, formatDateOnly, formatRun, todayDateOnly } from '../../config/tyres';
 
 const TABS = [
   { value: 'assets', label: 'By vehicle & machine' },
@@ -31,6 +31,12 @@ function Tiles({ items }) {
 
 const assetSearchText = (r) => `${r.assetLabel ?? ''} ${r.assetId} ${r.siteName ?? ''}`;
 
+const STATUS_LABELS = { active: 'Active', replaced: 'Replaced', off: 'Off asset' };
+
+function statusCounts({ active, replaced, off }) {
+  return [`${active} active`, replaced ? `${replaced} replaced` : null, off ? `${off} off asset` : null].filter(Boolean).join(' · ');
+}
+
 function AssetReport({ data }) {
   const [open, setOpen] = useState(() => new Set());
   const paged = usePagedRows(data.rows, { searchText: assetSearchText });
@@ -50,7 +56,7 @@ function AssetReport({ data }) {
     <>
       <Tiles
         items={[
-          ['Tyres fitted', String(t.tyresFitted), `${t.onAssets} on assets · ${t.scrapped} scrapped${t.returned ? ` · ${t.returned} returned` : ''}`],
+          ['Tyres fitted', String(t.tyresFitted), statusCounts({ active: t.onAssets, replaced: t.replaced, off: t.offAsset })],
           ['Tyre cost', formatCurrency(t.tyreCost), 'Incl. GST'],
         ]}
       />
@@ -69,13 +75,14 @@ function AssetReport({ data }) {
               <tr className="border-b border-steel-200">
                 <th className={th}>Asset</th>
                 <th className={`${th} text-right`}>Tyres</th>
+                <th className={`${th} text-right`}>Tyre run</th>
                 <th className={`${th} text-right`}>Tyre cost</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-steel-100">
               {paged.visible.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="px-4 py-10 text-center text-steel-500">
+                  <td colSpan={4} className="px-4 py-10 text-center text-steel-500">
                     {paged.term ? `No assets match "${paged.search.trim()}".` : 'No tyres were fitted in this period.'}
                   </td>
                 </tr>
@@ -111,11 +118,9 @@ function AssetReport({ data }) {
                         <button type="button" className="tabular-nums hover:underline" onClick={() => toggle(key)}>
                           {r.tyreCount}
                         </button>
-                        <span className="block text-xs text-steel-500">
-                          {r.onAssetCount} on{r.scrappedCount ? ` · ${r.scrappedCount} scrapped` : ''}
-                          {r.returnedCount ? ` · ${r.returnedCount} returned` : ''}
-                        </span>
+                        <span className="block text-xs text-steel-500">{statusCounts({ active: r.onAssetCount, replaced: r.replacedCount, off: r.offAssetCount })}</span>
                       </td>
+                      <td className={`${td} text-right tabular-nums`}>{formatRun(r.tyreRun, r.meterType)}</td>
                       <td className={`${td} text-right tabular-nums`}>{formatCurrency(r.tyreCost)}</td>
                     </tr>
                     {expanded &&
@@ -125,11 +130,12 @@ function AssetReport({ data }) {
                             <span className="font-semibold text-steel-900">{tyre.position}</span> · {tyre.tyreTypeLabel} {tyre.tyreSize}
                             {tyre.tyreCondition === 'used' ? ' (used)' : ''}
                             <span className="block text-steel-500">
-                              Fitted {formatDateOnly(tyre.fittedAt)} at {formatNumber(tyre.fitMeterReading)}
-                              {tyre.isOnAsset ? '' : ` · removed ${formatDateOnly(tyre.removedAt)} (${tyre.removalReasonLabel}, ${tyre.removalOutcome === 'scrapped' ? 'scrapped' : 'returned'})`}
+                              Fitted {formatDateOnly(tyre.fittedAt)} at {formatRun(tyre.fitMeterReading, tyre.meterType)}
+                              {tyre.isOnAsset ? '' : ` · ${tyre.fitmentStatus === 'replaced' ? 'replaced' : 'taken off'} ${formatDateOnly(tyre.removedAt)} at ${formatRun(tyre.removeMeterReading, tyre.meterType)}`}
                             </span>
                           </td>
-                          <td className="px-4 py-2 text-right">{tyre.isOnAsset ? 'On' : 'Off'}</td>
+                          <td className="px-4 py-2 text-right">{STATUS_LABELS[tyre.fitmentStatus]}</td>
+                          <td className="px-4 py-2 text-right tabular-nums">{formatRun(tyre.run, tyre.meterType)}</td>
                           <td className="px-4 py-2 text-right tabular-nums">{formatCurrency(tyre.cost)}</td>
                         </tr>
                       ))}

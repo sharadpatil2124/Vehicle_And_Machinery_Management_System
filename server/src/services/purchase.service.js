@@ -1,8 +1,8 @@
 const { Op } = require('sequelize');
 
-const { sequelize, Purchase, PurchaseItem, Item, Supplier, StorageLocation } = require('../models');
+const { sequelize, Purchase, PurchaseItem, Item, Supplier, Site, UnitOfMeasure } = require('../models');
 const AppError = require('../utils/AppError');
-const { optionalText, requireNumber, optionalNumber } = require('../utils/validation');
+const { optionalText, requireNumber, optionalNumber, requireDateOnly } = require('../utils/validation');
 const { parseListQuery, parseEnumFilter, containsPattern } = require('../utils/queryOptions');
 const { buildListResponse } = require('../utils/listResponse');
 const { createTenantScopedRepository } = require('./tenantScopedRepository');
@@ -11,6 +11,7 @@ const { recordCreate, recordUpdate } = require('./audit.service');
 const { scopeToSite, assertSiteAllowed, supervisorSiteId } = require('./siteAccess');
 const { assertSiteAssignable } = require('./site.service');
 const { postInventoryTransaction } = require('./inventoryTransaction.service');
+const { assertItemsCanTakeStock } = require('./masterData');
 
 const repo = createTenantScopedRepository(Purchase);
 
@@ -20,19 +21,17 @@ const DEFAULT_SORT = 'createdAt:desc';
 const PURCHASE_NUMBER_PREFIX = 'PO-';
 const PURCHASE_NUMBER_GENERATION_ATTEMPTS = 5;
 
-const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-
-function requireDateOnly(value, label) {
-  if (typeof value !== 'string' || !DATE_ONLY_PATTERN.test(value) || Number.isNaN(new Date(value).getTime())) {
-    throw AppError.badRequest(`${label} must be a valid date (YYYY-MM-DD)`);
-  }
-  return value;
-}
-
 function toPublic(purchase) {
   const json = purchase.toPublicJSON();
+  if (purchase.supplier) json.supplierName = purchase.supplier.supplierName;
+  if (purchase.site) json.siteName = purchase.site.name;
   if (purchase.items) {
-    json.items = purchase.items.map((line) => line.toPublicJSON());
+    json.items = purchase.items.map((line) => {
+      const lineJson = line.toPublicJSON();
+      if (line.item) lineJson.itemName = line.item.itemName;
+      if (line.uom) lineJson.uomName = line.uom.uomName;
+      return lineJson;
+    });
   }
   return json;
 }
@@ -67,12 +66,11 @@ function readPurchaseInput(payload, { partial = false } = {}) {
 function readPurchaseItemInput(raw, index) {
   const label = `Item ${index + 1}`;
   const itemId = requireNumber(raw?.itemId, `${label}: item`, { min: 1 });
-  const storageLocationId = requireNumber(raw?.storageLocationId, `${label}: storage location`, { min: 1 });
   const purchasedQuantity = requireNumber(raw?.purchasedQuantity, `${label}: purchased quantity`, { min: 0.001 });
   const unitPrice = requireNumber(raw?.unitPrice, `${label}: unit price`, { min: 0 });
   const taxPercentage = optionalNumber(raw?.taxPercentage, `${label}: tax percentage`, { min: 0 }) ?? 0;
 
-  return { itemId, storageLocationId, purchasedQuantity, unitPrice, taxPercentage };
+  return { itemId, purchasedQuantity, unitPrice, taxPercentage };
 }
 
 function readPurchaseItemsInput(rawItems) {
@@ -103,25 +101,13 @@ async function assertItemUsable(tenantId, itemId) {
   return item;
 }
 
-async function assertStorageLocationUsable(tenantId, storageLocationId, siteId) {
-  const location = await StorageLocation.findOne({ where: { tenantId, id: storageLocationId } });
-  if (!location) throw AppError.badRequest('Storage location not found');
-  if (location.status !== 'active') throw AppError.badRequest('Storage location is archived and cannot be used');
-  if (Number(location.siteId) !== Number(siteId)) {
-    throw AppError.badRequest('Storage location does not belong to this purchase\'s site');
-  }
-  return location;
-}
-
-async function buildValidatedLines(tenantId, siteId, itemsInput) {
+async function buildValidatedLines(tenantId, itemsInput) {
   const lines = [];
   for (const line of itemsInput) {
     const item = await assertItemUsable(tenantId, line.itemId);
-    await assertStorageLocationUsable(tenantId, line.storageLocationId, siteId);
     const { taxAmount, lineTotalAmount } = computeLineAmounts(line);
     lines.push({
       itemId: line.itemId,
-      storageLocationId: line.storageLocationId,
       uomId: item.baseUomId,
       purchasedQuantity: line.purchasedQuantity,
       unitPrice: line.unitPrice,
@@ -163,7 +149,21 @@ async function listPurchases({ tenantId, auth, query }) {
 }
 
 async function getPurchase({ tenantId, auth, id }) {
-  const purchase = await repo.findByPk(tenantId, id, { include: [{ model: PurchaseItem, as: 'items' }] });
+  // Names come with the document, so it still reads correctly after a record it used is archived.
+  const purchase = await repo.findByPk(tenantId, id, {
+    include: [
+      { model: Supplier, as: 'supplier', attributes: ['supplierName'] },
+      { model: Site, as: 'site', attributes: ['name'] },
+      {
+        model: PurchaseItem,
+        as: 'items',
+        include: [
+          { model: Item, as: 'item', attributes: ['itemName'] },
+          { model: UnitOfMeasure, as: 'uom', attributes: ['uomName'] },
+        ],
+      },
+    ],
+  });
   if (!purchase) throw AppError.notFound('Purchase not found');
   assertSiteAllowed(auth, purchase.siteId, 'Purchase not found');
   return toPublic(purchase);
@@ -179,7 +179,7 @@ async function createPurchase({ tenantId, auth, actingUserId, payload }) {
   await assertSupplierUsable(tenantId, input.supplierId);
 
   const itemsInput = readPurchaseItemsInput(payload.items);
-  const lines = await buildValidatedLines(tenantId, siteId, itemsInput);
+  const lines = await buildValidatedLines(tenantId, itemsInput);
   const totals = sumPurchaseTotals(lines);
 
   const purchase = await sequelize.transaction(async (transaction) => {
@@ -226,25 +226,28 @@ async function createPurchase({ tenantId, auth, actingUserId, payload }) {
 }
 
 async function updatePurchase({ tenantId, auth, actingUserId, id, payload }) {
-  const purchase = await repo.findByPk(tenantId, id);
-  if (!purchase) throw AppError.notFound('Purchase not found');
-  assertSiteAllowed(auth, purchase.siteId, 'Purchase not found');
-
-  if (purchase.status !== 'draft') {
-    throw AppError.conflict('This purchase has already been received and can no longer be edited');
-  }
-
-  const input = readPurchaseInput(payload, { partial: true });
-  if (input.supplierId !== undefined) await assertSupplierUsable(tenantId, input.supplierId);
-
-  const hasNewItems = payload.items !== undefined;
-  const lines = hasNewItems
-    ? await buildValidatedLines(tenantId, purchase.siteId, readPurchaseItemsInput(payload.items))
-    : null;
-
-  const before = purchase.toJSON();
-
   const updated = await sequelize.transaction(async (transaction) => {
+    // The row lock makes this take turns with a receive of the same purchase.
+    const purchase = await repo.findByPk(tenantId, id, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!purchase) throw AppError.notFound('Purchase not found');
+    assertSiteAllowed(auth, purchase.siteId, 'Purchase not found');
+
+    if (purchase.status !== 'draft') {
+      throw AppError.conflict('This purchase has already been received and can no longer be edited');
+    }
+
+    const input = readPurchaseInput(payload, { partial: true });
+    // Only a new supplier is checked: a draft may keep one that was archived after it was chosen.
+    if (input.supplierId !== undefined && input.supplierId !== purchase.supplierId) {
+      await assertSupplierUsable(tenantId, input.supplierId);
+    }
+
+    const hasNewItems = payload.items !== undefined;
+    const lines = hasNewItems
+      ? await buildValidatedLines(tenantId, readPurchaseItemsInput(payload.items))
+      : null;
+
+    const before = purchase.toJSON();
     const fields = { ...input, updatedBy: actingUserId };
 
     if (lines) {
@@ -269,36 +272,47 @@ async function updatePurchase({ tenantId, auth, actingUserId, id, payload }) {
 }
 
 async function receivePurchase({ tenantId, auth, actingUserId, id, payload }) {
-  const purchase = await repo.findByPk(tenantId, id);
-  if (!purchase) throw AppError.notFound('Purchase not found');
-  assertSiteAllowed(auth, purchase.siteId, 'Purchase not found');
-
-  if (purchase.status !== 'draft') {
-    throw AppError.conflict('This purchase has already been received');
-  }
-
-  const lines = await PurchaseItem.findAll({ where: { tenantId, purchaseId: purchase.id } });
-  if (lines.length === 0) throw AppError.badRequest('This purchase has no items to receive');
-
-  const overrides = new Map();
-  if (Array.isArray(payload?.items)) {
-    for (const override of payload.items) {
-      const purchaseItemId = requireNumber(override?.purchaseItemId, 'Purchase item', { min: 1 });
-      const receivedQuantity = requireNumber(override?.receivedQuantity, 'Received quantity', { min: 0 });
-      overrides.set(purchaseItemId, receivedQuantity);
-    }
-  }
-
   const updated = await sequelize.transaction(async (transaction) => {
+    // Checked under the row lock, so the same purchase received twice at once can only post once.
+    // These reads stay locking: a plain read here would start the snapshot before stock postings take their turn.
+    const purchase = await repo.findByPk(tenantId, id, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!purchase) throw AppError.notFound('Purchase not found');
+    assertSiteAllowed(auth, purchase.siteId, 'Purchase not found');
+
+    if (purchase.status !== 'draft') {
+      throw AppError.conflict('This purchase has already been received');
+    }
+
+    const lines = await PurchaseItem.findAll({
+      where: { tenantId, purchaseId: purchase.id },
+      order: [['id', 'ASC']],
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    if (lines.length === 0) throw AppError.badRequest('This purchase has no items to receive');
+
+    const overrides = new Map();
+    if (Array.isArray(payload?.items)) {
+      for (const override of payload.items) {
+        const purchaseItemId = requireNumber(override?.purchaseItemId, 'Purchase item', { min: 1 });
+        const receivedQuantity = requireNumber(override?.receivedQuantity, 'Received quantity', { min: 0 });
+        overrides.set(purchaseItemId, receivedQuantity);
+      }
+    }
+
+    const quantityToReceive = (line) => (overrides.has(line.id) ? overrides.get(line.id) : Number(line.purchasedQuantity));
+
+    const receivingItemIds = lines.filter((line) => quantityToReceive(line) > 0).map((line) => line.itemId);
+    await assertItemsCanTakeStock(tenantId, receivingItemIds, transaction);
+
     for (const line of lines) {
-      const receivedQuantity = overrides.has(line.id) ? overrides.get(line.id) : Number(line.purchasedQuantity);
+      const receivedQuantity = quantityToReceive(line);
 
       if (receivedQuantity > 0) {
         await postInventoryTransaction({
           tenantId,
           siteId: purchase.siteId,
           itemId: line.itemId,
-          storageLocationId: line.storageLocationId,
           uomId: line.uomId,
           transactionType: 'PURCHASE_RECEIPT',
           direction: 'IN',

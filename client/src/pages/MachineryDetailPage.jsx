@@ -121,6 +121,13 @@ export default function MachineryDetailPage() {
             >
               Compliance
             </Button>
+            <Button
+              as={Link}
+              to={`/maintenance/history?assetType=MACHINERY&assetId=${encodeURIComponent(machine.assetId)}`}
+              variant="secondary"
+            >
+              Maintenance history
+            </Button>
             <Can resource="MACHINERY" action="UPDATE">
               <Button as={Link} to={`/machinery/${machine.id}/edit`} variant="secondary">
                 Edit

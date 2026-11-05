@@ -22,6 +22,13 @@ async function readBody(response) {
   }
 }
 
+function endSessionIfExpired(response, token) {
+  if (response.status === 401 && token) {
+    clearSession();
+    window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+  }
+}
+
 async function request(method, path, body, { signal } = {}) {
   const headers = { Accept: 'application/json' };
   const token = readToken();
@@ -46,10 +53,7 @@ async function request(method, path, body, { signal } = {}) {
 
   if (response.ok) return payload;
 
-  if (response.status === 401 && token) {
-    clearSession();
-    window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
-  }
+  endSessionIfExpired(response, token);
 
   throw new ApiError(response.status, payload?.error ?? `Request failed (${response.status})`);
 }
@@ -138,6 +142,7 @@ async function createAssetWithDocuments(path, payload, files = {}) {
 
   const responseBody = await readBody(response);
   if (!response.ok) {
+    endSessionIfExpired(response, token);
     throw new ApiError(response.status, responseBody?.error ?? `Request failed (${response.status})`);
   }
   return responseBody;
@@ -174,6 +179,7 @@ async function uploadAssetDocument(assetType, assetId, docType, file) {
 
   const payload = await readBody(response);
   if (!response.ok) {
+    endSessionIfExpired(response, token);
     throw new ApiError(response.status, payload?.error ?? `Request failed (${response.status})`);
   }
   return payload;
@@ -193,6 +199,7 @@ async function downloadAssetDocument(assetType, assetId, docType, suggestedFilen
 
   if (!response.ok) {
     const payload = await readBody(response);
+    endSessionIfExpired(response, token);
     throw new ApiError(response.status, payload?.error ?? `Request failed (${response.status})`);
   }
 
@@ -284,15 +291,6 @@ export const suppliersApi = {
   restore: (id) => api.post(`/suppliers/${id}/restore`),
 };
 
-export const storageLocationsApi = {
-  list: (params) => api.get(`/storage-locations${toQueryString(params)}`),
-  get: (id) => api.get(`/storage-locations/${id}`),
-  create: (payload) => api.post('/storage-locations', payload),
-  update: (id, payload) => api.put(`/storage-locations/${id}`, payload),
-  remove: (id, confirmation) => api.delete(`/storage-locations/${id}`, { confirmation }),
-  restore: (id) => api.post(`/storage-locations/${id}/restore`),
-};
-
 export const purchasesApi = {
   list: (params) => api.get(`/purchases${toQueryString(params)}`),
   get: (id) => api.get(`/purchases/${id}`),
@@ -364,6 +362,21 @@ export const fuelTransactionsApi = {
     api.get(`/fuel-transactions/efficiency/${encodeURIComponent(assetType)}/${encodeURIComponent(assetId)}`),
 };
 
+export const adblueApi = {
+  overview: (params) => api.get(`/adblue/overview${toQueryString(params)}`),
+  reports: (params) => api.get(`/adblue/reports${toQueryString(params)}`),
+  listPurchases: (params) => api.get(`/adblue/purchases${toQueryString(params)}`),
+  getPurchase: (id) => api.get(`/adblue/purchases/${id}`),
+  createPurchase: (payload) => api.post('/adblue/purchases', payload),
+  updatePurchase: (id, payload) => api.put(`/adblue/purchases/${id}`, payload),
+  removePurchase: (id, confirmation) => api.delete(`/adblue/purchases/${id}`, { confirmation }),
+  listFillings: (params) => api.get(`/adblue/fillings${toQueryString(params)}`),
+  getFilling: (id) => api.get(`/adblue/fillings/${id}`),
+  createFilling: (payload) => api.post('/adblue/fillings', payload),
+  updateFilling: (id, payload) => api.put(`/adblue/fillings/${id}`, payload),
+  removeFilling: (id, confirmation) => api.delete(`/adblue/fillings/${id}`, { confirmation }),
+};
+
 export const maintenanceApi = {
   list: (params) => api.get(`/maintenance${toQueryString(params)}`),
   get: (id) => api.get(`/maintenance/${id}`),
@@ -372,6 +385,7 @@ export const maintenanceApi = {
   create: (payload) => api.post('/maintenance', payload),
   update: (id, payload) => api.put(`/maintenance/${id}`, payload),
   changeStage: (id, payload) => api.post(`/maintenance/${id}/stage`, payload),
+  correctCost: (id, payload) => api.put(`/maintenance/${id}/cost`, payload),
   remove: (id, confirmation) => api.delete(`/maintenance/${id}`, { confirmation }),
 };
 
@@ -399,8 +413,6 @@ export const tyreApi = {
   remove: (id, confirmation) => api.delete(`/tyres/${id}`, { confirmation }),
   restore: (id) => api.post(`/tyres/${id}/restore`),
   install: (id, payload) => api.post(`/tyres/${id}/install`, payload),
-  removeFromVehicle: (id, payload) => api.post(`/tyres/${id}/remove`, payload),
-  scrap: (id, payload) => api.post(`/tyres/${id}/scrap`, payload),
   fitments: (params) => api.get(`/tyres/history${toQueryString(params)}`),
   vehiclePositions: (vehicleId) => api.get(`/tyres/vehicles/${vehicleId}/positions`),
 }
@@ -466,8 +478,7 @@ export const tyresApi = {
   stock: (params) => api.get(`/tyres/stock${toQueryString(params)}`),
   fitments: (params) => api.get(`/tyres/fitments${toQueryString(params)}`),
   fit: (payload) => api.post('/tyres/fitments', payload),
-  removeFitment: (id, payload) => api.post(`/tyres/fitments/${id}/remove`, payload),
-  undoFitting: (id, confirmation) => api.delete(`/tyres/fitments/${id}`, { confirmation }),
+  updateFitment: (id, payload) => api.put(`/tyres/fitments/${id}`, payload),
   assetReport: (params, options) => api.get(`/tyres/reports/assets${toQueryString(params)}`, options),
   assetTyres: (params, options) => api.get(`/tyres/reports/assets/tyres${toQueryString(params)}`, options),
   costReport: (params, options) => api.get(`/tyres/reports/costs${toQueryString(params)}`, options),

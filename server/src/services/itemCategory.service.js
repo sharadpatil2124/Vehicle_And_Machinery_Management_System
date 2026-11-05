@@ -9,6 +9,7 @@ const { createTenantScopedRepository } = require('./tenantScopedRepository');
 const { archiveEntity, restoreEntity } = require('./archive.service');
 const { recordCreate, recordUpdate } = require('./audit.service');
 const { nextSequentialCode, isCodeCollision } = require('./codeGenerator');
+const { assertEditable, assertNameAvailable } = require('./masterData');
 
 const repo = createTenantScopedRepository(ItemCategory);
 
@@ -17,6 +18,8 @@ const DEFAULT_SORT = 'categoryName:asc';
 
 const CATEGORY_CODE_PREFIX = 'CAT-';
 const CATEGORY_CODE_GENERATION_ATTEMPTS = 5;
+
+const NAME_RULE = { model: ItemCategory, field: 'categoryName', codePrefix: CATEGORY_CODE_PREFIX, label: 'A category' };
 
 function toPublic(category) {
   return category.toPublicJSON();
@@ -64,6 +67,8 @@ async function createItemCategory({ tenantId, actingUserId, payload }) {
   const input = readItemCategoryInput(payload);
 
   const category = await sequelize.transaction(async (transaction) => {
+    await assertNameAvailable(NAME_RULE, { tenantId, name: input.categoryName, transaction });
+
     let created;
 
     for (let attempt = 1; attempt <= CATEGORY_CODE_GENERATION_ATTEMPTS; attempt += 1) {
@@ -96,14 +101,17 @@ async function createItemCategory({ tenantId, actingUserId, payload }) {
 }
 
 async function updateItemCategory({ tenantId, actingUserId, id, payload }) {
-  const category = await repo.findByPk(tenantId, id);
-  if (!category) throw AppError.notFound('Item category not found');
-
-  const input = readItemCategoryInput(payload, { partial: true });
-
-  const before = category.toJSON();
-
   const updated = await sequelize.transaction(async (transaction) => {
+    const category = await repo.findByPk(tenantId, id, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!category) throw AppError.notFound('Item category not found');
+    assertEditable(category, 'category');
+
+    const input = readItemCategoryInput(payload, { partial: true });
+    if (input.categoryName !== undefined && input.categoryName !== category.categoryName) {
+      await assertNameAvailable(NAME_RULE, { tenantId, name: input.categoryName, excludeId: category.id, transaction });
+    }
+
+    const before = category.toJSON();
     await category.update({ ...input, updatedBy: actingUserId }, { transaction });
 
     await recordUpdate(
@@ -148,6 +156,8 @@ async function restoreItemCategory({ tenantId, actingUserId, id }) {
     tenantId,
     id,
     performedBy: actingUserId,
+    dependencyCheck: (category, { transaction }) =>
+      assertNameAvailable(NAME_RULE, { tenantId, name: category.categoryName, excludeId: category.id, transaction }),
   });
 
   return toPublic(restored);

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { machineryApi, maintenanceApi, vehiclesApi, listAll } from '../../api/client';
 import { Alert, Button, Field, Input, Modal, Select } from '../ui';
 import DeleteWordModal from '../DeleteWordModal';
+import { useAuth } from '../../context/AuthContext';
+import { hasPermission } from '../../config/permissions';
 import { assetDisplayName, formatNumber, meterTypeForAsset, meterUnitLabel } from '../../config/fuel';
 import {
   MAINTENANCE_TYPE,
@@ -64,17 +66,17 @@ function validateTimeline({ reportedAt, startedAt, completedAt }, found) {
   if (completedAt && completedAt < (startedAt || reportedAt)) found.completedAt = 'Completion cannot be before work started.';
 }
 
-function CostFields({ form, errors, update }) {
+function CostFields({ form, errors, update, locked = {} }) {
   return (
     <>
-      <Field label="Labour cost (₹)" error={errors.labourCost} hint="Optional.">
+      <Field label="Labour cost (₹)" error={errors.labourCost} hint={locked.labourCost ? 'Already saved. Only an Admin can change it.' : 'Optional.'}>
         {({ id, invalid, describedBy }) => (
-          <Input id={id} invalid={invalid} describedBy={describedBy} type="number" min={0} step="any" value={form.labourCost} onChange={update('labourCost')} />
+          <Input id={id} invalid={invalid} describedBy={describedBy} type="number" min={0} step="any" value={form.labourCost} onChange={update('labourCost')} disabled={locked.labourCost} />
         )}
       </Field>
-      <Field label="Total cost (₹)" error={errors.totalCost} hint="Optional. Labour plus anything else spent.">
+      <Field label="Total cost (₹)" error={errors.totalCost} hint={locked.totalCost ? 'Already saved. Only an Admin can change it.' : 'Optional. Labour plus anything else spent.'}>
         {({ id, invalid, describedBy }) => (
-          <Input id={id} invalid={invalid} describedBy={describedBy} type="number" min={0} step="any" value={form.totalCost} onChange={update('totalCost')} />
+          <Input id={id} invalid={invalid} describedBy={describedBy} type="number" min={0} step="any" value={form.totalCost} onChange={update('totalCost')} disabled={locked.totalCost} />
         )}
       </Field>
     </>
@@ -320,6 +322,9 @@ function StageModal({ kind, record, onClose, onDone }) {
   const resolving = kind === 'resolve';
   const isPreventive = record.type === 'preventive';
   const needsMeter = resolving && isPreventive;
+  const { role } = useAuth();
+  const canCorrectCost = hasPermission(role, 'MAINTENANCE', 'UPDATE_COST');
+  const lockedCosts = { labourCost: !canCorrectCost && record.labourCost != null, totalCost: !canCorrectCost && record.totalCost != null };
   const unit = meterUnitLabel(record.meterType);
 
   const { form, errors, setErrors, update } = useFormState({
@@ -465,10 +470,65 @@ function StageModal({ kind, record, onClose, onDone }) {
                   <p className="mt-0.5 text-xs text-steel-500">From when it was reported until the completion time above.</p>
                 </div>
               )}
-              <CostFields form={form} errors={errors} update={update} />
+              <CostFields form={form} errors={errors} update={update} locked={lockedCosts} />
             </>
           )}
         </div>
+      </form>
+    </Modal>
+  );
+}
+
+function CostModal({ record, onClose, onDone }) {
+  const { form, errors, setErrors, update } = useFormState({
+    labourCost: toInput(record.labourCost),
+    totalCost: toInput(record.totalCost),
+  });
+  const [submitError, setSubmitError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setSubmitError(null);
+    const found = {};
+    validateCosts(form, found);
+    setErrors(found);
+    if (Object.keys(found).length > 0) return;
+
+    setSubmitting(true);
+    try {
+      await maintenanceApi.correctCost(record.id, {
+        labourCost: toPayloadNumber(form.labourCost),
+        totalCost: toPayloadNumber(form.totalCost),
+      });
+      onDone('Maintenance cost corrected.');
+    } catch (err) {
+      setSubmitError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Edit maintenance cost"
+      description={`${record.assetLabel ?? record.assetId} (${record.assetId}). Only the cost changes: the stage, dates, meter reading and the asset stay as they are.`}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" form="maintenance-cost-form" loading={submitting}>
+            Save cost
+          </Button>
+        </>
+      }
+    >
+      <form id="maintenance-cost-form" onSubmit={handleSubmit} noValidate>
+        <Alert tone="error">{submitError}</Alert>
+        <CostFields form={form} errors={errors} update={update} />
       </form>
     </Modal>
   );
@@ -517,6 +577,9 @@ export default function MaintenanceDialogs({ dialog, onClose, onDone }) {
   }
   if (kind === 'start' || kind === 'resolve') {
     return <StageModal kind={kind} record={record} onClose={onClose} onDone={onDone} />;
+  }
+  if (kind === 'cost') {
+    return <CostModal record={record} onClose={onClose} onDone={onDone} />;
   }
   if (kind === 'delete') {
     return <DeleteDialog record={record} onClose={onClose} onDone={onDone} />;

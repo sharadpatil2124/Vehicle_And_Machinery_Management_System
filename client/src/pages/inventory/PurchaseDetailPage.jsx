@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { purchasesApi, suppliersApi, itemsApi, storageLocationsApi, unitsOfMeasureApi, sitesApi, listAll } from '../../api/client';
+import { purchasesApi } from '../../api/client';
 import { Alert, Badge, Button, Card, Modal, Spinner, Table } from '../../components/ui';
 import Can from '../../components/Can';
 
@@ -22,7 +22,6 @@ export default function PurchaseDetailPage() {
 
   const [purchase, setPurchase] = useState(null);
   const [loadError, setLoadError] = useState(null);
-  const [lookups, setLookups] = useState({ suppliers: [], items: [], locations: [], units: [], sites: [] });
   const [receiving, setReceiving] = useState(false);
   const [receiveError, setReceiveError] = useState(null);
   const [confirmingReceive, setConfirmingReceive] = useState(false);
@@ -40,20 +39,6 @@ export default function PurchaseDetailPage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  useEffect(() => {
-    Promise.all([
-      listAll(suppliersApi.list),
-      listAll(itemsApi.list),
-      listAll(storageLocationsApi.list),
-      listAll(unitsOfMeasureApi.list),
-      listAll(sitesApi.list),
-    ])
-      .then(([suppliers, items, locations, units, sites]) => {
-        setLookups({ suppliers: suppliers.data, items: items.data, locations: locations.data, units: units.data, sites: sites.data });
-      })
-      .catch(() => {});
-  }, []);
 
   async function handleReceive() {
     setReceiving(true);
@@ -82,26 +67,21 @@ export default function PurchaseDetailPage() {
 
   if (!purchase) return <Spinner label="Loading purchase" />;
 
-  const supplierName = lookups.suppliers.find((s) => s.id === purchase.supplierId)?.supplierName ?? '—';
-  const siteName = lookups.sites.find((s) => s.id === purchase.siteId)?.name ?? '—';
+  const supplierName = purchase.supplierName ?? '—';
+  const siteName = purchase.siteName ?? '—';
   const isDraft = purchase.status === 'draft';
 
-  const itemName = (id) => lookups.items.find((i) => i.id === id)?.itemName ?? '—';
-  const locationName = (id) => lookups.locations.find((l) => l.id === id)?.locationName ?? '—';
-  const uomName = (id) => lookups.units.find((u) => u.id === id)?.uomName ?? '';
-
   const itemColumns = [
-    { key: 'itemId', label: 'Item', render: (row) => itemName(row.itemId) },
-    { key: 'storageLocationId', label: 'Storage location', render: (row) => locationName(row.storageLocationId) },
+    { key: 'itemId', label: 'Item', render: (row) => row.itemName ?? '—' },
     {
       key: 'purchasedQuantity',
       label: 'Purchased',
-      render: (row) => `${row.purchasedQuantity.toLocaleString()} ${uomName(row.uomId)}`,
+      render: (row) => `${row.purchasedQuantity.toLocaleString()} ${row.uomName ?? ''}`,
     },
     {
       key: 'receivedQuantity',
       label: 'Received',
-      render: (row) => `${row.receivedQuantity.toLocaleString()} ${uomName(row.uomId)}`,
+      render: (row) => `${row.receivedQuantity.toLocaleString()} ${row.uomName ?? ''}`,
     },
     {
       key: 'unitPriceInclTax',
@@ -164,7 +144,7 @@ export default function PurchaseDetailPage() {
         open={confirmingReceive}
         onClose={() => setConfirmingReceive(false)}
         title="Receive this purchase?"
-        description="Every line receives its full purchased quantity, and stock is added at each storage location immediately. This can't be undone from this screen."
+        description="Every line receives its full purchased quantity, and stock is added at this site immediately. This can't be undone from this screen."
         footer={
           <>
             <Button variant="secondary" onClick={() => setConfirmingReceive(false)}>

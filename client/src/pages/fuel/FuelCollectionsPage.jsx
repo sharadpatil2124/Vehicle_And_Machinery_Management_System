@@ -1,11 +1,32 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { fuelCollectionsApi } from '../../api/client';
+import { fuelCollectionsApi, listAll } from '../../api/client';
 import { Alert, Badge, Button, Input, Pagination, Select, Spinner, Table } from '../../components/ui';
 import Can from '../../components/Can';
+import PrintReportButton from '../../components/PrintReport';
 import { useAuth } from '../../context/AuthContext';
 import useSiteNames from '../../hooks/useSiteNames';
-import { COLLECTION_STATUS, formatCurrency, formatDateOnly, formatLitres } from '../../config/fuel';
+import { COLLECTION_STATUS, formatCurrency, formatDateOnly, formatLitres, formatNumber } from '../../config/fuel';
+
+function listParams(active) {
+  return {
+    search: active.search || undefined,
+    status: active.status || undefined,
+    siteId: active.siteId || undefined,
+    dateFrom: active.dateFrom || undefined,
+    dateTo: active.dateTo || undefined,
+  };
+}
+
+function appliedFilters(active, siteNames) {
+  const applied = [];
+  if (active.search.trim()) applied.push({ label: 'Search', value: active.search.trim() });
+  if (active.status) applied.push({ label: 'Status', value: COLLECTION_STATUS[active.status]?.label ?? active.status });
+  if (active.siteId) applied.push({ label: 'Site', value: siteNames[active.siteId] ?? active.siteId });
+  if (active.dateFrom) applied.push({ label: 'From', value: formatDateOnly(active.dateFrom) });
+  if (active.dateTo) applied.push({ label: 'To', value: formatDateOnly(active.dateTo) });
+  return applied;
+}
 
 export default function FuelCollectionsPage() {
   const location = useLocation();
@@ -26,14 +47,7 @@ export default function FuelCollectionsPage() {
   const load = useCallback(async (activeFilters) => {
     setError(null);
     try {
-      const response = await fuelCollectionsApi.list({
-        search: activeFilters.search || undefined,
-        status: activeFilters.status || undefined,
-        siteId: activeFilters.siteId || undefined,
-        dateFrom: activeFilters.dateFrom || undefined,
-        dateTo: activeFilters.dateTo || undefined,
-        page: activeFilters.page,
-      });
+      const response = await fuelCollectionsApi.list({ ...listParams(activeFilters), page: activeFilters.page });
       setResult(response);
     } catch (err) {
       setError(err.message);
@@ -47,6 +61,46 @@ export default function FuelCollectionsPage() {
 
   function updateFilter(key, value) {
     setFilters((f) => ({ ...f, [key]: value, page: 1 }));
+  }
+
+  async function buildPrintReport() {
+    const { data } = await listAll(fuelCollectionsApi.list, listParams(filters));
+    const counted = data.filter((c) => c.status !== 'cancelled');
+    const total = (pick) => counted.reduce((sum, c) => sum + (Number(pick(c)) || 0), 0);
+
+    return {
+      title: 'Fuel Collections',
+      filters: appliedFilters(filters, siteNames),
+      summary: [
+        { label: 'Collections', value: formatNumber(data.length) },
+        { label: 'Litres (excl. cancelled)', value: formatLitres(total((c) => c.quantity)) },
+        { label: 'Amount (excl. cancelled)', value: formatCurrency(total((c) => c.amount)) },
+      ],
+      sections: [
+        {
+          title: 'Fuel collections',
+          rows: data,
+          getRowKey: (c) => c.id,
+          emptyMessage: 'No fuel collections match these filters.',
+          columns: [
+            { key: 'collectionNumber', label: 'Collection', render: (c) => c.collectionNumber },
+            { key: 'collectionDate', label: 'Date', render: (c) => formatDateOnly(c.collectionDate) },
+            { key: 'site', label: 'Site', render: (c) => c.siteName ?? '—' },
+            { key: 'carrier', label: 'Carrier', render: (c) => [c.carrierLabel ?? '—', c.carrierAssetId] },
+            { key: 'station', label: 'Station', render: (c) => c.fuelStationName ?? '—' },
+            { key: 'fuelType', label: 'Fuel', render: (c) => c.fuelType },
+            {
+              key: 'quantity',
+              label: 'Litres',
+              align: 'right',
+              render: (c) => [formatLitres(c.quantity), c.status === 'received' && c.shortageQuantity > 0 ? `${formatLitres(c.shortageQuantity)} short` : null],
+            },
+            { key: 'amount', label: 'Amount', align: 'right', render: (c) => formatCurrency(c.amount) },
+            { key: 'status', label: 'Status', render: (c) => COLLECTION_STATUS[c.status]?.label ?? c.status },
+          ],
+        },
+      ],
+    };
   }
 
   const columns = [
@@ -101,11 +155,14 @@ export default function FuelCollectionsPage() {
           <h1 className="text-xl font-semibold text-steel-900">Fuel Collections</h1>
           <p className="mt-1 text-steel-500">Trips to the pump: fuel filled into cans, then received back at the site.</p>
         </div>
-        <Can resource="FUEL_COLLECTION" action="CREATE">
-          <Button as={Link} to="/fuel/collections/new">
-            Record collection
-          </Button>
-        </Can>
+        <div className="flex flex-wrap items-center gap-2">
+          <PrintReportButton buildReport={buildPrintReport} onError={setError} />
+          <Can resource="FUEL_COLLECTION" action="CREATE">
+            <Button as={Link} to="/fuel/collections/new">
+              Record collection
+            </Button>
+          </Can>
+        </div>
       </div>
 
       <Alert tone="success">{notice}</Alert>

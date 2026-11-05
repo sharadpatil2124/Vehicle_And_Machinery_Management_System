@@ -1,8 +1,29 @@
-const { SiteAssignment, Site, User } = require('../models');
+const { Op } = require('sequelize');
+
+const { Maintenance, SiteAssignment, Site, User } = require('../models');
 const { resolveAsset } = require('./asset.service');
+const { recordUpdate } = require('./audit.service');
 
 function toPublic(assignment) {
   return assignment.toPublicJSON();
+}
+
+// Open jobs move with the asset, so its new site can see and finish them. Finished and deleted records stay where they are.
+async function moveOpenMaintenance({ tenantId, assetType, assetId, nextSiteId, actingUserId, transaction }) {
+  const openJobs = await Maintenance.findAll({
+    where: { tenantId, assetType, assetId, status: 'active', stage: { [Op.ne]: 'resolved' } },
+    transaction,
+    lock: transaction.LOCK.UPDATE,
+  });
+
+  for (const job of openJobs) {
+    const before = job.toJSON();
+    await job.update({ siteId: nextSiteId, updatedBy: actingUserId }, { transaction });
+    await recordUpdate(
+      { tenantId, entityType: 'Maintenance', entityId: job.id, performedBy: actingUserId, before, after: job },
+      { transaction }
+    );
+  }
 }
 
 async function recordSiteAssignment({
@@ -35,6 +56,8 @@ async function recordSiteAssignment({
       { transaction }
     );
   }
+
+  await moveOpenMaintenance({ tenantId, assetType, assetId, nextSiteId, actingUserId, transaction });
 }
 
 async function listSiteHistory({ tenantId, auth, assetType, assetId }) {

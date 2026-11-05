@@ -2,6 +2,7 @@ const { Transaction, Op, fn, col } = require('sequelize');
 
 const { SiteFuelStock, FuelStockLedger, FuelCollection, FuelTransaction } = require('../models');
 const AppError = require('../utils/AppError');
+const { requireIdFilter } = require('../utils/validation');
 const { parseListQuery, parseEnumFilter } = require('../utils/queryOptions');
 const { buildListResponse } = require('../utils/listResponse');
 const { supervisorSiteId } = require('./siteAccess');
@@ -17,7 +18,7 @@ const {
 function siteScope(auth, query) {
   const ownSiteId = supervisorSiteId(auth);
   if (ownSiteId !== null) return { siteId: ownSiteId };
-  if (query.siteId) return { siteId: Number(query.siteId) };
+  if (query.siteId) return { siteId: requireIdFilter(query.siteId, 'Site') };
   return {};
 }
 
